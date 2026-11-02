@@ -403,7 +403,7 @@ function wmFresh(){return {at:'out',vis:{out:1},seen:{out:1},areas:{},open:false
 // ---- in-game clock ----
 // WMS.time counts minutes since midnight of day 1 (the game starts at 8:00 AM). Map travel costs MPP minutes per
 // map pixel; each step in an area and each combat turn costs a minute.
-var MPP=2;
+var MPP=1;
 function tick(min){WMS.time=(WMS.time||480)+min}
 function clockMin(){return Math.floor(WMS.time||480)%1440}
 function clockStr(){var m=clockMin(),h=Math.floor(m/60),mm=m%60;return ((h+11)%12+1)+':'+(mm<10?'0':'')+mm+(h<12?' AM':' PM')}
@@ -435,7 +435,7 @@ function leaveArea(){
 }
 // Free travel: the marker (WMS.pos) walks wherever you click. Locations show up once you get within SEE of them
 // (WMS.seen); stand on one and click it (or Enter) to go in.
-var SEE=130,WSPD=110,WTRAIL=[];
+var SEE=70,WSPD=55,WTRAIL=[];
 function wmShown(id){return !!(WMS.seen&&WMS.seen[id])||!!WMS.vis[id]}
 function wmCleared(id){var a=WMS.areas[id];return !!a&&!a.E.some(function(e){return !e.dummy})}
 function wmPos(){if(!WMS.pos)WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};return WMS.pos}
@@ -448,7 +448,7 @@ function wmLoop(){if(WMAP.hidden)return;wmStep();drawMap();requestAnimationFrame
 // head for a map point; to: the location there, if any
 function wmGo(x,y,to){WTRAV={x:x,y:y,to:to||null,last:performance.now(),tr:0};wmInfo()}
 function wmStep(){
- if(!WTRAV)return;var now=performance.now(),dt=Math.min(.1,(now-WTRAV.last)/1000),p=wmPos(),dx=WTRAV.x-p.x,dy=WTRAV.y-p.y,d=Math.hypot(dx,dy),s=WSPD*dt;WTRAV.last=now;
+ if(!WTRAV)return;var now=performance.now(),dt=Math.min(.25,(now-WTRAV.last)/1000),p=wmPos(),dx=WTRAV.x-p.x,dy=WTRAV.y-p.y,d=Math.hypot(dx,dy),s=WSPD*dt;WTRAV.last=now;
  if(now-WTRAV.tr>90){WTRAV.tr=now;WTRAIL.push({x:p.x,y:p.y});if(WTRAIL.length>10)WTRAIL.shift()}
  if(d<=s){tick(d*MPP);p.x=WTRAV.x;p.y=WTRAV.y;WTRAV=null;WTRAIL=[];wmSpot();WSEL=wmAt()||WSEL;wmInfo();put(AUTO,snap());return}
  p.x+=dx/d*s;p.y+=dy/d*s;tick(s*MPP);if(wmSpot())wmInfo();
@@ -457,11 +457,13 @@ function wmEnter(id){WTRAV=null;WTRAIL=[];WMS.open=false;WMAP.hidden=true;enterA
 function wmInfo(){
  var b=document.getElementById('wmgo'),info=document.getElementById('wminfo');
  if(!WSEL){info.innerHTML='<b>OPEN WASTELAND</b><small>'+(WTRAV?'Travelling…':'Nothing here but sand')+'</small><p>Click anywhere on the map to travel there, or click a location.</p>';b.disabled=true;b.textContent=WTRAV?'Travelling…':'Pick a location';return}
- var id=WSEL,nd=WMN[id],here=!WTRAV&&wmAt()===id,danger='';
- if(nd.safe)danger='<small style="display:inline;color:var(--ink)">SAFE</small>';else for(var q=1;q<=4;q++)danger+='<i'+(q<=nd.t?' class="on"':'')+'></i>';
- var st=here?'You are here':WMS.vis[id]?(wmCleared(id)?'Visited · cleared':'Visited'):'Not explored';
- info.innerHTML='<b>'+nd.n.toUpperCase()+'</b> <span class="danger" title="Danger">'+danger+'</span><small>'+st+'</small><p>'+nd.d+'</p>';
- b.disabled=!!WTRAV&&WTRAV.to===id;b.textContent=here?'Enter '+nd.n:WTRAV&&WTRAV.to===id?'Travelling…':'Travel to '+nd.n;
+ var id=WSEL,nd=WMN[id],here=!WTRAV&&wmAt()===id,danger='',known=!!WMS.vis[id],nm=known?nd.n:'unknown location';
+ // a place keeps its name, danger and description secret until you've been inside it
+ if(!known)danger='<small style="display:inline;color:var(--dim)">?</small>';
+ else if(nd.safe)danger='<small style="display:inline;color:var(--ink)">SAFE</small>';else for(var q=1;q<=4;q++)danger+='<i'+(q<=nd.t?' class="on"':'')+'></i>';
+ var st=here?'You are here':known?(wmCleared(id)?'Visited · cleared':'Visited'):'Not explored';
+ info.innerHTML='<b>'+(known?nd.n.toUpperCase():'???')+'</b> <span class="danger" title="Danger">'+danger+'</span><small>'+st+'</small><p>'+(known?nd.d:'Something is out here. Go in to find out what.')+'</p>';
+ b.disabled=!!WTRAV&&WTRAV.to===id;b.textContent=here?'Enter '+nm:WTRAV&&WTRAV.to===id?'Travelling…':'Travel to '+nm;
 }
 // seeded scatter so the terrain is the same every time the map is drawn
 function drawMap(){
@@ -491,13 +493,13 @@ function drawMap(){
  Object.keys(WMN).forEach(function(id){
   if(!wmShown(id))return;var nd=WMN[id],v=WMS.vis[id];
   // the power plant: a cooling tower with a short stack beside it
-  if(nd.fin){c.strokeStyle=v?'#ffb347':'rgba(255,179,71,.6)';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-9,nd.y+8);c.quadraticCurveTo(nd.x-4,nd.y-2,nd.x-6,nd.y-10);c.lineTo(nd.x+4,nd.y-10);c.quadraticCurveTo(nd.x+2,nd.y-2,nd.x+7,nd.y+8);c.closePath();c.stroke();
+  if(nd.fin&&v){c.strokeStyle='#ffb347';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-9,nd.y+8);c.quadraticCurveTo(nd.x-4,nd.y-2,nd.x-6,nd.y-10);c.lineTo(nd.x+4,nd.y-10);c.quadraticCurveTo(nd.x+2,nd.y-2,nd.x+7,nd.y+8);c.closePath();c.stroke();
    c.beginPath();c.moveTo(nd.x+10,nd.y+8);c.lineTo(nd.x+10,nd.y-6);c.stroke();
    var bl=(now/500|0)%2;if(bl){c.fillStyle='#ff3b2a';c.fillRect(nd.x+8.5,nd.y-9,3,3)}}
   else{c.fillStyle=v?'#6dff95':'#07180d';c.strokeStyle=v?'#6dff95':'#2a8f50';c.lineWidth=2;c.fillRect(nd.x-5,nd.y-5,10,10);c.strokeRect(nd.x-5,nd.y-5,10,10);
    if(wmCleared(id)){c.strokeStyle='#04120a';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-3,nd.y);c.lineTo(nd.x-1,nd.y+3);c.lineTo(nd.x+3,nd.y-3);c.stroke()}}
   if(id===WSEL){c.strokeStyle='#ffb347';c.lineWidth=1.5;c.beginPath();c.arc(nd.x,nd.y,13,0,7);c.stroke()}
-  c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';var lb=nd.n.toUpperCase(),tw=c.measureText(lb).width;c.fillText(lb,Math.max(tw/2+4,Math.min(w-tw/2-4,nd.x)),nd.y+(nd.fin?24:20)+4*(fk-1));
+  c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';var lb=v?nd.n.toUpperCase():'???',tw=c.measureText(lb).width;c.fillText(lb,Math.max(tw/2+4,Math.min(w-tw/2-4,nd.x)),nd.y+(nd.fin&&v?24:20)+4*(fk-1));
  });
  // night wash (the marker and the clock stay bright on top)
  var nf=nightF();if(nf){c.fillStyle='rgba(4,10,40,'+(.5*nf)+')';c.fillRect(0,0,w,h)}
