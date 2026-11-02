@@ -1,7 +1,7 @@
-# ricksong.github.io
+# games
 random projects and games (hopefully weekly?)
 
-Live at https://ricksong.github.io/
+Live at https://xrolenks.github.io/games/
 
 ## Layout
 
