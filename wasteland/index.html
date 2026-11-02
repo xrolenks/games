@@ -59,7 +59,17 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .modal{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(1,6,3,.78)}
 .modal[hidden]{display:none}
 #locn{color:var(--dim);font-weight:normal}
+.msgbox{width:min(100%,400px)}
+#msg-text{font-size:1rem;line-height:1.5;color:var(--ink);margin:10px 0 16px}
+#msg-text.voice::before,#msg-text.voice::after{color:var(--hot)}
+#msg-text.voice::before{content:"\201C"}
+#msg-text.voice::after{content:"\201D"}
+#msg-text.quiet{color:var(--dim);font-style:italic}
 #locn:not(:empty)::before{content:"// "}
+#cmb{float:right;font-size:.7rem;letter-spacing:.1em;padding:1px 6px;border:1px solid var(--dim);color:var(--dim);font-weight:normal}
+#cmb.on{color:#ff5a4a;border-color:#ff5a4a;font-weight:bold;animation:cmbPulse 1.2s ease-in-out infinite}
+@keyframes cmbPulse{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){#cmb.on{animation:none}}
 .wmbox{width:min(100%,560px)}
 #wmcv{display:block;width:100%;height:auto;margin:8px 0 0;border:2px solid var(--edge);background:#04120a;cursor:pointer;touch-action:manipulation}
 #wminfo{min-height:5.2em;margin:10px 0 2px;font-size:.88rem}
@@ -162,7 +172,14 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 </head>
 <body>
 <div id="app">
-<h1>WILD WASTELAND <span id="locn"></span></h1>
+<h1>WILD WASTELAND <span id="locn"></span><span id="cmb"></span></h1>
+<div id="msg" class="modal" role="dialog" aria-modal="true" aria-labelledby="msg-title" hidden>
+<div class="box msgbox">
+<h2 id="msg-title">INTERCOM</h2>
+<p id="msg-text"></p>
+<button id="msgok" class="go" type="button">OK</button>
+</div>
+</div>
 <div id="wmap" class="modal" role="dialog" aria-modal="true" aria-labelledby="wm-title" hidden>
 <div class="box wmbox">
 <h2 id="wm-title">THE WASTELAND</h2>
@@ -259,7 +276,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <dt>Scroll wheel</dt><dd>Zoom in and out.</dd>
 <dt>Space</dt><dd>End your turn.</dd>
 </dl>
-<p>You get 10 AP a turn. Walls block bullets; cacti don't. Your game autosaves.</p>
+<p>Exploring is free: walk anywhere at no AP cost. Once an enemy spots you (or hears you attack), combat starts and you get 10 AP a turn. Walls block bullets; cacti don't. Your game autosaves.</p>
 <button id="helpgo" class="go" type="button">Play</button>
 </div>
 </div>
@@ -317,7 +334,21 @@ function say(s){logs.push(s);if(logs.length>8)logs.shift();return false}
 function bfs(s,t,blockE){var prev={},q=[s];prev[s]=-1;
  while(q.length){var c=q.shift();if(c===t)break;nbrs(c).forEach(function(n){if(n in prev||T[n])return;if(blockE&&enemyAt(n))return;prev[n]=c;q.push(n)})}
  if(!(t in prev))return null;var p=[],c2=t;while(c2!==s){p.unshift(c2);c2=prev[c2]}return p}
+// Bunker 9 Gate is a fixed cave inside the mountain. #: rock, D: the bunker's sealed door (west wall),
+// I: intercom post beside it, P: where you start, X: the cave mouth (red flag). Tile types: 8 rock, 9 door, 10 intercom.
+var CAVE=['##################','######....########','####.......#######','###.........######','##...#.......#####','#I.......##.....##',
+ 'D.........#......#','DP...............X','D......#.........#','#...........##..##','##..##.........###','###......#....####','#####.......######','##################'];
+function isCave(){return !!(WMS&&WMN[WMS.at].cave)}
+function buildCave(){
+ T=[];items={};E=[];F={};BD=[];MV=[];PH=0;HQ=[];SQ=[];SK={x:-20,y:-20,a:-1,b:-1,door:-1};
+ for(var y=0;y<H;y++)for(var x=0;x<W;x++){var ch=CAVE[y][x],i=ix(x,y);T.push(ch==='#'?8:ch==='D'?9:ch==='I'?10:0);if(ch==='P')P=i;if(ch==='X')EX=i}
+ function free(){var r;do{r=rnd(W*H)}while(T[r]||r===P||r===EX||items[r]||r%W<3);return r}
+ items[free()]='s';items[free()]='s';for(var am=0;am<4;am++)items[free()]='a';
+ var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[free()]='g:'+gp[rnd(gp.length)];
+ AP=MAXAP;WARNED=false;
+}
 function newLevel(){
+ if(isCave())return buildCave();
  var ok=false;
  while(!ok){
   T=[];items={};E=[];F={};BD=[];MV=[];PH=0;HQ=[];SQ=[];for(var i=0;i<W*H;i++)T.push(0);
@@ -332,8 +363,8 @@ function newLevel(){
   ok=!!bfs(P,EX,false)&&!!bfs(P,SK.door,false);
  }
  function free(minx){var r;do{r=rnd(W*H)}while(T[r]||F[r]||r===P||r===EX||items[r]||enemyAt(r)||r%W<minx);return r}
- for(var a=0;a<Math.min(lv,3)+1;a++)E.push({i:free(6),t:'R',hp:14,g:rnd(2)?'f':'m',w:rnd(100)<40?'m':'g'});
- for(var b=0;b<lv+2;b++)E.push({i:free(5),t:'r',hp:6});
+ if(!WMN[WMS.at].safe)for(var a=0;a<Math.min(lv,3)+1;a++)E.push({i:free(6),t:'R',hp:14,g:rnd(2)?'f':'m',w:rnd(100)<40?'m':'g'});
+ if(!WMN[WMS.at].safe)for(var b=0;b<lv+2;b++)E.push({i:free(5),t:'r',hp:6});
  items[free(2)]='s';items[free(2)]='s';for(var am=0;am<4;am++)items[free(2)]='a';
  var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[SK.a]='g:'+gp[rnd(gp.length)];items[SK.b]='s';for(var gi=0;gi<(lv>1?1:0);gi++)items[free(3)]='g:'+gp[rnd(gp.length)];
  AP=MAXAP;WARNED=false;
@@ -341,8 +372,9 @@ function newLevel(){
 function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];WMS=wmFresh();say('Bunker 9 is silent. Cross the wasteland to the radio tower.');say('Reach the red flag to leave an area and open the map.');newLevel();render();}
 // ---- world map ----
 // Locations on the map. t: danger tier (feeds newLevel's lv), l: roads to other locations, x/y: spot on the 480x300 map.
+// safe: no enemies spawn there. cave: built from the fixed CAVE layout. ent: where you come back in (default: west edge).
 var WMN={
- out:{n:'Bunker 9 Gate',x:104,y:198,t:1,l:['gulch','road'],d:'Scrubland outside your bunker door. Mostly rats.'},
+ out:{n:'Bunker 9 Gate',x:104,y:198,t:1,safe:1,cave:1,ent:ix(16,7),l:['gulch','road'],d:'A cave in the mountainside, at the sealed door of Bunker 9.'},
  gulch:{n:'Dry Gulch',x:176,y:104,t:2,l:['out','scrap'],d:'A cracked riverbed. Rat nests line the banks.'},
  road:{n:'Broken Highway',x:204,y:246,t:2,l:['out','scrap'],d:'Wrecked cars and raider toll stops.'},
  scrap:{n:'Scrap Town',x:318,y:172,t:3,l:['gulch','road','tower'],d:'A sheet-metal shanty town. Raiders run it now.'},
@@ -355,10 +387,11 @@ function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift()
 function enterArea(id){
  var nd=WMN[id],a=WMS.areas[id],first=!WMS.vis[id];
  WMS.at=id;WMS.vis[id]=1;lv=nd.t;
- if(a){T=a.T;items=a.items;E=a.E;F=a.F;SK=a.SK;BD=a.BD;EX=a.EX;MV=[];PH=0;HQ=[];SQ=[];P=freeNear(ix(0,H>>1));AP=MAXAP;WARNED=false;say('Back at '+nd.n+'.')}
+ if(a){T=a.T;items=a.items;E=nd.safe?[]:a.E;F=a.F;SK=a.SK;BD=a.BD;EX=a.EX;MV=[];PH=0;HQ=[];SQ=[];P=freeNear(nd.ent!==undefined?nd.ent:ix(0,H>>1));AP=MAXAP;WARNED=false;say('Back at '+nd.n+'.')}
  else newLevel();
  if(first){hp=Math.min(30,hp+6);say('You reach '+nd.n+', patching up on the road (+6 HP).')}
  if(nd.fin&&first)say('The mast looms to the east. Reach the red flag at its base.');
+ WASC=false;detect();
 }
 // reaching the red flag: the tower's flag wins the game, any other flag opens the map
 function leaveArea(){
@@ -373,7 +406,7 @@ function openMap(){WMAP.hidden=false;if(!WSEL)WSEL=WMS.at;wmInfo();requestAnimat
 function wmLoop(){if(WMAP.hidden)return;drawMap();requestAnimationFrame(wmLoop)}
 function wmInfo(){
  var id=WSEL,nd=WMN[id],here=id===WMS.at,road=WMN[WMS.at].l.indexOf(id)>=0,danger='';
- for(var q=1;q<=4;q++)danger+='<i'+(q<=nd.t?' class="on"':'')+'></i>';
+ if(nd.safe)danger='<small style="display:inline;color:var(--ink)">SAFE</small>';else for(var q=1;q<=4;q++)danger+='<i'+(q<=nd.t?' class="on"':'')+'></i>';
  var st=here?'You are here':WMS.vis[id]?(wmCleared(id)?'Visited · cleared':'Visited'):'Not explored';
  document.getElementById('wminfo').innerHTML='<b>'+nd.n.toUpperCase()+'</b> <span class="danger" title="Danger">'+danger+'</span><small>'+st+'</small><p>'+nd.d+'</p>';
  var b=document.getElementById('wmgo');b.disabled=!!WTRAV||!(here||road);
@@ -432,14 +465,35 @@ document.getElementById('wmgo').addEventListener('click',function(){
  WTRAV={from:WMS.at,to:to,t0:performance.now(),dur:1100};wmInfo();
  setTimeout(function(){WTRAV=null;WMS.open=false;WMAP.hidden=true;enterArea(to);render()},1150);
 });
+// ---- combat state ----
+// Enemies idle until they notice you (al = alerted). You're in combat while any enemy is alerted;
+// outside combat, walking is free, AP refills after every action and enemies don't take turns.
+var SIGHT={R:7,r:5},WASC=false;
+function inCombat(){return E.some(function(e){return e.al&&!e.dummy})}
+// an enemy that notices you brings its friends close by with it
+function alertFrom(e){e.al=1;E.forEach(function(o){if(!o.al&&!o.dummy&&mh(o.i,e.i)<=6)o.al=1})}
+// anyone who can see you notices you; returns true if that just started combat (you get a full turn to react)
+function detect(){
+ var was=inCombat();
+ E.forEach(function(e){if(!e.al&&!e.dummy&&mh(e.i,P)<=SIGHT[e.t]&&los(e.i,P))alertFrom(e)});
+ if(was||!inCombat())return false;
+ var e=E.filter(function(x){return x.al})[0];AP=MAXAP;WARNED=false;WASC=true;
+ say('A '+nm(e)+' spots you! Combat begins.');POPS.push({o:'P',txt:'COMBAT!',t:performance.now(),dy:0,col:'#ff5a4a'});
+ return true;
+}
+// attacking is loud: the target and anything within earshot come for you
+function noise(e){if(E.indexOf(e)>=0)alertFrom(e);E.forEach(function(o){if(!o.dummy&&mh(o.i,P)<=8)alertFrom(o)})}
 function step(n){
- if(T[n]||enemyAt(n)||AP<1||over)return false;
- walk('P',P,n,PH++);P=n;AP--;
+ var free=!inCombat();
+ if(T[n]||enemyAt(n)||(!free&&AP<1)||over)return false;
+ walk('P',P,n,PH++);P=n;if(!free)AP--;
  if(items[P]==='s'){stims++;say('Found a stim pack.');delete items[P]}
  // an ammo crate holds ammo for one of the guns you own, picked at random
  else if(items[P]==='a'){var own=SL.concat(BAG).filter(function(w){return ainf(w)}),t=own.length?own[rnd(own.length)]:'pistol';addAmmo(t,ainf(t).f);say('Found '+ainf(t).f+' '+ainf(t).u+' of '+ammoName(t).toLowerCase()+'.');delete items[P]}
  else if(items[P]&&items[P][0]==='g'){say('Gear here: '+GEAR[items[P].slice(2)].n+'. Tap your own tile to equip (1 AP).')}
  if(P===EX){leaveArea();return false}
+ // stop walking the moment someone spots you
+ if(detect())return false;
  return true;
 }
 function attack(e){
@@ -459,7 +513,7 @@ function enemyTurn(){
  var base=PH;
  E.slice().forEach(function(e){
   if(over)return;
-  if(e.dummy)return;// testdummy cheat: never moves or attacks
+  if(e.dummy||!e.al)return;// test dummies never act; idle enemies wait until they notice you
   if(e.down){e.down=0;say('The '+nm(e)+' staggers back to its feet.');return}
   var mv=e.t==='R'&&e.w!=='m'?2:3,s=0,mx=0;e.fl0=e.fl||1;
   while(true){
@@ -477,7 +531,27 @@ function enemyTurn(){
  if(hp<=0){hp=0;over=true;say('Your vitals flatline. SIGNAL LOST. Press New game.')}
  AP=MAXAP;WARNED=false;
 }
-function after(){if(!over&&AP<=0&&!WARNED){WARNED=true;say('Out of AP. Press End turn (Space).')}play(render)}
+// walk up to the intercom if needed, then press it: the first call gets the voice, after that only static
+function useIntercom(ic){
+ if(mh(P,ic)>1){
+  var best=null;nbrs(ic).forEach(function(n){if(T[n]||enemyAt(n))return;var p=bfs(P,n,true);if(p&&(!best||p.length<best.length))best=p});
+  if(!best){say('You can\'t reach the intercom.');render();return}
+  for(var k=0;k<best.length;k++)if(!step(best[k]))break;
+  if(mh(P,ic)>1){after();return}
+ }
+ PF=scr(ic)[0]>=scr(P)[0]?1:-1;
+ var first=!WMS.ic;WMS.ic=(WMS.ic||0)+1;
+ var txt=first?'Find the reactor control chip, and our deal will be complete.':'You hear static from the other end.';
+ say(first?'INTERCOM: "'+txt+'"':txt);
+ after(function(){showMsg('INTERCOM',txt,first?'voice':'quiet')});
+}
+var MSG=document.getElementById('msg');
+function showMsg(title,txt,cls){document.getElementById('msg-title').textContent=title;var p=document.getElementById('msg-text');p.textContent=txt;p.className=cls||'';showModal(MSG,'msgok')}
+document.getElementById('msgok').addEventListener('click',function(){closeModal(MSG)});
+MSG.addEventListener('click',function(e){if(e.target===MSG)closeModal(MSG)});
+function after(cb){
+ if(!over){var c=inCombat();if(!c){if(WASC)say('Combat over. You can move freely.');AP=MAXAP;WARNED=false}WASC=c}
+ if(!over&&AP<=0&&!WARNED){WARNED=true;say('Out of AP. Press End turn (Space).')}play(cb?function(){render();cb()}:render)}
 function busy(){return !!(FX||CUR)}
 function walk(o,a,b,ph){MV.push({o:o,a:a,b:b,ph:ph})}
 function hq(o,txt,hit,ph){HQ.push({o:o,txt:txt,hit:hit,ph:ph})}
@@ -509,8 +583,14 @@ function play(done){
 function tap(i){
  if(over||busy())return;
  var e=enemyAt(i);
- if(e){attack(e);hrConvert();if(FX)animate(after);else after();return}
- if(i===P){if(SL[AC]==='stim'){useStim();return}equipHere();after();return}if(T[i])return;
+ if(e){var ap0=AP,was=inCombat();attack(e);
+  // an attack that went off (AP spent) is noisy; a surprise attack starts combat without a fresh turn
+  if(AP<ap0){noise(e);if(!was&&inCombat()){WASC=true;say('Combat begins.')}}
+  hrConvert();if(FX)animate(after);else after();return}
+ if(i===P){if(SL[AC]==='stim'){useStim();return}equipHere();after();return}
+ if(T[i]===10){useIntercom(i);return}
+ if(T[i]===9){say('The bunker door is sealed tight. It won\'t budge.');render();return}
+ if(T[i])return;
  var p=bfs(P,i,true);if(!p){say('No path there.');render();return}
  for(var k=0;k<p.length&&AP>0;k++){if(!step(p[k]))break;}
  after();
@@ -986,7 +1066,7 @@ function drawHeal(){
   xs.forEach(function(x,k){var v=u-k*.06;if(v<0||v>1)return;var y=cy-6-v*30-(k%3)*4;g.globalAlpha=1-v;g.fillStyle=k%2?'#6dff95':'#b8ffcb';g.fillRect(cx+x-2,y,5,1);g.fillRect(cx+x,y-2,1,5);g.globalAlpha=1});
  }
 }
-function endTurn(){if(over||busy())return;AP=0;WARNED=false;say('You end your turn.');play(function(){enemyTurn();play(render)})}
+function endTurn(){if(over||busy())return;if(!inCombat()){say('Nobody is after you. Move freely.');render();return}AP=0;WARNED=false;say('You end your turn.');play(function(){enemyTurn();detect();AP=MAXAP;play(after)})}
 var COL=getComputedStyle(document.documentElement);
 function cv(n){return COL.getPropertyValue(n).trim()}
 function diamond(x,y,dz,fill,stroke){var sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2-dz;g.beginPath();g.moveTo(sx,sy);g.lineTo(sx+TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx-TW/2,sy+TH/2);g.closePath();g.fillStyle=fill;g.fill();if(stroke){g.strokeStyle=stroke;g.lineWidth=1;g.stroke()}}
@@ -1167,6 +1247,51 @@ function behindRoof(DR,ri){
  var r2=Object.keys(DR).some(function(k){return +k<ri&&DR[k].some(function(d){return [[0,-6],[0,-18],[0,-28],[-7,-16],[7,-16]].some(function(o){return g.isPointInPath(hull,d.x+o[0],d.y+o[1])})})});
  g.restore();return r2;
 }
+// ---- cave pieces (Bunker 9 Gate) ----
+var CBG=null;
+// dark rock overhead with hanging stalactites instead of the desert sky
+function caveBackdrop(){
+ if(CBG)return CBG;
+ CBG=document.createElement('canvas');CBG.width=grid.width;CBG.height=grid.height;
+ var b=CBG.getContext('2d'),w=CBG.width,h=CBG.height,seed=21;
+ function rng(){seed=(seed*16807)%2147483647;return seed/2147483647}
+ var gr=b.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#090705');gr.addColorStop(.55,'#1a1511');gr.addColorStop(1,'#241d17');
+ b.fillStyle=gr;b.fillRect(0,0,w,h);
+ for(var k=0;k<34;k++){var x=rng()*w,len=14+rng()*46,wd=4+rng()*10;b.fillStyle=k%3?'#14100c':'#1c1712';b.beginPath();b.moveTo(x-wd,0);b.lineTo(x+wd,0);b.lineTo(x+rng()*3,len);b.closePath();b.fill()}
+ b.fillStyle='rgba(255,255,255,.035)';for(var d=0;d<160;d++)b.fillRect(rng()*w,rng()*h,1,1);
+ return CBG;
+}
+// rock height: low along the front edges so they don't hide you, tall at the back, medium for pillars
+function rockH(x,y){var j=(x*7+y*13)%9;if(y>=H-2||x>=W-2)return 6+j%4;return Math.min(x,y,W-1-x,H-1-y)<=1?30+j:16+j}
+function rockBlock(x,y){
+ var sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2,h=rockH(x,y);
+ g.fillStyle='#5d5247';g.beginPath();g.moveTo(sx-TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx,sy+TH-h);g.lineTo(sx-TW/2,sy+TH/2-h);g.fill();
+ g.fillStyle='#463d35';g.beginPath();g.moveTo(sx+TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx,sy+TH-h);g.lineTo(sx+TW/2,sy+TH/2-h);g.fill();
+ g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=1;g.beginPath();g.moveTo(sx-TW/4,sy+TH*.75-h*.3);g.lineTo(sx-TW/6,sy+TH*.75-h*.6);g.moveTo(sx+TW/5,sy+TH*.7-h*.2);g.lineTo(sx+TW/3,sy+TH*.6-h*.5);g.stroke();
+ diamond(x,y,h,'#76695a','#3a322a');
+ g.fillStyle='#8a7c6b';g.fillRect(sx-4,sy+TH/2-h-1,3,2);g.fillRect(sx+5,sy+TH/2-h+2,2,2);
+}
+// the bunker door: a steel slab on the cave's west wall (plane x=1, spanning the door tiles)
+function bunkerDoor(y0,y1){
+ var Hd=30;function q(u0,v0,u1,v1,col,st){poly([pt(1,y0+(y1-y0)*u0,Hd*v0),pt(1,y0+(y1-y0)*u1,Hd*v0),pt(1,y0+(y1-y0)*u1,Hd*v1),pt(1,y0+(y1-y0)*u0,Hd*v1)],col,st)}
+ q(0,0,1,1,'#2e3236','#15181a');
+ for(var k=0;k<12;k++)q(k/12,.9,(k+1)/12,1,k%2?'#d4a632':'#1a1a1a');
+ q(.08,0,.92,.88,'#7d868d','#3a3f44');
+ q(.08,.28,.92,.33,'#5e666c');q(.08,.58,.92,.63,'#5e666c');q(.495,0,.505,.88,'#2e3236');
+ [.13,.87].forEach(function(u){[.12,.45,.76].forEach(function(v){q(u-.012,v-.02,u+.012,v+.02,'#c4cace')})});
+ // stencilled 9
+ ['###','#.#','###','..#','###'].forEach(function(r,j){for(var c=0;c<3;c++)if(r[c]==='#')q(.42+c*.055,.78-j*.075,.42+(c+1)*.055,.78-(j+1)*.075,'#d4a632')});
+ var on=(performance.now()/600|0)%2,lp=pt(1,(y0+y1)/2,Hd*.95);g.fillStyle=on?'#ff3b2a':'#5a1410';g.beginPath();g.arc(lp[0],lp[1],2.5,0,7);g.fill();kick(700);
+}
+// intercom on a post beside the door; its light blinks until you've used it
+function intercomPost(sx,sy){
+ var bx=sx,by=sy+TH/2;
+ g.fillStyle='rgba(0,0,0,.4)';g.beginPath();g.ellipse(bx,by+1,6,2.5,0,0,7);g.fill();
+ g.fillStyle='#3a3f44';g.fillRect(bx-1.5,by-20,3,20);
+ g.fillStyle='#4a5056';g.strokeStyle='#15181a';g.lineWidth=1;g.fillRect(bx-6,by-33,12,15);g.strokeRect(bx-6.5,by-33.5,13,16);
+ g.fillStyle='#22262a';for(var k=0;k<4;k++)g.fillRect(bx-4,by-30+k*2.5,8,1);
+ var lit=!WMS.ic&&(performance.now()/500|0)%2;g.fillStyle=lit?'#6dff95':'#2a5a38';g.fillRect(bx+2,by-21,2,2);if(!WMS.ic)kick(600);
+}
 var BG=null;
 function backdrop(){
  if(BG)return BG;
@@ -1198,7 +1323,8 @@ function camera(){
 }
 function drawIso(){
  var ink=cv('--ink'),dim=cv('--dim'),hot=cv('--hot'),pan=cv('--panel'),edge=cv('--edge');
- g.setTransform(1,0,0,1,0,0);g.drawImage(backdrop(),0,0);
+ var cave=isCave();
+ g.setTransform(1,0,0,1,0,0);g.drawImage(cave?caveBackdrop():backdrop(),0,0);
  camera();
  // zoom about the player's feet (camera keeps them at ZX,ZY); stays set for odds/FX drawn afterwards
  g.setTransform(Z,0,0,Z,ZX*(1-Z),ZY*(1-Z));
@@ -1218,9 +1344,10 @@ function drawIso(){
  if(hv>=0&&hv!==P&&!enemyAt(hv)){var hp2=bfs(P,hv,true);hcost=hp2?hp2.length:-1}
  for(var y=0;y<H;y++)for(var x=0;x<W;x++){
   var i=ix(x,y),sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2,e=enemyAt(i);
-  diamond(x,y,0,F[i]?'#8a6a45':['#d9b877','#cfae6c','#d4b370','#c9a763'][(x*3+y*5)%4],F[i]?'#5e4429':'#b8934f');
-  if(i===hv){var hc=hcost===null||(hcost>0&&hcost<=AP)?'109,255,149':'255,179,71';diamond(x,y,0,'rgba('+hc+',.45)','rgb('+hc+')')}
-  if((x*5+y*3)%7===0&&!F[i]){g.fillStyle='#a98448';g.fillRect(sx-6,sy+TH/2-2,3,2);g.fillRect(sx+4,sy+TH/2+2,2,2);}
+  if(cave)diamond(x,y,0,['#77695a','#706354','#7a6c5c','#6c5f51'][(x*3+y*5)%4],'#5c5044');
+  else diamond(x,y,0,F[i]?'#8a6a45':['#d9b877','#cfae6c','#d4b370','#c9a763'][(x*3+y*5)%4],F[i]?'#5e4429':'#b8934f');
+  if(i===hv){var hc=hcost===null||(hcost>0&&(hcost<=AP||!inCombat()))?'109,255,149':'255,179,71';diamond(x,y,0,'rgba('+hc+',.45)','rgb('+hc+')')}
+  if((x*5+y*3)%7===0&&!F[i]){g.fillStyle=cave?'#8a7b6a':'#a98448';g.fillRect(sx-6,sy+TH/2-2,3,2);g.fillRect(sx+4,sy+TH/2+2,2,2);}
   if(i===EX){diamond(x,y,0,'#4a3a26','#fff4c9');
    var fx0=sx,fy0=sy+TH/2+2;
    g.fillStyle='rgba(0,0,0,.4)';g.beginPath();g.ellipse(fx0,fy0,5,2.5,0,0,7);g.fill();
@@ -1229,13 +1356,17 @@ function drawIso(){
    g.fillStyle='#ff5a44';g.fillRect(fx0+3,fy0-31,6,2);}
   if(items[i]){g.fillStyle=items[i][0]==='g'?'#b34a12':'#1f4d2e';g.fillRect(sx-5,sy+TH/2-5,10,10);g.fillStyle='#fff4c9';g.font='bold 10px monospace';g.textAlign='center';g.fillText(items[i]==='s'?'+':items[i]==='a'?'=':GEAR[items[i].slice(2)].k==='w'?'/':'[',sx,sy+TH/2+3);}
   BD.forEach(function(b){if(b.i===i&&!(FX&&!FX.down&&(FX.body===b||(FX.bodies&&FX.bodies.indexOf(b)>=0))))corpse(sx,sy+TH/2,b)});
-  if(T[i]===3){shackWall(sx,sy);if(i===RI&&!F[P])shackRoof(see);}else if(T[i]===2){cactus(sx,sy+TH/2,i);}else if(T[i]===4||T[i]===6){}else if(T[i]===5){car(x-1,y,i,0);}else if(T[i]===7){car(x,y-1,i,1);}else if(T[i]){var h=16;g.fillStyle='#9c6b3f';g.beginPath();g.moveTo(sx-TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx,sy+TH-h);g.lineTo(sx-TW/2,sy+TH/2-h);g.fill();
+  // the door's tiles are drawn together at the first one, before anything that stands in front of them
+  if(T[i]===8)rockBlock(x,y);
+  else if(T[i]===9){if(T[i-W]!==9){var y1=y;while(T[ix(x,y1)]===9){rockBlock(x,y1);y1++}bunkerDoor(y,y1)}}
+  else if(T[i]===10)intercomPost(sx,sy);
+  else if(T[i]===3){shackWall(sx,sy);if(i===RI&&!F[P])shackRoof(see);}else if(T[i]===2){cactus(sx,sy+TH/2,i);}else if(T[i]===4||T[i]===6){}else if(T[i]===5){car(x-1,y,i,0);}else if(T[i]===7){car(x,y-1,i,1);}else if(T[i]){var h=16;g.fillStyle='#9c6b3f';g.beginPath();g.moveTo(sx-TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx,sy+TH-h);g.lineTo(sx-TW/2,sy+TH/2-h);g.fill();
    g.fillStyle='#7c5230';g.beginPath();g.moveTo(sx+TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx,sy+TH-h);g.lineTo(sx+TW/2,sy+TH/2-h);g.fill();
    diamond(x,y,h,'#b98456','#6b4526');}
   (DR[i]||[]).forEach(function(d){if(d.lie){g.save();g.translate(d.x,d.y);g.scale(1,.7);g.rotate(Math.PI/2);figure(0,0,d.col,d.t,d.fl,0,d.tint,d.ta);g.restore()}else figure(d.x,d.y,d.col,d.t,d.fl,d.sh,d.tint,d.ta)});
  }
  if(hcost!==null){
-  var hs=scr(hv),ht=hcost<0?'no path':hcost+' AP',ok=hcost>0&&hcost<=AP;
+  var cmb=inCombat(),hs=scr(hv),ht=hcost<0?'no path':cmb?hcost+' AP':'walk',ok=hcost>0&&(hcost<=AP||!cmb);
   g.font='bold 11px monospace';g.textAlign='center';var hw=g.measureText(ht).width+8;
   g.fillStyle='rgba(3,13,7,.85)';g.fillRect(hs[0]-hw/2,hs[1]-30,hw,14);g.fillStyle=ok?ink:hot;g.fillText(ht,hs[0],hs[1]-19);
  }
@@ -1254,7 +1385,8 @@ function drawMini(){
  var cw=3,chh=1.5,mw=(W+H)*cw,mh=(W+H)*chh,x0=grid.width-mw-10,y0=8,ox=x0+H*cw;
  g.fillStyle='rgba(3,13,7,.72)';g.fillRect(x0-4,y0-4,mw+8,mh+8);g.strokeStyle='rgba(42,143,80,.9)';g.lineWidth=1;g.strokeRect(x0-3.5,y0-3.5,mw+7,mh+7);
  function cell(i,col,s){var x=i%W,y=(i/W)|0,cx=ox+(x-y)*cw,cy=y0+(x+y)*chh+chh;s=s||1;g.fillStyle=col;g.beginPath();g.moveTo(cx,cy-chh*s);g.lineTo(cx+cw*s,cy);g.lineTo(cx,cy+chh*s);g.lineTo(cx-cw*s,cy);g.closePath();g.fill()}
- for(var i=0;i<W*H;i++)cell(i,T[i]>=4?'#8a4a2a':T[i]===3?'#6e5235':F[i]?'#8a6a45':((i%W+((i/W)|0))%2?'#b8955a':'#c4a265'));
+ var cave=isCave();
+ for(var i=0;i<W*H;i++)cell(i,T[i]===8?'#3d352d':T[i]===9?'#9aa3aa':T[i]===10?'#6dff95':cave?((i%W+((i/W)|0))%2?'#6f6254':'#776a5b'):T[i]>=4?'#8a4a2a':T[i]===3?'#6e5235':F[i]?'#8a6a45':((i%W+((i/W)|0))%2?'#b8955a':'#c4a265'));
  for(i=0;i<W*H;i++)if(T[i]===2)cell(i,'#3f6b2f',.8);
  Object.keys(items).forEach(function(k){cell(+k,items[k][0]==='g'?'#e0702a':'#2f7a48',.7)});
  cell(EX,'#ff3b2a',1.2);
@@ -1300,6 +1432,7 @@ function render(){
  document.getElementById('log').innerHTML=logs.map(function(l){return '<div>&gt; '+l.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'}).join('');
  put(AUTO,snap());updateCursor();
  document.getElementById('locn').textContent=WMN[WMS.at].n.toUpperCase();
+ var cb=document.getElementById('cmb'),inc=!over&&inCombat();cb.textContent=over?'':inc?'COMBAT':'EXPLORING';cb.className=inc?'on':'';
  // the map stays open (and comes back after a reload) until you pick where to go
  if(WMS.open&&WMAP.hidden&&document.getElementById('menu').hidden)openMap();
  if(!WMS.open&&!WMAP.hidden)WMAP.hidden=true;
@@ -1314,6 +1447,11 @@ function restore(s){
   // saves from before the world map: put the player on the route at the matching step
   if(d.WM)WMS=d.WM;else{WMS=wmFresh();var at=['out','gulch','scrap','tower'][Math.min(3,Math.max(0,(lv||1)-1))];WMS.at=at;WMS.vis[at]=1;if(at==='scrap')WMS.vis.gulch=1;lv=WMN[at].t}
   if(!WMN[WMS.at])WMS=wmFresh();
+  // saves from before the gate became a cave: forget the old desert layout, rebuild it if you're standing in it
+  if(WMS.areas.out&&!WMS.areas.out.T.some(function(v){return v===8}))delete WMS.areas.out;
+  if(WMS.at==='out'&&!T.some(function(v){return v===8}))buildCave();
+  if(WMN[WMS.at].safe)E=E.filter(function(e){return e.dummy});
+  WASC=E.some(function(e){return e.al&&!e.dummy});
   MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
  catch(e){return false}
 }
@@ -1321,7 +1459,9 @@ function saveGame(){say(put(SLOT,snap())?'Game saved.':'Save failed: browser sto
 function loadGame(){if(busy())return;var s=get(SLOT);if(s&&restore(s))say('Save loaded.');else say('No saved game found.');render();}
 
 function hit(px,py){var u=(px-OX)/(TW/2),v=(py-OY)/(TH/2),x=Math.floor((u+v)/2),y=Math.floor((v-u)/2);return(x<0||y<0||x>=W||y>=H)?-1:ix(x,y);}
-function pick(e){var r=grid.getBoundingClientRect(),px=((e.clientX-r.left)*grid.width/r.width-ZX*(1-Z))/Z,py=((e.clientY-r.top)*grid.height/r.height-ZY*(1-Z))/Z,a=hit(px,py),b=hit(px,py+12);if(b>=0&&enemyAt(b))a=b;return a}
+function pick(e){var r=grid.getBoundingClientRect(),px=((e.clientX-r.left)*grid.width/r.width-ZX*(1-Z))/Z,py=((e.clientY-r.top)*grid.height/r.height-ZY*(1-Z))/Z,a=hit(px,py),b=hit(px,py+12);if(b>=0&&enemyAt(b))a=b;
+ // the intercom stands up off its tile, so a click on its box counts too
+ [12,22,30].forEach(function(o){var c=hit(px,py+o);if(c>=0&&T[c]===10)a=c});return a}
 grid.addEventListener('click',function(e){var a=pick(e);if(a>=0)tap(a);});
 // right-click an enemy for its health and gear
 function foeInfo(e){
@@ -1396,7 +1536,7 @@ document.getElementById('new').addEventListener('click',newGame);
 document.getElementById('save').addEventListener('click',saveGame);
 var HELP=document.getElementById('help'),INV=document.getElementById('inv');
 var CHEAT=document.getElementById('cheat'),SETS=document.getElementById('sets');
-function openModal(){return !MENU.hidden?MENU:!WMAP.hidden?WMAP:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
+function openModal(){return !MENU.hidden?MENU:!MSG.hidden?MSG:!WMAP.hidden?WMAP:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
 // settings: cursor size, with a green and red preview at the real size
 var CURSZ=document.getElementById('cursz');
 function syncSets(){
@@ -1599,7 +1739,7 @@ window.addEventListener('keydown',function(e){
  var k=e.key.toLowerCase(),dx=0,dy=0;
  var mo=openModal();
  if(mo===MENU||mo===WMAP)return;
- if(mo){if(k==='escape'||(k==='i'&&mo===INV)||(mo===HELP&&(k==='enter'||k===' '))){e.preventDefault();closeModal(mo)}return}
+ if(mo){if(k==='escape'||(k==='i'&&mo===INV)||((mo===HELP||mo===MSG)&&(k==='enter'||k===' '))){e.preventDefault();closeModal(mo)}return}
  if(k==='arrowup'||k==='w')dy=-1;else if(k==='arrowdown'||k==='s')dy=1;else if(k==='arrowleft'||k==='a')dx=-1;else if(k==='arrowright'||k==='d')dx=1;
  else if(k==='h'){useStim();return}else if(k==='i'){openInv();return}else if(k==='+'||k==='='){zoom(1.15);return}else if(k==='-'||k==='_'){zoom(1/1.15);return}else if(k==='m'){MINI=!MINI;if(!busy()){drawIso();drawOdds()}return}else if(k==='q'){setSlot(1-AC);return}else if(k==='r'){reload();return}else if(k==='`'||k==='~'){e.preventDefault();openCheat();return}else if(k==='1'||k==='2'){setSlot(+k-1);return}else if(k==='e'){tap(P);return}else if(k===' '){e.preventDefault();endTurn();return}else return;
  e.preventDefault();var x=P%W+dx,y=((P/W)|0)+dy;if(x<0||x>=W||y<0||y>=H)return;tap(ix(x,y));
