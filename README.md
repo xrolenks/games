@@ -1,4 +1,4 @@
-# ricksong.github.io
+# rick song games
 random projects and games (hopefully weekly?)
 
 Live at https://xrolenks.github.io/games/
