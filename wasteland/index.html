@@ -721,7 +721,7 @@ function burst(e,wd,d){
  if(kill){E.splice(E.indexOf(e),1);var body={i:e.i,t:sk(e),f:P%W<=e.i%W?1:-1};BD.push(body);FX.dead=e;FX.body=body;say('The '+nm(e)+' is shredded.')}
 }
 function drawBurst(t,X){
- var ms=t*X.dur,n=X.burst.length,end=n*BGAP,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15-4+4*((t*X.dur/35|0)%3),tx=b[0],ty=b[1]-(X.ty==='R'?14:6);
+ var ms=t*X.dur,n=X.burst.length,end=n*BGAP,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-9-PL()-4+4*((t*X.dur/35|0)%3),tx=b[0],ty=b[1]-(X.ty==='R'?14:6);
  var shown=X.burst.filter(function(s,i){return s.hit&&ms>=i*BGAP+60});
  function holes(ox,oy){shown.forEach(function(s){g.fillStyle='#4a0806';g.fillRect(ox+s.h[0]-1,oy+s.h[1]-1,2,2);g.fillStyle='#c0392b';g.fillRect(ox+s.h[0]+1,oy+s.h[1],1,1)})}
  var fresh=X.burst.some(function(s,i){var age=ms-(i*BGAP+60);return s.hit&&age>=0&&age<50});
@@ -753,7 +753,7 @@ function headshot(e,body){
  say('Headshot!');
 }
 function drawHeadshot(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=X.spin,t0=sk(X.dead),fl=X.dead.fl||1,o=headOff(t0),hx=b[0]+o[0]*fl,hy=b[1]+o[1],mx=a[0]+25*(b[0]>=a[0]?1:-1),my=a[1]-15;
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=X.spin,t0=sk(X.dead),fl=X.dead.fl||1,o=headOff(t0),hx=b[0]+o[0]*fl,hy=b[1]+o[1],mx=a[0]+25*(b[0]>=a[0]?1:-1),my=a[1]-15-PL();
  var lx=b[0]+X.hd[0],ly=b[1]+X.hd[1];
  if(ms<70){g.fillStyle='rgba(255,230,150,'+(1-ms/70)+')';g.beginPath();g.arc(mx,my,8,0,7);g.fill()}
  if(ms<HS.hit){var u=ms/HS.hit;g.strokeStyle='#fff6c8';g.lineWidth=2;g.beginPath();g.moveTo(mx+(hx-mx)*Math.max(0,u-.5),my+(hy-my)*Math.max(0,u-.5));g.lineTo(mx+(hx-mx)*u,my+(hy-my)*u);g.stroke()}
@@ -796,7 +796,7 @@ function drawBat(t,X){
  var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,hx=b[0],hy=b[1]-(X.ty==='r'?6:14);
  // knockback / knockdown take effect at impact; the slide itself is animated by play() afterwards
  if(ms>=BAT.imp&&!X.applied){X.applied=1;if(X.kb!==undefined){walk(X.tgt,X.tgt.i,X.kb,PH++);X.tgt.i=X.kb}if(X.kd)X.tgt.down=1}
- if(ms<BAT.imp+80){var sw=Math.min(1,ms/BAT.imp),a0=-2.4,a1=.5,an=a0+(a1-a0)*sw,cx=a[0]+4*dir,cy=a[1]-16;
+ if(ms<BAT.imp+80){var sw=Math.min(1,ms/BAT.imp),a0=-2.4,a1=.5,an=a0+(a1-a0)*sw,cx=a[0]+4*dir,cy=a[1]-16-PL();
   g.strokeStyle='rgba(255,255,255,'+(.75*(1-Math.max(0,(ms-BAT.imp)/80)))+')';g.lineWidth=3;g.beginPath();
   for(var q=0;q<=8;q++){var aq=a0+(an-a0)*q/8,x=cx+dir*Math.cos(aq)*18,y=cy+Math.sin(aq)*12;if(q)g.lineTo(x,y);else g.moveTo(x,y)}g.stroke();
   var bx2=cx+dir*Math.cos(an)*18,by2=cy+Math.sin(an)*12;g.lineCap='round';g.strokeStyle='#120c08';g.lineWidth=6;g.beginPath();g.moveTo(cx,cy);g.lineTo(bx2,by2);g.stroke();g.strokeStyle='#7a3818';g.lineWidth=3.5;g.beginPath();g.moveTo(cx,cy);g.lineTo(bx2,by2);g.stroke();g.strokeStyle='#f2eee2';g.lineWidth=3.5;g.beginPath();g.moveTo(cx,cy);g.lineTo(cx+(bx2-cx)*.25,cy+(by2-cy)*.25);g.stroke();g.lineCap='butt';}
@@ -812,7 +812,7 @@ function drawBat(t,X){
 var PJ={wind:90,imp:170,hold:230,dur:400};
 function drawPunch(t,X){
  var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,
-  rx=a[0]+10*dir,ry=a[1]-15,tx=b[0]-5*dir,ty=b[1]-(X.ty==='r'?5:15),sx=a[0]+4*dir,sy=a[1]-16,fx,fy;
+  rx=a[0]+10*dir,ry=a[1]-15-PL(),tx=b[0]-5*dir,ty=b[1]-(X.ty==='r'?5:15),sx=a[0]+4*dir,sy=a[1]-16-PL(),fx,fy;
  if(ms<PJ.wind){var w=ms/PJ.wind;fx=rx-3*dir*w;fy=ry+w}
  else if(ms<PJ.imp){var j=(ms-PJ.wind)/(PJ.imp-PJ.wind);j*=j;fx=rx-3*dir+(tx-rx+3*dir)*j;fy=ry+1+(ty-ry-1)*j}
  else if(ms<PJ.hold){fx=tx;fy=ty}
@@ -824,8 +824,8 @@ function drawPunch(t,X){
  g.lineCap='round';g.strokeStyle='#1a1208';g.lineWidth=5;g.beginPath();g.moveTo(sx,sy);g.lineTo(fx,fy);g.stroke();
  g.strokeStyle=pcol('P','j');g.lineWidth=3;g.beginPath();g.moveTo(sx,sy);g.lineTo(fx,fy);g.stroke();g.lineCap='butt';
  g.fillStyle='#1a1208';g.fillRect(Math.round(fx-3),Math.round(fy-3),6,6);
- g.fillStyle='#e0a870';g.fillRect(Math.round(fx-2),Math.round(fy-2),4,4);
- g.fillStyle='#c98e58';g.fillRect(Math.round(fx+(dir>0?1:-2)),Math.round(fy-2),1,4);
+ g.fillStyle=fistCol('#e0a870');g.fillRect(Math.round(fx-2),Math.round(fy-2),4,4);
+ g.fillStyle=fistCol('#c98e58');g.fillRect(Math.round(fx+(dir>0?1:-2)),Math.round(fy-2),1,4);
  if(ms>=PJ.imp&&ms<PJ.imp+200){var v=(ms-PJ.imp)/200,hx=tx+4*dir,hy=ty;
   if(X.hit){g.fillStyle='rgba(255,236,150,'+(1-v)+')';g.beginPath();for(var q=0;q<8;q++){var rr=q%2?3+4*v:8+7*v,aq=q*Math.PI/4+.2;g[q?'lineTo':'moveTo'](hx+Math.cos(aq)*rr,hy+Math.sin(aq)*rr*.8)}g.closePath();g.fill()}
   var txt=X.hit?'POW!':'WHIFF';g.font='bold '+(X.hit?12:10)+'px monospace';g.textAlign='center';g.lineWidth=3;
@@ -850,7 +850,7 @@ function flyAway(s,v,p,dir,k){
 function drawHRA(t,X){
  var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,imp=BAT.imp;
  if(ms<imp){
-  var u=ms/imp,mx=a[0]+15*dir,my=a[1]-15,tx=b[0],ty=b[1]-(X.ty==='r'?6:14);
+  var u=ms/imp,mx=a[0]+15*dir,my=a[1]-15-PL(),tx=b[0],ty=b[1]-(X.ty==='r'?6:14);
   if(ms<80){g.fillStyle='rgba(255,220,120,'+(1-ms/80)+')';g.beginPath();g.arc(mx,my,8,0,7);g.fill()}
   g.strokeStyle='#ffe08a';g.lineWidth=2;g.beginPath();g.moveTo(mx+(tx-mx)*Math.max(0,u-.4),my+(ty-my)*Math.max(0,u-.4));g.lineTo(mx+(tx-mx)*u,my+(ty-my)*u);g.stroke();
   X.vic.forEach(function(v){var s=scr(v.i);figure(s[0],s[1],cv('--hot'),sk(v),v.fl||1)});
@@ -882,7 +882,7 @@ function flameFx(e){
  if(kill){FX.body.ash=1;say('The '+nm(e)+' goes up in flames and crumbles to ash.')}
 }
 function drawFlame(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15,tx=b[0],ty=b[1]-(X.ty==='r'?6:14),tall=X.ty==='r'?12:26;
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15-PL(),tx=b[0],ty=b[1]-(X.ty==='r'?6:14),tall=X.ty==='r'?12:26;
  if(ms<FL.stream+150){var fade=ms<FL.stream?1:1-(ms-FL.stream)/150;
   for(var k=0;k<34;k++){var p=((ms/FL.stream)*1.5-k/34);if(p<0||p>1)continue;var w=Math.sin(k*1.7+ms*.03)*p*7,x=mx+(tx-mx)*p+w*.3,y=my+(ty-my)*p+w,sz=1.5+p*5;
    g.fillStyle=(p<.3?'rgba(255,245,190,':p<.65?'rgba(255,165,60,':'rgba(220,70,25,')+(.85*fade*(p>.9?(1-p)/.1:1))+')';g.beginPath();g.arc(x,y,sz,0,7);g.fill()}}
@@ -904,7 +904,7 @@ function laserFx(e){
  FX.popT=100/FX.dur;
 }
 function drawLaser(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+15*dir,my=a[1]-15,tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='r'?6:14)+(X.hit?0:X.mo[1]);
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+15*dir,my=a[1]-15-PL(),tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='r'?6:14)+(X.hit?0:X.mo[1]);
  var t0=X.dead?sk(X.dead):null,fl=X.dead?X.dead.fl||1:1;
  // the target, before the beam does its work
  if(X.lz==='cut'){
@@ -954,7 +954,7 @@ function teslaFx(e){
  if(kill){FX.body.bone=1;say('The '+nm(e)+' is electrocuted down to the bone.')}
 }
 function drawTesla(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+21*dir,my=a[1]-15,tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='r'?6:14)+(X.hit?0:X.mo[1]);
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+21*dir,my=a[1]-15-PL(),tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='r'?6:14)+(X.hit?0:X.mo[1]);
  var seed=(ms/45|0)+1;
  if(ms<TZ.bolt){var f=ms<250?1:1-(ms-250)/100;bolt(mx,my,tx,ty,seed,f,2);g.fillStyle='rgba(190,235,255,'+f+')';g.beginPath();g.arc(mx,my,5,0,7);g.fill()}
  if(!X.dead){if(X.hit&&ms>80&&ms<550){for(var k=0;k<3;k++)bolt(tx-8+k*8,ty-8,tx-6+((seed+k)%3)*6,ty+8,seed+k*9,.7*(1-(ms-80)/470),1)}return}
@@ -984,7 +984,7 @@ function pellets(e,wd,d){
  if(e.hp<=0){E.splice(E.indexOf(e),1);var body={i:e.i,t:sk(e),f:P%W<=e.i%W?1:-1};BD.push(body);FX.dead=e;FX.body=body;say('The '+nm(e)+' goes down.');holeKill(e,body)}
 }
 function drawPellets(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15,tx=b[0],ty=b[1]-(X.ty==='r'?6:14);
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15-PL(),tx=b[0],ty=b[1]-(X.ty==='r'?6:14);
  if(ms<90){g.fillStyle='rgba(255,220,120,'+(1-ms/90)+')';g.beginPath();g.arc(mx,my,9,0,7);g.fill();g.fillStyle='rgba(255,255,255,'+(1-ms/90)+')';g.beginPath();g.arc(mx,my,4,0,7);g.fill()}
  if(!X.flashed&&ms>=120&&X.hit){X.flashed=1;X.tgt.hitAt=performance.now()}
  X.pel.forEach(function(s){
@@ -1002,7 +1002,7 @@ function holeKill(e,body){
  say('The blast tears straight through the '+nm(e)+'.');
 }
 function drawHole(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15,t0=sk(X.dead),fl=X.dead.fl||1,ho=holeOff(t0,fl);
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-15-PL(),t0=sk(X.dead),fl=X.dead.fl||1,ho=holeOff(t0,fl);
  var kb=ms<HO.hit?0:dir*6*Math.min(1,(ms-HO.hit)/120),bx=b[0]+kb,hx=bx+ho[0],hy=b[1]+ho[1];
  if(ms<90){g.fillStyle='rgba(255,220,120,'+(1-ms/90)+')';g.beginPath();g.arc(mx,my,9,0,7);g.fill()}
  if(ms<HO.hit){var u=ms/HO.hit;g.strokeStyle='#ffe08a';g.lineWidth=1;for(var k=0;k<5;k++){var ty=b[1]+ho[1]+(k-2)*3;g.beginPath();g.moveTo(mx+(b[0]-mx)*Math.max(0,u-.4),my+(ty-my)*Math.max(0,u-.4));g.lineTo(mx+(b[0]+ho[0]-mx)*u,my+(ty-my)*u);g.stroke()}figure(b[0],b[1],cv('--hot'),t0,fl)}
@@ -1031,7 +1031,7 @@ function gibCorpse(cx,cy,b){
  if(b.hd)lyingHead(cx+b.hd[0],cy+b.hd[1],b.t,b.hf||1);
 }
 function drawRocket(t,X){
- var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-18,tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='r'?6:14)+(X.hit?0:X.mo[1]);
+ var ms=t*X.dur,a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+23*dir,my=a[1]-18-PL(),tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='r'?6:14)+(X.hit?0:X.mo[1]);
  function at(p){return [mx+(tx-mx)*p,my+(ty-my)*p-10*Math.sin(Math.PI*p)]}
  if(ms<160){var bb=ms/160;g.fillStyle='rgba(210,200,180,'+(.6*(1-bb))+')';g.beginPath();g.arc(mx-dir*(26+20*bb),my,5+8*bb,0,7);g.fill()}
  if(X.dead&&ms<RK.imp)figure(b[0],b[1],cv('--hot'),sk(X.dead),X.dead.fl||1);
@@ -1154,7 +1154,7 @@ function drawHeal(){
  var dt=performance.now()-HEALT;if(dt<0||dt>1100)return;
  var s=scr(P),cx=s[0],cy=s[1];
  if(dt<450){
-  var p=Math.min(1,dt/350),sx=cx-11*PF,sy=cy-15,d=PF,a=dt<380?1:(450-dt)/70;
+  var p=Math.min(1,dt/350),sx=cx-11*PF,sy=cy-15-PL(),d=PF,a=dt<380?1:(450-dt)/70;
   g.globalAlpha=a;
   g.fillStyle='#c9d3d8';g.fillRect(sx+d*4,sy,d*3,1);
   g.fillStyle='#e8f0f4';g.fillRect(Math.min(sx-d*4,sx+d*4),sy-1,8,3);
@@ -1223,25 +1223,50 @@ var GUNS={
  holy:[[10,7,'#d4a632'],[11,7,'#d4a632'],[10,8,'#a8801e'],[11,8,'#a8801e'],[10,6,'#f2d16b'],[10,5,'#fff2b0']],
  shotgun:[[8,8,'#7a5230'],[9,8,'#7a5230'],[10,8,'#7a5230'],[10,7,'#5d6268'],[11,6,'#5d6268'],[12,6,'#6b7076'],[13,6,'#6b7076'],[14,6,'#8a9096'],[15,6,'#8a9096'],[16,6,'#aab0b6'],[11,7,'#8a9096'],[12,7,'#8a9096'],[13,7,'#4a3020'],[14,7,'#8a9096'],[15,7,'#8a9096'],[16,7,'#d8dde0']]
 };
+// the minigun is carried low at the hip: 3 rows down from where the cells above put it (its burst muzzle matches)
+GUNS.minigun=GUNS.minigun.map(function(q){return [q[0],q[1]+3,q[2]]});
 // bare hands: lead fist (first 4 cells) up by the face, rear fist tucked by the chest
 var FISTS=[[10,6,'#e0a870'],[11,6,'#c98e58'],[10,7,'#e0a870'],[11,7,'#c98e58'],[8,7,'#e0a870'],[8,8,'#c98e58']];
+// two-handed weapons: the second arm reaches forward under the weapon. s: sleeve cells, h: the support hand
+// (same cell grid as GUNS). The sleeve uses the lighter shirt/armor shade with a dark edge under it so it stands
+// out from the torso.
+var TWOH={minigun:{s:[[11,13],[12,13]],h:[13,13]},shotgun:{s:[[10,9],[11,8]],h:[12,8]},tesla:{s:[[10,9],[11,9]],h:[12,9]},
+ rocket:{s:[[11,8],[12,8]],h:[13,7]},sniper:{s:[[10,9],[11,8]],h:[12,8]},bat:{s:[[10,9],[11,8]],h:[11,7]}};
+// every cell of the held weapon plus the support arm, as [col,row,color]
+function heldCells(w,px){
+ var tw=TWOH[w];if(!tw)return px;var arm2=tw.s.concat([tw.h]),ol=pcol('P','k');
+ // dark edge first (under every arm cell, and past the hand), then the weapon, then the arm on top
+ var edge=arm2.map(function(q){return [q[0],q[1]+1,ol]}).concat([[tw.h[0]+1,tw.h[1],ol]]);
+ return edge.concat(px,tw.s.map(function(q){return [q[0],q[1],pcol('P','l')]}),[[tw.h[0],tw.h[1],'#e0a870']]);
+}
 function heldGun(cx,cy,fl,tint,ta){
- var x0=Math.round(cx-12),y0=Math.round(cy+3-32),w=SL[AC],px=GUNS[w]||FISTS;
+ var x0=Math.round(cx-12),y0=Math.round(cy+3-32-PL()),w=SL[AC],px=GUNS[w]||FISTS;
  // mid-punch the lead fist is drawn by drawPunch at the end of the arm
  if(px===FISTS&&FX&&FX.punch)px=FISTS.slice(4);
  var p=Math.min(1,Math.max(0,(performance.now()-DRAWT)/380)),e=1-Math.pow(1-p,2),ox=-(1-e),oy=Math.round(4*(1-e));
- px.forEach(function(q){var c=q[0]+ox,x=x0+Math.round((fl<0?11-c:c)*2),y=y0+(q[1]+oy)*2;g.fillStyle=q[2];g.fillRect(x,y,2,2);if(tint){g.globalAlpha=ta;g.fillStyle=tint;g.fillRect(x,y,2,2);g.globalAlpha=1}});
+ heldCells(w,px).forEach(function(q){var c=q[0]+ox,x=x0+Math.round((fl<0?11-c:c)*2),y=y0+(q[1]+oy)*2;g.fillStyle=fistCol(q[2]);g.fillRect(x,y,2,2);if(tint){g.globalAlpha=ta;g.fillStyle=tint;g.fillRect(x,y,2,2);g.globalAlpha=1}});
  var since=performance.now()-DRAWT-380;
  if(GUNS[w]&&since>=0&&since<60){var tip=px[px.length-1],tc=tip[0]+1;g.fillStyle='#fffbe0';g.fillRect(x0+(fl<0?11-tc:tc)*2,y0+tip[1]*2-1,2,2)}
 }
 var ARMC={jacket:{j:'#6b4226',l:'#8f5d36'},plate:{j:'#6f757a',l:'#a9aeb3'},vest:{j:'#34402a',l:'#56683f'},
- power:{j:'#5f6a72',l:'#a3adb4',h:'#6f7a82',a:'#6f7a82',n:'#2e363c',s:'#7f8a92',e:'#6dff95',p:'#4f5a62',m:'#2f363c',k:'#14181b'}};
+ power:{j:'#5f6a72',l:'#a3adb4',h:'#6f7a82',a:'#6f7a82',n:'#2e363c',s:'#7f8a92',e:'#6dff95',p:'#4f5a62',m:'#2f363c',k:'#14181b',V:'#ff3b2a',W:'#ffb0a0',q:'#0e1113'}};
 function pcol(t,ch){var a=t==='P'&&ARMC[arm];return a&&a[ch]||SPR[t].p[ch]}
+// power armor gets its own bigger frame: 14x19 instead of 12x16. Domed helmet with a red visor slit and grille,
+// wide pauldrons, thick legs. Column c of the normal sprite lines up with column c+1 here and everything from the
+// hands up sits 3 rows (PL() = 6 px) higher, so held guns and effects just lift by PL().
+var PWR=['....kkkkkk....','...klljjjjk...','..kljjjjjjjk..','..kjjnnVVVWk..','..kjjnnnnnnk..','..kjnqnqnqnk..','...knnnnnnk...',
+ '.kkkkknnkkkkk.','kllljjnnllljjk','kjjjjjjjjjjjjk','knnjjjjjjjjgg.','knnjlljjjjkg..','knnjjjjjjjk...','.knjnnnnnnk...',
+ '..kjjjjjjjjjk.','..kjjjk.kjjjk.','..kljjk.kljjk.','..knnnk.knnnk.','.kkkkkk.kkkkkk'];
+function pdat(){return arm==='power'?PWR:SPR.P.d}
+function PL(){return arm==='power'?6:0}
+// bare fists become armored gauntlets in power armor
+function fistCol(c){if(arm!=='power')return c;return c==='#e0a870'?ARMC.power.l:c==='#c98e58'?ARMC.power.j:c}
 function drawModel(cv){
- var c=cv.getContext('2d'),S=8,d=SPR.P.d;c.clearRect(0,0,cv.width,cv.height);
+ // power armor is taller, so it's drawn at 6 px a cell to fit; guns shift to its columns/rows (+1, +3)
+ var pw=arm==='power',c=cv.getContext('2d'),S=pw?6:8,d=pdat(),gx=pw?1:0,gy=pw?3:0;c.clearRect(0,0,cv.width,cv.height);
  c.fillStyle='rgba(109,255,149,.06)';for(var y=0;y<cv.height;y+=8)c.fillRect(0,y,cv.width,1);
  for(var j=0;j<d.length;j++)for(var i=0;i<d[j].length;i++){var ch=d[j][i];if(ch==='.'||ch==='g')continue;c.fillStyle=pcol('P',ch);c.fillRect(i*S,j*S,S,S)}
- (GUNS[SL[AC]]||FISTS).forEach(function(q){c.fillStyle=q[2];c.fillRect(q[0]*S,q[1]*S,S,S)});
+ heldCells(SL[AC],GUNS[SL[AC]]||FISTS).forEach(function(q){c.fillStyle=fistCol(q[2]);c.fillRect((q[0]+gx)*S,(q[1]+gy)*S,S,S)});
  if(arm==='plate'){c.fillStyle='#d8dde0';[[3,7],[6,7],[4,9],[7,9]].forEach(function(q){c.fillRect(q[0]*S+3,q[1]*S+3,2,2)})}
  if(arm==='vest'){c.fillStyle='#1f2618';c.fillRect(2*S,8*S+3,8*S,2);c.fillRect(2*S,10*S+3,8*S,2)}
 }
@@ -1259,7 +1284,7 @@ function cutEdge(t,j,i,mode){return t.charAt(0)==='r'?(mode===4?i===7:i===6):(mo
 // head centre relative to the feet when facing right
 function headOff(t){return t.charAt(0)==='r'?[9,-8]:[-1,-21]}
 // mode: 0 whole sprite, 1 without the head, 2 head only
-function sprite(cx,cy,t,fl,tint,ta,mode){var s=SPR[t],S=2,d=s.d,w=d[0].length,h=d.length,x0=Math.round(cx-w*S/2),y0=Math.round(cy+3-h*S);for(var j=0;j<h;j++)for(var i=0;i<w;i++){var ch=d[j][i];if(ch==='.'||(t==='P'&&ch==='g'))continue;var rim=0,rc=null;if(mode===3){var hc=holeCell(t,j,i);if(hc===2)continue;rim=hc}else if(mode===4||mode===5){var tp=isTop(t,j,i);if(mode===4?!tp:tp)continue;if(cutEdge(t,j,i,mode))rc=CUTGLOW}else if(mode===6){if(((i*73+j*151)%97)/97<DISS)continue}else if(mode){var hd=isHead(t,j,i);if(mode===1?hd:!hd)continue}var px=x0+(fl<0?w-1-i:i)*S;g.fillStyle=rc||(rim?'#6a0a06':pcol(t,ch));g.fillRect(px,y0+j*S,S,S);if(tint){g.globalAlpha=ta;g.fillStyle=tint;g.fillRect(px,y0+j*S,S,S);g.globalAlpha=1}}}
+function sprite(cx,cy,t,fl,tint,ta,mode){var s=SPR[t],S=2,d=t==='P'?pdat():s.d,w=d[0].length,h=d.length,x0=Math.round(cx-w*S/2),y0=Math.round(cy+3-h*S);for(var j=0;j<h;j++)for(var i=0;i<w;i++){var ch=d[j][i];if(ch==='.'||(t==='P'&&ch==='g'))continue;var rim=0,rc=null;if(mode===3){var hc=holeCell(t,j,i);if(hc===2)continue;rim=hc}else if(mode===4||mode===5){var tp=isTop(t,j,i);if(mode===4?!tp:tp)continue;if(cutEdge(t,j,i,mode))rc=CUTGLOW}else if(mode===6){if(((i*73+j*151)%97)/97<DISS)continue}else if(mode){var hd=isHead(t,j,i);if(mode===1?hd:!hd)continue}var px=x0+(fl<0?w-1-i:i)*S;g.fillStyle=rc||(rim?'#6a0a06':pcol(t,ch));g.fillRect(px,y0+j*S,S,S);if(tint){g.globalAlpha=ta;g.fillStyle=tint;g.fillRect(px,y0+j*S,S,S);g.globalAlpha=1}}}
 function figure(cx,cy,col,t,fl,sh,tint,ta,mode){
  g.fillStyle='rgba(0,0,0,.5)';g.beginPath();g.ellipse(cx,cy+2+(sh||0),9,4,0,0,7);g.fill();g.fillStyle=col;
  if(SPR[t]){sprite(cx,cy,t,fl,tint,ta,mode);if(t==='P')heldGun(cx,cy,fl,tint,ta);}
@@ -1538,7 +1563,7 @@ var FX=null;
 function scr(i){var x=i%W,y=(i/W)|0;return [OX+(x-y)*TW/2,OY+(x+y)*TH/2+TH/2]}
 function drawFx(t,X){
  X=X||FX;if(X.hra)return drawHRA(t,X);if(X.lob)return drawLob(t,X);if(X.burst)return drawBurst(t,X);if(X.hs)return drawHeadshot(t,X);if(X.rk)return drawRocket(t,X);if(X.fl)return drawFlame(t,X);if(X.lzs)return drawLaser(t,X);if(X.tz)return drawTesla(t,X);if(X.ho)return drawHole(t,X);if(X.pel)return drawPellets(t,X);if(X.bat)return drawBat(t,X);if(X.punch)return drawPunch(t,X);
- var a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+(X.mz||{rifle:19,shotgun:23,pistol:13,minigun:23,sniper:25,rocket:23,flamer:23,laser:15,tesla:21}[SL[AC]]||11)*dir,my=a[1]-15,tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='R'||X.ty==='P'?14:6)+(X.hit?0:X.mo[1]);
+ var a=scr(X.a),b=scr(X.b),dir=b[0]>=a[0]?1:-1,mx=a[0]+(X.mz||{rifle:19,shotgun:23,pistol:13,minigun:23,sniper:25,rocket:23,flamer:23,laser:15,tesla:21}[SL[AC]]||11)*dir,my=a[1]-15-(X.ty==='P'?0:PL()),tx=b[0]+(X.hit?0:X.mo[0]),ty=b[1]-(X.ty==='R'||X.ty==='P'?14:6)+(X.hit?0:X.mo[1]);
  if(X.dead&&t<.55)figure(b[0],b[1],cv('--hot'),sk(X.dead));
  if(t<.25){var f=1-t/.25,r=3+7*f;g.fillStyle='rgba(255,220,120,'+f+')';g.beginPath();g.arc(mx,my,r,0,7);g.fill();g.fillStyle='rgba(255,255,255,'+f+')';g.beginPath();g.arc(mx,my,r*.45,0,7);g.fill();}
  var u=(t-.05)/.5;
