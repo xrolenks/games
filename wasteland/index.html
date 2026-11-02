@@ -47,6 +47,8 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .slot.rl .ico{opacity:.45}
 .slot .rlm{position:absolute;left:6px;top:4px;font-size:.7rem;font-weight:bold;letter-spacing:.06em;color:var(--hot)}
 .slot.rl .apc{color:var(--hot)}
+.slot .spr{position:absolute;right:6px;top:4px;font-size:.72rem;color:var(--dim)}
+.slot .spr::before{content:"+";opacity:.7}
 .slot:hover{background:var(--panel)}
 .slot.on:hover{background:var(--panel)}
 .slot small{display:block;font-size:.75rem;color:var(--dim)}
@@ -70,10 +72,14 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .mbox .go{width:100%;margin-top:10px;font-size:1rem;padding:10px}
 #m-intro h2{font-size:1rem;letter-spacing:.08em;margin:0 0 14px}
 #m-intro p{text-align:left;font-size:.92rem;line-height:1.5;margin:0 0 12px;color:var(--ink)}
+#curprev{display:flex;gap:16px;align-items:center;justify-content:center;min-height:60px;background:#2b1c10;border:2px solid var(--edge);margin-top:4px}
+#curprev canvas{image-rendering:pixelated}
 #m-look h2{font-size:1rem;letter-spacing:.08em;margin:0 0 12px}
 #lookcv{display:block;margin:0 auto 14px;width:96px;height:128px;image-rendering:pixelated;border:2px solid var(--edge);background:#2b1c10;padding:6px;box-sizing:content-box}
 .lrow{display:flex;align-items:center;gap:10px;margin:0 0 10px;text-align:left}
-.lrow>span{width:5.5em;flex:none;color:var(--ink);font-size:.85rem}
+.lrow>span,.lrow>label{min-width:5.5em;white-space:nowrap;flex:none;color:var(--ink);font-size:.85rem}
+#cursz{flex:1;min-width:0;accent-color:#6dff95;height:28px;cursor:pointer}
+#curszv{min-width:3.4em;text-align:right;color:var(--hot);font-size:.85rem}
 .opts{display:flex;gap:6px;flex-wrap:wrap;flex:1}
 .opts button{flex:1;padding:6px 8px}
 .opts button[aria-pressed="true"]{border-color:var(--hot);color:var(--hot);box-shadow:0 0 0 1px var(--hot) inset}
@@ -150,7 +156,15 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="slots"></div>
 <div class="ctl tctl"><button id="treload" type="button">Reload</button><button id="tpick" type="button">Pick up</button><button id="tmap" type="button">Map</button><button id="tzout" class="zm" type="button" aria-label="Zoom out">&minus;</button><button id="tzin" class="zm" type="button" aria-label="Zoom in">+</button></div>
 <div id="log" aria-live="polite"></div>
-<div class="ctl"><button id="end" type="button">End turn</button><button id="save" type="button">Save</button><button id="load" type="button">Load</button><button id="new" type="button">New game</button><button id="invbtn" type="button">Inventory</button><button id="helpbtn" type="button">Controls</button></div>
+<div class="ctl"><button id="end" type="button">End turn</button><button id="save" type="button">Save</button><button id="load" type="button">Load</button><button id="new" type="button">New game</button><button id="invbtn" type="button">Inventory</button><button id="helpbtn" type="button">Controls</button><button id="setbtn" type="button">Settings</button></div>
+<div id="sets" class="modal" role="dialog" aria-modal="true" aria-labelledby="sets-title" hidden>
+<div class="box">
+<h2 id="sets-title">SETTINGS</h2>
+<div class="lrow"><label for="cursz">Cursor size</label><input id="cursz" type="range" min="16" max="48" step="1"><output id="curszv" for="cursz"></output></div>
+<div id="curprev" aria-hidden="true"></div>
+<button id="setclose" class="go" type="button" style="margin-top:12px">Close</button>
+</div>
+</div>
 <div id="inv" class="modal" role="dialog" aria-modal="true" aria-labelledby="inv-title" hidden>
 <div class="box">
 <h2 id="inv-title">INVENTORY</h2>
@@ -231,7 +245,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 </div>
 <script>
 (function(){
-var W=18,H=14,T,items,E,P,EX,AP,ammo,stims,hp,lv,over,logs,SL,AC,arm,grid=document.getElementById('grid'),g=grid.getContext('2d'),TW=48,TH=24,OX=216,OY=34;
+var W=18,H=14,T,items,E,P,EX,AP,stims,hp,lv,over,logs,SL,AC,arm,grid=document.getElementById('grid'),g=grid.getContext('2d'),TW=48,TH=24,OX=216,OY=34;
 var MAXAP=10;// action points per turn
 var PUNCH=3;// AP per punch
 var CRATES=0;// crate obstacles per area (was 16)
@@ -256,6 +270,20 @@ var GEAR={
  vest:{k:'a',n:'Riot vest',dr:3},
  power:{k:'a',n:'Power armor',dr:8}
 };
+// every gun has its own ammo. AM: spare ammo by weapon id. f: how much one ammo pickup gives.
+// GOT: guns already found this game, so a gun only comes with starter ammo the first time.
+var AMMO={pistol:{n:'Revolver rounds',u:'rds',f:6},rifle:{n:'Rifle rounds',u:'rds',f:5},sniper:{n:'Sniper rounds',u:'rds',f:4},shotgun:{n:'Shotgun shells',u:'shells',f:4},
+ minigun:{n:'Minigun belt',u:'rds',f:40},flamer:{n:'Fuel',u:'fuel',f:10},laser:{n:'Energy cells',u:'cells',f:12},rocket:{n:'Rockets',u:'rockets',f:2}};
+var AM={},GOT={};
+// guns that use another gun's ammo pool: the tesla cannon runs on the laser pistol's energy cells
+var SHARED={tesla:'laser'};
+function ak(w){return SHARED[w]||w}
+function ainf(w){return AMMO[ak(w)]}
+function am(w){return AM[ak(w)]||0}
+function addAmmo(w,n){AM[ak(w)]=am(w)+n}
+function ammoName(w){return ainf(w)?ainf(w).n:'Ammo'}
+// the guns an ammo pool feeds, e.g. "Laser pistol or Tesla cannon"
+function ammoFor(pool){return Object.keys(GEAR).filter(function(g){return GEAR[g].cap&&ak(g)===pool}).map(function(g){return GEAR[g].n}).join(' or ')}
 function dr(){return arm?GEAR[arm].dr:0}
 function rnd(n){return Math.floor(Math.random()*n)}
 function ix(x,y){return y*W+x}
@@ -289,7 +317,7 @@ function newLevel(){
  var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[SK.a]='g:'+gp[rnd(gp.length)];items[SK.b]='s';for(var gi=0;gi<(lv>1?1:0);gi++)items[free(3)]='g:'+gp[rnd(gp.length)];
  AP=MAXAP;WARNED=false;
 }
-function newGame(){if(busy())return;hp=30;PF=1;ammo=12;stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];say('Bunker 9 is silent. Cross the wasteland to the radio tower.');say('Reach the red flag in each of 3 areas.');newLevel();render();}
+function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];say('Bunker 9 is silent. Cross the wasteland to the radio tower.');say('Reach the red flag in each of 3 areas.');newLevel();render();}
 function nextLevel(){
  lv++;
  if(lv>3){over=true;say('The tower hums. Your signal reaches the other bunkers.');say('YOU WIN. Press New game to play again.');return}
@@ -299,7 +327,8 @@ function step(n){
  if(T[n]||enemyAt(n)||AP<1||over)return false;
  walk('P',P,n,PH++);P=n;AP--;
  if(items[P]==='s'){stims++;say('Found a stim pack.');delete items[P]}
- else if(items[P]==='a'){ammo+=6;say('Found 6 rounds.');delete items[P]}
+ // an ammo crate holds ammo for one of the guns you own, picked at random
+ else if(items[P]==='a'){var own=SL.concat(BAG).filter(function(w){return ainf(w)}),t=own.length?own[rnd(own.length)]:'pistol';addAmmo(t,ainf(t).f);say('Found '+ainf(t).f+' '+ainf(t).u+' of '+ammoName(t).toLowerCase()+'.');delete items[P]}
  else if(items[P]&&items[P][0]==='g'){say('Gear here: '+GEAR[items[P].slice(2)].n+'. Tap your own tile to equip (1 AP).')}
  if(P===EX){nextLevel();return false}
  return true;
@@ -308,7 +337,7 @@ function attack(e){
  var d=mh(P,e.i),dmg,hit,fx=scr(e.i)[0]-scr(P)[0];if(fx)PF=fx>0?1:-1;
  if(SL[AC]&&GEAR[SL[AC]].aoe)return lob(e,GEAR[SL[AC]]);
  if(d===1&&!isWeap(SL[AC])){if(AP<PUNCH)return say('A punch costs '+PUNCH+' AP.');AP-=PUNCH;hit=.85;dmg=3+rnd(3);say('You punch the '+nm(e)+'.');FX={a:P,b:e.i,ty:e.t,punch:1,mo:[0,0],dur:PJ.dur,popT:PJ.imp/PJ.dur,downT:PJ.imp/PJ.dur}}
- else{if(!isWeap(SL[AC]))return say(SL[AC]==='stim'?'You have a stim pack in hand. Click yourself to use it, or swap slots (Q).':'Nothing in this slot. Close in to punch, or swap slots (Q).');var wd=GEAR[SL[AC]];if(wd.melee)return swing(e,wd,d);if(wd.cap?MAG[AC]<1:ammo<1)return say(wd.cap?'*Click* The '+wd.n+' is empty. Reload with R ('+RELOAD+' AP).':'Out of ammo. Close in to punch.');if(d>wd.rng)return say('Out of range for the '+wd.n+' (max '+wd.rng+').');if(!los(P,e.i))return say('No clear shot: a wall is in the way.');if(AP<wd.ap)return say('The '+wd.n+' costs '+wd.ap+' AP.');if(wd.burst)return burst(e,wd,d);if(wd.pellets)return pellets(e,wd,d);AP-=wd.ap;if(wd.cap)MAG[AC]--;else ammo--;hit=Math.min(.95,Math.max(.25,.95-.09*d+wd.acc));dmg=wd.min+rnd(wd.max-wd.min+1);say('You fire at the '+nm(e)+' ('+Math.round(hit*100)+'%).');FX={a:P,b:e.i,ty:e.t,mo:[rnd(17)-8,rnd(9)-4]}}
+ else{if(!isWeap(SL[AC]))return say(SL[AC]==='stim'?'You have a stim pack in hand. Click yourself to use it, or swap slots (Q).':'Nothing in this slot. Close in to punch, or swap slots (Q).');var wd=GEAR[SL[AC]];if(wd.melee)return swing(e,wd,d);if(wd.cap?MAG[AC]<1:am(SL[AC])<1)return say(wd.cap?'*Click* The '+wd.n+' is empty. Reload with R ('+RELOAD+' AP).':'Out of ammo. Close in to punch.');if(d>wd.rng)return say('Out of range for the '+wd.n+' (max '+wd.rng+').');if(!los(P,e.i))return say('No clear shot: a wall is in the way.');if(AP<wd.ap)return say('The '+wd.n+' costs '+wd.ap+' AP.');if(wd.burst)return burst(e,wd,d);if(wd.pellets)return pellets(e,wd,d);AP-=wd.ap;if(wd.cap)MAG[AC]--;else AM[ak(SL[AC])]--;hit=Math.min(.95,Math.max(.25,.95-.09*d+wd.acc));dmg=wd.min+rnd(wd.max-wd.min+1);say('You fire at the '+nm(e)+' ('+Math.round(hit*100)+'%).');FX={a:P,b:e.i,ty:e.t,mo:[rnd(17)-8,rnd(9)-4]}}
  var landed=Math.random()<hit;
  if(FX){FX.hit=landed;FX.tgt=e;FX.dmg=dmg}else hq(e,landed?'-'+dmg:'MISS',landed,PH++);
  if(landed){e.hp-=dmg;say('Hit for '+dmg+'.');if(e.hp<=0){say('The '+nm(e)+' goes down.');E.splice(E.indexOf(e),1);var body={i:e.i,t:sk(e),f:P%W<=e.i%W?1:-1};BD.push(body);if(FX){FX.dead=e;FX.body=body;if(wd&&wd.headshot)headshot(e,body);else if(wd&&wd.hole)holeKill(e,body)}}}else say('Miss.');
@@ -383,9 +412,10 @@ function equipHere(){
  if(AP<1){say('No action points left.');return}
  var id=it.slice(2),gd=GEAR[id],old,h=AC;
  AP--;
- if(gd.k==='w'){if(SL[AC]&&!SL[1-AC])h=1-AC;old=SL[h];if(old==='stim')old='';if(old&&GEAR[old].cap&&MAG[h]){ammo+=MAG[h];say('Unloaded '+MAG[h]+' rounds from the '+GEAR[old].n+'.')}MAG[h]=0;SL[h]=id;if(h===AC)drawWeapon()}else{old=arm;arm=id}
+ if(gd.k==='w'){if(SL[AC]&&!SL[1-AC])h=1-AC;old=SL[h];if(old==='stim')old='';if(old&&GEAR[old].cap&&MAG[h]){addAmmo(old,MAG[h]);say('Unloaded '+MAG[h]+' '+ainf(old).u+' from the '+GEAR[old].n+'.')}MAG[h]=0;SL[h]=id;if(h===AC)drawWeapon()}else{old=arm;arm=id}
  if(old&&gd.k==='w')items[P]='g:'+old;else{delete items[P];if(old)BAG.push(old)}
  say('Equipped '+gd.n+(gd.k==='w'?' in slot '+(h+1):'')+(old?(gd.k==='w'?' and left the '+GEAR[old].n+' behind.':' and packed the '+GEAR[old].n+'.'):'.')+(gd.cap?' It needs loading (R).':''));
+ if(ainf(id)&&!GOT[id]){GOT[id]=1;addAmmo(id,ainf(id).f*2);say('It came with '+ainf(id).f*2+' '+ainf(id).u+' of '+ammoName(id).toLowerCase()+'.')}
 }
 function setSlot(k){if(over||busy()||k===AC)return;AC=k;drawWeapon();render()}
 // Minigun: up to 20 rounds per burst, each rolls to hit on its own; a kill plays the riddled-then-fall animation
@@ -777,7 +807,7 @@ var RM=['',''];
 function inReload(k){var gd=GEAR[SL[k]];if(!RM[k]||RM[k]!==SL[k]||!gd||!gd.cap||MAG[k]>=gd.cap){RM[k]='';return false}return true}
 // ammo left in a slot's gun as a bar, no numbers: full = full width, empty = just the track
 function ammoBar(k){var gd=GEAR[SL[k]];if(!gd||!gd.cap)return '';var p=Math.max(0,Math.min(1,MAG[k]/gd.cap));return '<span class="amb" aria-hidden="true"><i'+(p<=.25?' class="low"':'')+' style="width:'+Math.round(p*100)+'%"></i></span>'}
-function magTxt(k){var gd=GEAR[SL[k]];return gd&&gd.cap?' · '+MAG[k]+'/'+gd.cap+' loaded':gd&&gd.aoe?' · ×'+GREN:''}
+function magTxt(k){var gd=GEAR[SL[k]];return gd&&gd.cap?' · '+MAG[k]+'/'+gd.cap+' loaded · '+am(SL[k])+' spare':gd&&gd.aoe?' · ×'+GREN:''}
 function isWeap(w){return !!w&&GEAR[w].k==='w'}
 // slot description: weapon stats, stim count, or bare hands
 function slotInfo(k,short){var w=SL[k],gd=GEAR[w];if(!gd)return 'punch only';if(gd.k==='u')return '×'+stims+' · +12 HP · 1 AP · click yourself';if(gd.melee)return gd.min+'-'+gd.max+' dmg · melee · '+gd.ap+' AP';return gd.min+'-'+gd.max+' dmg · '+(short?'rng ':'range ')+gd.rng+' · '+gd.ap+' AP'+magTxt(k)}
@@ -789,7 +819,7 @@ function equipStim(k){
  if(SL[k]&&SL[k]!=='stim'){unload(k);BAG.push(SL[k])}SL[k]='stim';MAG[k]=0;
  say('Stim packs ready in slot '+(k+1)+'. Click yourself (or press E) to use one.');if(k===AC)drawWeapon();
 }
-function loadedOk(){if(!isWeap(SL[AC]))return false;var gd=GEAR[SL[AC]];if(gd.melee)return true;return !!gd&&(gd.aoe?GREN>0:gd.cap?MAG[AC]>0:ammo>0)}
+function loadedOk(){if(!isWeap(SL[AC]))return false;var gd=GEAR[SL[AC]];if(gd.melee)return true;return !!gd&&(gd.aoe?GREN>0:gd.cap?MAG[AC]>0:am(SL[AC])>0)}
 function reload(){if(!over&&!busy()&&reloadSlot(AC,false))after();else render()}
 // free=true for reloading from the inventory, which was already paid for when it opened
 function reloadSlot(k,free){
@@ -797,9 +827,9 @@ function reloadSlot(k,free){
  if(!gd||!gd.cap){say(gd?'The '+gd.n+' doesn\'t need reloading.':'Nothing to reload in this slot.');return false}
  var need=gd.cap-MAG[k];
  if(need<=0){say('The '+gd.n+' is already full.');return false}
- if(ammo<1){say('No spare rounds to reload with.');return false}
+ var w=SL[k];if(am(w)<1){say('No '+ammoName(w).toLowerCase()+' left to reload with.');return false}
  if(!free&&AP<RELOAD){say('Reloading costs '+RELOAD+' AP.');return false}
- var n=Math.min(need,ammo);if(!free)AP-=RELOAD;ammo-=n;MAG[k]+=n;
+ var n=Math.min(need,am(w));if(!free)AP-=RELOAD;AM[ak(w)]-=n;MAG[k]+=n;
  say('You reload the '+gd.n+' ('+MAG[k]+'/'+gd.cap+').');
  POPS.push({o:'P',txt:'RELOAD',t:performance.now(),dy:0,col:'#cfe8d6'});if(k===AC)drawWeapon();else kick(700);
  return true;
@@ -808,11 +838,11 @@ function reloadSlot(k,free){
 function giveLoaded(id){var k=SL.indexOf(id),cap=GEAR[id].cap||0;if(k>=0){MAG[k]=cap;return}if(BAG.indexOf(id)<0)BAG.push(id);LOADED[id]=cap}
 // a gun moved from a slot into Carried keeps its rounds (held in LOADED until it's equipped again)
 function stash(k){var w=SL[k];if(w&&GEAR[w].cap){if(MAG[k])LOADED[w]=MAG[k];else delete LOADED[w]}MAG[k]=0}
-// load a carried gun straight from spare ammo (free, like everything else inside the inventory)
+// load a carried gun straight from its spare ammo (free, like everything else inside the inventory)
 function loadCarried(i){var id=BAG[i],gd=GEAR[id];if(over||!gd||!gd.cap)return;var cur=LOADED[id]||0,need=gd.cap-cur;
- if(need<=0){say('The '+gd.n+' is already full.');return}if(ammo<1){say('No spare rounds to load with.');return}
- var n=Math.min(need,ammo);ammo-=n;LOADED[id]=cur+n;say('You load the '+gd.n+' ('+LOADED[id]+'/'+gd.cap+').')}
-function unload(k){if(MAG[k]){ammo+=MAG[k];MAG[k]=0}}
+ if(need<=0){say('The '+gd.n+' is already full.');return}if(am(id)<1){say('No '+ammoName(id).toLowerCase()+' left to load with.');return}
+ var n=Math.min(need,am(id));AM[ak(id)]-=n;LOADED[id]=cur+n;say('You load the '+gd.n+' ('+LOADED[id]+'/'+gd.cap+').')}
+function unload(k){if(MAG[k]){addAmmo(SL[k],MAG[k]);MAG[k]=0}}
 function unequip(k){if(over||!SL[k])return;var w=SL[k];stash(k);if(w!=='stim')BAG.push(w);SL[k]='';say('Unequipped the '+GEAR[w].n+'.')}
 function equipFromBag(i,k){
  var id=BAG[i];if(over||!id||GEAR[id].k!=='w')return;
@@ -1156,18 +1186,18 @@ function animate(done){var t0=performance.now(),D=FX.dur||800;render();requestAn
 function render(){
  var pips='';for(var q=0;q<MAXAP;q++)pips+='<i'+(q<AP?' class="on"':'')+'></i>';
  document.getElementById('hud').innerHTML='<span>HP</span><span class="track"><i style="width:'+Math.round(100*Math.max(0,hp)/30)+'%"></i></span><b>'+hp+'/30</b><span>AP</span><span class="pips">'+pips+'</span><b>'+AP+'/'+MAXAP+'</b>';
- document.getElementById('slots').innerHTML=SL.map(function(w,k){var gd=GEAR[w],rl=inReload(k),nm2=gd?gd.n:'Unarmed';return '<button type="button" class="slot'+(k===AC?' on':'')+(rl?' rl':'')+'" data-k="'+k+'" aria-pressed="'+(k===AC)+'" aria-label="Slot '+(k+1)+': '+(rl?'reload the '+nm2:nm2)+'" title="'+(rl?'Click to reload the '+nm2+' ('+MAG[k]+'/'+gd.cap+')':nm2+(gd&&gd.cap?' (right-click for reload mode)':''))+'">'+wIcon(w)+(rl?'<span class="rlm">RELOAD</span>':'')+ammoBar(k)+'<span class="apc">'+(rl?RELOAD:gd?gd.k==='u'?1:gd.ap:PUNCH)+' AP</span></button>'}).join('');
+ document.getElementById('slots').innerHTML=SL.map(function(w,k){var gd=GEAR[w],rl=inReload(k),nm2=gd?gd.n:'Unarmed';return '<button type="button" class="slot'+(k===AC?' on':'')+(rl?' rl':'')+'" data-k="'+k+'" aria-pressed="'+(k===AC)+'" aria-label="Slot '+(k+1)+': '+(rl?'reload the '+nm2:nm2)+'" title="'+(rl?'Click to reload the '+nm2+' ('+MAG[k]+'/'+gd.cap+')':nm2+(gd&&gd.cap?' (right-click for reload mode)':''))+'">'+wIcon(w)+(rl?'<span class="rlm">RELOAD</span>':'')+(gd&&gd.cap?'<span class="spr" title="Spare '+ammoName(w).toLowerCase()+'">'+am(w)+'</span>':'')+ammoBar(k)+'<span class="apc">'+(rl?RELOAD:gd?gd.k==='u'?1:gd.ap:PUNCH)+' AP</span></button>'}).join('');
  drawIso();if(!CUR)drawOdds();
  document.getElementById('log').innerHTML=logs.map(function(l){return '<div>&gt; '+l.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'}).join('');
- put(AUTO,snap());
+ put(AUTO,snap());updateCursor();
 }
 var AUTO='bunker9-auto',SLOT='bunker9-slot';
 function put(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
 function get(k){try{return localStorage.getItem(k)}catch(e){return null}}
-function snap(){return JSON.stringify({T:T,items:items,E:E,P:P,EX:EX,AP:AP,ammo:ammo,stims:stims,hp:hp,lv:lv,over:over,logs:logs,SL:SL,MAG:MAG,LOADED:LOADED,HRALL:HRALL,GREN:GREN,AC:AC,arm:arm,BAG:BAG,F:F,SK:SK,BD:BD,PF:PF,LOOK:LOOK})}
+function snap(){return JSON.stringify({T:T,items:items,E:E,P:P,EX:EX,AP:AP,AM:AM,GOT:GOT,stims:stims,hp:hp,lv:lv,over:over,logs:logs,SL:SL,MAG:MAG,LOADED:LOADED,HRALL:HRALL,GREN:GREN,AC:AC,arm:arm,BAG:BAG,F:F,SK:SK,BD:BD,PF:PF,LOOK:LOOK})}
 function restore(s){
  try{var d=JSON.parse(s);if(!d||!d.T||d.T.length!==W*H)return false;var sl=d.SL||[d.wpn||'pistol',''];if(!sl.every(function(w){return !w||GEAR[w]}))return false;
-  T=d.T;items=d.items;E=d.E;P=d.P;EX=d.EX;AP=d.AP;ammo=d.ammo;stims=d.stims;hp=d.hp;lv=d.lv;over=d.over;logs=d.logs;SL=sl;GREN=d.GREN||0;LOADED=d.LOADED||{};HRALL=!!d.HRALL;MAG=d.MAG||sl.map(function(w){return GEAR[w]&&GEAR[w].cap||0});AC=d.AC?1:0;arm=d.arm;BAG=(d.BAG||[]).filter(function(b){return GEAR[b]});F=d.F;SK=d.SK;BD=d.BD||[];PF=d.PF||1;if(d.LOOK){LOOK=d.LOOK;buildPlayer()}MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
+  T=d.T;items=d.items;E=d.E;P=d.P;EX=d.EX;AP=d.AP;AM=d.AM||{pistol:d.ammo||0};Object.keys(SHARED).forEach(function(w){if(AM[w]){AM[SHARED[w]]=(AM[SHARED[w]]||0)+AM[w];delete AM[w]}});GOT=d.GOT||{pistol:1};stims=d.stims;hp=d.hp;lv=d.lv;over=d.over;logs=d.logs;SL=sl;GREN=d.GREN||0;LOADED=d.LOADED||{};HRALL=!!d.HRALL;MAG=d.MAG||sl.map(function(w){return GEAR[w]&&GEAR[w].cap||0});AC=d.AC?1:0;arm=d.arm;BAG=(d.BAG||[]).filter(function(b){return GEAR[b]});F=d.F;SK=d.SK;BD=d.BD||[];PF=d.PF||1;if(d.LOOK){LOOK=d.LOOK;buildPlayer()}MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
  catch(e){return false}
 }
 function saveGame(){say(put(SLOT,snap())?'Game saved.':'Save failed: browser storage is unavailable.');render();}
@@ -1224,15 +1254,44 @@ document.getElementById('tzout').addEventListener('click',function(){zoom(1/1.15
 document.getElementById('tzin').addEventListener('click',function(){zoom(1.15)});
 document.addEventListener('mousedown',function(ev){if(ev.button!==2)hideFoe()});
 window.addEventListener('keydown',hideFoe);
-function hover(a){if(a===HOV)return;HOV=a;if(!busy()){drawIso();drawOdds()}}
+function hover(a){if(a===HOV)return;HOV=a;updateCursor();if(!busy()){drawIso();drawOdds()}}
+// map cursor: pixel crosshair drawn in code, green normally, red over an enemy you can't hit from here.
+// CURS is the cursor's size in screen pixels (CURMIN-CURMAX), set with the Settings slider and kept in browser storage.
+var CURPAT=['...........','.....c.....','.....c.....','.....c.....','...........','.ccc.c.ccc.','...........','.....c.....','.....c.....','.....c.....','...........'];
+var CURMIN=16,CURMAX=48,CURS=(function(v){v=+v;if(v>=2&&v<=4)v*=11;return v>=CURMIN&&v<=CURMAX?Math.round(v):33})(get('bunker9-cursor')),CURURL={},CURK='';
+// cells snap to whole pixels, so any size stays crisp
+function cursorImg(col,N){
+ var n=CURPAT.length,c=document.createElement('canvas'),x=c.getContext('2d');c.width=c.height=N;
+ function on(i,j){return i>=0&&j>=0&&i<n&&j<n&&CURPAT[j][i]==='c'}
+ function e(k){return Math.round(k*N/n)}
+ for(var j=0;j<n;j++)for(var i=0;i<n;i++){var f=on(i,j)?col:on(i-1,j)||on(i+1,j)||on(i,j-1)||on(i,j+1)?'#0b0f0c':null;if(f){x.fillStyle=f;x.fillRect(e(i),e(j),e(i+1)-e(i),e(j+1)-e(j))}}
+ return c;
+}
+function buildCursors(){var h=Math.floor(CURS/2);['g','r'].forEach(function(k){CURURL[k]='url('+cursorImg(k==='g'?'#6dff95':'#ff4a3a',CURS).toDataURL()+') '+h+' '+h+', crosshair'});CURK='';updateCursor()}
+// same reach rules as attack(): bare hands punch adjacent, melee adjacent, guns need range and a clear line; grenades always reach
+function canHit(e){var w=SL[AC],gd=GEAR[w],d=mh(P,e.i);if(!isWeap(w))return d===1;if(gd.aoe)return true;if(gd.melee)return d<=1;return d<=gd.rng&&los(P,e.i)}
+function updateCursor(){var e=HOV>=0?enemyAt(HOV):null,k=e&&!canHit(e)?'r':'g';if(k===CURK)return;CURK=k;grid.style.cursor=CURURL[k]}
+buildCursors();
 grid.addEventListener('mousemove',function(e){hover(pick(e))});
 grid.addEventListener('mouseleave',function(){hover(-1)});
 document.getElementById('end').addEventListener('click',endTurn);
 document.getElementById('new').addEventListener('click',newGame);
 document.getElementById('save').addEventListener('click',saveGame);
 var HELP=document.getElementById('help'),INV=document.getElementById('inv');
-var CHEAT=document.getElementById('cheat');
-function openModal(){return !MENU.hidden?MENU:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:null}
+var CHEAT=document.getElementById('cheat'),SETS=document.getElementById('sets');
+function openModal(){return !MENU.hidden?MENU:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
+// settings: cursor size, with a green and red preview at the real size
+var CURSZ=document.getElementById('cursz');
+function syncSets(){
+ CURSZ.value=CURS;document.getElementById('curszv').textContent=CURS+' px';
+ var pv=document.getElementById('curprev');pv.innerHTML='';pv.appendChild(cursorImg('#6dff95',CURS));pv.appendChild(cursorImg('#ff4a3a',CURS));
+}
+// preview follows the drag live; the real cursor is rebuilt and saved when the drag ends
+CURSZ.addEventListener('input',function(){CURS=+CURSZ.value;syncSets()});
+CURSZ.addEventListener('change',function(){put('bunker9-cursor',CURS);buildCursors()});
+document.getElementById('setbtn').addEventListener('click',function(){syncSets();showModal(SETS,'setclose')});
+document.getElementById('setclose').addEventListener('click',function(){closeModal(SETS)});
+SETS.addEventListener('click',function(e){if(e.target===SETS)closeModal(SETS)});
 function openCheat(){if(busy())return;document.getElementById('cheatin').value='';showModal(CHEAT,'cheatin')}
 document.getElementById('cheatform').addEventListener('submit',function(e){
  e.preventDefault();var code=document.getElementById('cheatin').value.trim().toLowerCase();closeModal(CHEAT);
@@ -1242,11 +1301,11 @@ document.getElementById('cheatform').addEventListener('submit',function(e){
   say('CHEAT: 3 Holy Hand Grenades added to your inventory. Equip them from Carried.');
   POPS.push({o:'P',txt:'+3 HOLY',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='heavyweaponsguy'){
-  giveLoaded('minigun');ammo+=200;
+  giveLoaded('minigun');addAmmo('minigun',200);
   say('CHEAT: Fully loaded Minigun and 200 spare rounds added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+MINIGUN',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='boomstick'){
-  giveLoaded('shotgun');ammo+=20;
+  giveLoaded('shotgun');addAmmo('shotgun',20);
   say('CHEAT: Fully loaded Sawed-off and 20 spare shells added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+SHOTGUN',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='homerun'){
@@ -1254,11 +1313,11 @@ document.getElementById('cheatform').addEventListener('submit',function(e){
   say(HRALL?'CHEAT: Home run mode ON. Every kill sends the enemy flying off the map. Enter the code again to turn it off.':'CHEAT: Home run mode OFF.');
   POPS.push({o:'P',txt:HRALL?'HOME RUN MODE':'HOME RUN OFF',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='firestarter'){
-  giveLoaded('flamer');ammo+=30;
+  giveLoaded('flamer');addAmmo('flamer',30);
   say('CHEAT: Fuelled Flamethrower and 30 spare fuel added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+FLAMETHROWER',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='pewpew'){
-  giveLoaded('laser');ammo+=24;
+  giveLoaded('laser');addAmmo('laser',24);
   say('CHEAT: Charged Laser pistol and 24 spare cells added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+LASER PISTOL',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='testdummy'){
@@ -1266,7 +1325,7 @@ document.getElementById('cheatform').addEventListener('submit',function(e){
   if(spot===undefined)say('No room next to you for a test dummy.');
   else{E.push({i:spot,t:'R',hp:1,g:rnd(2)?'f':'m',w:'g',dummy:1});say('CHEAT: A 1 HP test dummy appears next to you. It never attacks.');POPS.push({o:'P',txt:'+DUMMY',t:performance.now(),dy:0,col:'#ffd27a'});kick(0)}
  }else if(code==='zeus'){
-  giveLoaded('tesla');ammo+=9;
+  giveLoaded('tesla');addAmmo('tesla',9);
   say('CHEAT: Charged Tesla cannon and 9 spare cells added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+TESLA CANNON',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='batterup'){
@@ -1274,7 +1333,7 @@ document.getElementById('cheatform').addEventListener('submit',function(e){
   say('CHEAT: Baseball bat added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+BAT',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='kaboom'){
-  giveLoaded('rocket');ammo+=6;
+  giveLoaded('rocket');addAmmo('rocket',6);
   say('CHEAT: Loaded Rocket launcher and 6 spare rockets added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+ROCKETS',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='ironclad'){
@@ -1282,7 +1341,7 @@ document.getElementById('cheatform').addEventListener('submit',function(e){
   say('CHEAT: Power armor added to your inventory. Drag it onto the armor slot to wear it.');
   POPS.push({o:'P',txt:'+POWER ARMOR',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='deadeye'){
-  giveLoaded('sniper');ammo+=20;
+  giveLoaded('sniper');addAmmo('sniper',20);
   say('CHEAT: Fully loaded Sniper rifle and 20 spare rounds added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+SNIPER',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code)say('Nothing happens.');
@@ -1343,11 +1402,11 @@ function fillInv(){
   +'</div></div>'
   +'<div class="zone" id="aslot" style="margin-top:10px"><span>ARMOR SLOT</span>'+(arm?chip(arm,'worn'):'<em>Drop armor here</em>')+'</div>'
   +'<div class="slots2">'+SL.map(function(w,k){var gd=GEAR[w];return '<div class="zone wslot'+(k===AC?' on':'')+'" data-slot="'+k+'"'+(gd?' draggable="true"':'')+' data-src="w'+k+'" role="button" tabindex="0" aria-pressed="'+(k===AC)+'"><span>SLOT '+(k+1)+(k===AC?' ▸ ACTIVE':'')+(gd?'<button type="button" class="unq" data-unq="'+k+'" aria-label="Unequip">✕</button>':'')+'</span><div class="ws">'+wIcon(w)+'<div><b>'+(gd?gd.n:'Unarmed')+'</b><small>'+slotInfo(k,1)+'</small></div></div></div>'}).join('')+'</div>'
-  +'<small style="color:var(--dim);font-size:.72rem">Drag bullets onto a weapon to reload it. Drag weapons and armor out to Carried to unequip, or from Carried into a slot to equip. Tapping works too. Everything in here is free once it\'s open.</small>';
+;
  h+='<div id="bagz" class="carried"><h3>CARRIED</h3>'
-  +'<div class="inv-row grab" draggable="true" data-src="ammo" role="button" tabindex="0">'+icon('ammo')+'<div class="nm">Ammo<small>Spare rounds · drag onto a weapon to reload</small></div><span class="n">'+ammo+' rds</span></div>'
+  +Object.keys(AMMO).filter(function(w){return am(w)>0}).map(function(w){return '<div class="inv-row grab" draggable="true" data-src="ammo:'+w+'" role="button" tabindex="0">'+icon('ammo')+'<div class="nm">'+ammoName(w)+'<small>For the '+ammoFor(w)+'</small></div><span class="n">'+am(w)+' '+AMMO[w].u+'</span></div>'}).join('')
   +'<div class="inv-row grab" draggable="true" data-src="stim" role="button" tabindex="0">'+icon('stim')+'<div class="nm">Stim packs<small>+12 HP · 1 AP · drag into a slot to carry in hand'+(why?' · '+why:'')+'</small></div><span class="n">×'+stims+'</span><button id="invstim" type="button"'+(canStim?'':' disabled')+'>Use</button></div>'
-  +BAG.map(function(b,k){var gd=GEAR[b],wp=gd.k==='w';return '<div class="inv-row grab'+(gd.cap?' bagw':'')+'" draggable="true" data-src="'+k+'" data-bi="'+k+'" role="button" tabindex="0">'+(wp?wIcon(b):icon('armor',b))+'<div class="nm">'+gd.n+'<small>'+(wp?'Weapon · '+gd.min+'-'+gd.max+' dmg · rng '+gd.rng+' · '+gd.ap+' AP'+(gd.aoe?' · ×'+GREN:'')+(gd.cap?' · '+(LOADED[b]||0)+'/'+gd.cap+' loaded':''):'Armor · -'+gd.dr+' damage taken')+'</small></div><span class="n">'+(wp?'Equip':'Wear')+'</span></div>'}).join('')
+  +BAG.map(function(b,k){var gd=GEAR[b],wp=gd.k==='w';return '<div class="inv-row grab'+(gd.cap?' bagw':'')+'" draggable="true" data-src="'+k+'" data-bi="'+k+'" role="button" tabindex="0">'+(wp?wIcon(b):icon('armor',b))+'<div class="nm">'+gd.n+'<small>'+(wp?'Weapon · '+gd.min+'-'+gd.max+' dmg · rng '+gd.rng+' · '+gd.ap+' AP'+(gd.aoe?' · ×'+GREN:'')+(gd.cap?' · '+(LOADED[b]||0)+'/'+gd.cap+' loaded · '+am(b)+' spare':''):'Armor · -'+gd.dr+' damage taken')+'</small></div><span class="n">'+(wp?'Equip':'Wear')+'</span></div>'}).join('')
   +'</div>';
  document.getElementById('invbody').innerHTML=h;
  var b=document.getElementById('invstim');if(b)b.addEventListener('click',function(){closeModal(INV);useStim()});
@@ -1355,10 +1414,20 @@ function fillInv(){
  function done(){render();fillInv()}
  function isBag(s){return /^\d+$/.test(s)&&BAG[+s]}
  function isSlot(s){return /^w[01]$/.test(s)}
+ function isAmmo(s){return /^ammo:/.test(s)}
+ // ammo rows carry the pool id ("ammo:laser"); a gun fits if its pool matches
+ function fits(pool,w){return !!w&&!!GEAR[w].cap&&ak(w)===pool}
+ function noFit(pool,g2){say(ammoName(pool)+(g2&&GEAR[g2].k==='w'?' don\'t fit the '+GEAR[g2].n+'.':' only fit the '+ammoFor(pool)+'.'))}
+ // tapping an ammo row loads a matching gun that isn't full: the active slot first, then the other slot, then Carried
+ function ammoTo(pool){
+  var ks=[AC,1-AC].filter(function(k){return fits(pool,SL[k])}),open=ks.filter(function(k){return MAG[k]<GEAR[SL[k]].cap});
+  if(open.length||ks.length){reloadSlot((open.length?open:ks)[0],true);return}
+  for(var i=0;i<BAG.length;i++)if(fits(pool,BAG[i])){loadCarried(i);return}
+  say('You don\'t have a '+ammoFor(pool)+' to load.')}
  // tap/click fallback for each draggable thing
  function act(src){
   if(src==='worn')unwear();
-  else if(src==='ammo')reloadSlot(AC,true);
+  else if(isAmmo(src))ammoTo(src.slice(5));
   else if(src==='stim')equipStim();
   else if(isSlot(src)){if(+src[1]!==AC)AC=+src[1],drawWeapon()}
   else if(isBag(src)){if(GEAR[BAG[+src]].k==='a')wear(+src);else equipFromBag(+src)}
@@ -1368,9 +1437,9 @@ function fillInv(){
  function drop(target,src){
   if(target==='aslot'){if(isBag(src)&&GEAR[BAG[+src]].k==='a')wear(+src)}
   else if(target==='bagz'){if(src==='worn')unwear();else if(isSlot(src))unequip(+src[1])}
-  else if(target[0]==='b'){if(src==='ammo')loadCarried(+target.slice(1));else if(isSlot(src))unequip(+src[1])}
+  else if(target[0]==='b'){var bi=+target.slice(1);if(isAmmo(src)){if(fits(src.slice(5),BAG[bi]))loadCarried(bi);else noFit(src.slice(5),BAG[bi])}else if(isSlot(src))unequip(+src[1])}
   else{var k=+target.slice(1);
-   if(src==='ammo')reloadSlot(k,true);
+   if(isAmmo(src)){if(fits(src.slice(5),SL[k]))reloadSlot(k,true);else noFit(src.slice(5),SL[k])}
    else if(src==='stim')equipStim(k);
    else if(isSlot(src)&&+src[1]!==k)swapSlots();
    else if(isBag(src)&&GEAR[BAG[+src]].k==='w')equipFromBag(+src,k);}
