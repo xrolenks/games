@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricksong.io</title>
+<meta name="description" content="Random projects and browser games by ricksong.">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0b0f0c;--panel:#121914;--edge:#24402c;--ink:#e6f2e9;--dim:#8aa392;--accent:#6dff95;--hot:#ffb347;
+}
+@media (prefers-color-scheme: light){
+  :root{color-scheme:light;--bg:#f4f6f3;--panel:#ffffff;--edge:#cfdcd2;--ink:#14201a;--dim:#5b6e61;--accent:#127a3a;--hot:#b45f00}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+main{max-width:960px;margin:0 auto;padding:48px 16px 64px}
+header h1{font-family:"Courier New",Courier,monospace;font-size:clamp(1.8rem,5vw,2.6rem);margin:0;letter-spacing:.02em}
+header h1 span{color:var(--accent)}
+header p{color:var(--dim);margin:6px 0 0}
+h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin:40px 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--edge);border-radius:12px;overflow:hidden;color:inherit;text-decoration:none;transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-3px);border-color:var(--accent)}
+.card:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.thumb{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;font-family:"Courier New",Courier,monospace;font-weight:bold}
+.thumb.wasteland{background:radial-gradient(circle at 70% 30%,#5a3a1c,#2b1c10 70%);color:#6dff95;font-size:1.4rem;letter-spacing:.1em;text-shadow:0 0 8px #6dff95}
+.body{padding:14px 16px 16px}
+.body h3{margin:0 0 4px;font-size:1.1rem}
+.body p{margin:0;color:var(--dim);font-size:.93rem}
+.tags{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.tags span{font-size:.75rem;border:1px solid var(--edge);border-radius:999px;padding:2px 8px;color:var(--dim)}
+footer{margin-top:56px;color:var(--dim);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ricksong<span>.io</span></h1>
+    <p>Random games made by me (Rick).</p>
+  </header>
+
+  <h2>Games</h2>
+  <div class="grid">
+    <a class="card" href="wasteland/">
+      <div class="thumb wasteland" aria-hidden="true">WILD WASTELAND</div>
+      <div class="body">
+        <h3>Wild Wasteland</h3>
+        <p>A fan-made game inspired by the classic Fallouts.</p>
+        <div class="tags"><span>Turn-based</span><span>Desktop &amp; mobile</span></div>
+      </div>
+    </a>
+    <!-- To add a game: copy the <a class="card"> block above and change the link, title and text. -->
+  </div>
+
+  <footer>Made by ricksong · Hosted on GitHub Pages</footer>
+</main>
+</body>
+</html>
