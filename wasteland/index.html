@@ -282,7 +282,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <dt>E</dt><dd>Equip gear you're standing on (1 AP). Orange tiles are gear.</dd>
 <dt>R</dt><dd>Reload your current weapon (2 AP).</dd>
 <dt>Right-click a slot</dt><dd>Switch a gun to reload mode; click it to reload (2 AP).</dd>
-<dt>H</dt><dd>Use a stim pack (+12 HP, 1 AP).</dd>
+<dt>H</dt><dd>Use a stim pack (+12-20 HP, 1 AP).</dd>
 <dt>Click yourself</dt><dd>Use the stim pack in your active slot.</dd>
 <dt>I</dt><dd>Open your inventory (2 AP).</dd>
 <dt>M</dt><dd>Show or hide the minimap.</dd>
@@ -1092,7 +1092,7 @@ function ammoBar(k){var gd=GEAR[SL[k]];if(!gd||!gd.cap)return '';var p=Math.max(
 function magTxt(k){var gd=GEAR[SL[k]];return gd&&gd.cap?' · '+MAG[k]+'/'+gd.cap+' loaded · '+am(SL[k])+' spare':gd&&gd.aoe?' · ×'+GREN:''}
 function isWeap(w){return !!w&&GEAR[w].k==='w'}
 // slot description: weapon stats, stim count, or bare hands
-function slotInfo(k,short){var w=SL[k],gd=GEAR[w];if(!gd)return 'punch only';if(gd.k==='u')return '×'+stims+' · +12 HP · 1 AP · click yourself';if(gd.melee)return gd.min+'-'+gd.max+' dmg · melee · '+gd.ap+' AP';return gd.min+'-'+gd.max+' dmg · '+(short?'rng ':'range ')+gd.rng+' · '+gd.ap+' AP'+magTxt(k)}
+function slotInfo(k,short){var w=SL[k],gd=GEAR[w];if(!gd)return 'punch only';if(gd.k==='u')return '×'+stims+' · +12-20 HP · 1 AP · click yourself';if(gd.melee)return gd.min+'-'+gd.max+' dmg · melee · '+gd.ap+' AP';return gd.min+'-'+gd.max+' dmg · '+(short?'rng ':'range ')+gd.rng+' · '+gd.ap+' AP'+magTxt(k)}
 // put the stim stack in a slot (default: an empty one, else the active one)
 function equipStim(k){
  if(over)return;if(stims<1){say('No stim packs.');return}
@@ -1135,7 +1135,7 @@ function equipFromBag(i,k){
 function swapSlots(){var t=SL[0];SL[0]=SL[1];SL[1]=t;t=MAG[0];MAG[0]=MAG[1];MAG[1]=t;AC=1-AC;}
 // every swap plays the draw-in, including bare hands (the fists come up into a guard)
 function drawWeapon(){DRAWT=performance.now();kick(460)}
-function useStim(){if(over||busy())return;if(hp>=30){say('Already at full health.');render();return}if(stims<1||AP<1){say(stims<1?'No stim packs.':'No action points left.');render();return}stims--;AP--;if(stims<1)for(var q=0;q<2;q++)if(SL[q]==='stim')SL[q]='';var was=hp;hp=Math.min(30,hp+12);say('You use a stim (+'+(hp-was)+' HP).');healFx(hp-was);after();}
+function useStim(){if(over||busy())return;if(hp>=30){say('Already at full health.');render();return}if(stims<1||AP<1){say(stims<1?'No stim packs.':'No action points left.');render();return}stims--;AP--;if(stims<1)for(var q=0;q<2;q++)if(SL[q]==='stim')SL[q]='';var was=hp;hp=Math.min(30,hp+12+rnd(9));/* heals 12-20 */say('You use a stim (+'+(hp-was)+' HP).');healFx(hp-was);after();}
 function healFx(n){
  var now=performance.now();HEALT=now;
  var k=POPS.filter(function(p){return p.o==='P'&&now-p.t<350}).length;
@@ -1797,7 +1797,7 @@ function wIcon(w){return icon(w==='stim'?'stim':GUNS[w]?w:'fist')}
 function invRow(ico,name,sub,n,btn){return '<div class="inv-row">'+(ico||'')+'<div class="nm">'+name+(sub?'<small>'+sub+'</small>':'')+'</div>'+(n!==undefined?'<span class="n">'+n+'</span>':'')+(btn||'')+'</div>'}
 function bar(v,max,col){return '<span class="bar"><i style="width:'+Math.round(100*Math.max(0,v)/max)+'%;background:'+col+'"></i></span>'}
 function fillInv(){
- var canStim=!over&&stims>0&&AP>=1&&hp<30,why=stims<1?'none left':hp>=30?'full health':AP<1?'no AP':'';
+ var canStim=!over&&stims>0&&AP>=1&&hp<30;
  function chip(id,src){var gd=GEAR[id];return '<span class="chip" draggable="true" role="button" tabindex="0" data-src="'+src+'">'+icon('armor',id)+'<span>'+gd.n+' <small>-'+gd.dr+'</small></span></span>'}
  var h='<h3>CHARACTER</h3><div class="paper"><canvas id="model" width="120" height="128" aria-label="Your character"></canvas><div class="pd stat">'
   +'<div class="st">'+icon('heart')+'<div><b>Health</b> <span class="n">'+hp+'/30</span>'+bar(hp,30,'#e0453a')+'</div></div>'
@@ -1809,8 +1809,8 @@ function fillInv(){
 ;
  h+='<div id="bagz" class="carried"><h3>CARRIED</h3>'
   +(WMS.chip&&!WMS.done?'<div class="inv-row">'+icon('chip')+'<div class="nm">Reactor control chip<small>Bring it back to the Bunker 9 intercom</small></div><span class="n">Quest</span></div>':'')
-  +Object.keys(AMMO).filter(function(w){return am(w)>0}).map(function(w){return '<div class="inv-row grab" draggable="true" data-src="ammo:'+w+'" role="button" tabindex="0">'+icon('ammo')+'<div class="nm">'+ammoName(w)+'<small>For the '+ammoFor(w)+'</small></div><span class="n">'+am(w)+' '+AMMO[w].u+'</span></div>'}).join('')
-  +'<div class="inv-row grab" draggable="true" data-src="stim" role="button" tabindex="0">'+icon('stim')+'<div class="nm">Stim packs<small>+12 HP · 1 AP · drag into a slot to carry in hand'+(why?' · '+why:'')+'</small></div><span class="n">×'+stims+'</span><button id="invstim" type="button"'+(canStim?'':' disabled')+'>Use</button></div>'
+  +Object.keys(AMMO).filter(function(w){return am(w)>0}).map(function(w){return '<div class="inv-row grab" draggable="true" data-src="ammo:'+w+'" role="button" tabindex="0">'+icon('ammo')+'<div class="nm">'+ammoName(w)+'</div><span class="n">'+am(w)+' '+AMMO[w].u+'</span></div>'}).join('')
+  +'<div class="inv-row grab" draggable="true" data-src="stim" role="button" tabindex="0">'+icon('stim')+'<div class="nm">Stim packs<small>+12-20 HP</small></div><span class="n">×'+stims+'</span><button id="invstim" type="button"'+(canStim?'':' disabled')+'>Use</button></div>'
   +BAG.map(function(b,k){var gd=GEAR[b],wp=gd.k==='w';return '<div class="inv-row grab'+(gd.cap?' bagw':'')+'" draggable="true" data-src="'+k+'" data-bi="'+k+'" role="button" tabindex="0">'+(wp?wIcon(b):icon('armor',b))+'<div class="nm">'+gd.n+'<small>'+(wp?'Weapon · '+gd.min+'-'+gd.max+' dmg · rng '+gd.rng+' · '+gd.ap+' AP'+(gd.aoe?' · ×'+GREN:'')+(gd.cap?' · '+(LOADED[b]||0)+'/'+gd.cap+' loaded · '+am(b)+' spare':''):'Armor · -'+gd.dr+' damage taken')+'</small></div><span class="n">'+(wp?'Equip':'Wear')+'</span></div>'}).join('')
   +'</div>';
  document.getElementById('invbody').innerHTML=h;
