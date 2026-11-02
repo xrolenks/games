@@ -61,6 +61,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 #locn{color:var(--dim);font-weight:normal}
 #locn:not(:empty)::before{content:"// "}
 #cmb{float:right;font-size:.7rem;letter-spacing:.1em;padding:1px 6px;border:1px solid var(--dim);color:var(--dim);font-weight:normal}
+#cmb:empty{display:none}
 #cmb.on{color:#ff5a4a;border-color:#ff5a4a;font-weight:bold;animation:cmbPulse 1.2s ease-in-out infinite}
 @keyframes cmbPulse{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){#cmb.on{animation:none}}
@@ -83,12 +84,13 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .modal dd{margin:0}
 .modal .go{width:100%}
 .menu{z-index:20;background-color:#030d07;background-size:cover;background-position:center;image-rendering:pixelated}
-.mbox{width:min(100%,460px);text-align:center;padding:24px 22px;background:rgba(7,24,13,.86);border:2px solid var(--edge);box-shadow:0 0 0 1px var(--bg),0 0 30px rgba(109,255,149,.18)}
+.mbox{width:min(100%,460px);max-height:calc(100vh - 32px);overflow:auto;text-align:center;padding:24px 22px;background:rgba(7,24,13,.86);border:2px solid var(--edge);box-shadow:0 0 0 1px var(--bg),0 0 30px rgba(109,255,149,.18)}
 .menu .logo{font-size:2.3rem;line-height:1.05;letter-spacing:.14em;margin:6px 0 8px;color:var(--ink);text-shadow:0 0 14px rgba(109,255,149,.55)}
 .tag{color:var(--dim);font-size:.85rem;margin:0 0 18px}
 .mbox .go{width:100%;margin-top:10px;font-size:1rem;padding:10px}
 #m-intro h2{font-size:1rem;letter-spacing:.08em;margin:0 0 14px}
 #m-intro p{text-align:left;font-size:.92rem;line-height:1.5;margin:0 0 12px;color:var(--ink)}
+#m-intro q{color:var(--hot)}
 #curprev{display:flex;gap:16px;align-items:center;justify-content:center;min-height:60px;background:#2b1c10;border:2px solid var(--edge);margin-top:4px}
 #curprev canvas{image-rendering:pixelated}
 #m-look h2{font-size:1rem;letter-spacing:.08em;margin:0 0 12px}
@@ -221,19 +223,18 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <button id="mlook" class="go" type="button">Continue</button>
 </div>
 <div id="m-intro" hidden>
-<h2>BUNKER 9 // FINAL BRIEFING</h2>
-<p class="ln" style="animation-delay:.1s">The bombs fell a lifetime ago. You grew up in Bunker 9, one of the last shelters still talking to the others by radio.</p>
-<p class="ln" style="animation-delay:.9s">Three weeks ago, the radio went silent.</p>
-<p class="ln" style="animation-delay:1.7s">Someone has to cross the wasteland to the old radio tower and get the signal back on air. The elders drew straws. You drew the short one.</p>
-<p class="ln" style="animation-delay:2.5s">Raiders and mutant rats roam the dunes between here and the tower. Reach the red flag at the edge of each area, then pick your road on the map.</p>
-<button id="mbegin" class="go ln" style="animation-delay:3.1s" type="button">Begin</button>
+<h2>THE WANDERER // A DEAL IN THE DARK</h2>
+<p class="ln" style="animation-delay:.1s">You have wandered the wastes for as long as you can remember. You scavenge through old ruins and sell anything you can find to make a living.</p>
+<p class="ln" style="animation-delay:1.2s">One day while traveling, you explore a cave and find the entrance to a highly secured bunker. You heard stories about them, but you never thought they actually existed. While investigating, you hear a voice over the intercom. <q>Stranger, our reactor system is slowly failing and we need a control chip to ensure this bunker's survival. If you can find the chip and bring it to us, we will let you join our community.</q></p>
+<p class="ln" style="animation-delay:2.6s">This is the opportunity you have been waiting for your whole life. No more selling scraps just for a meager existence. You unholster your old revolver and head out to the wastes one last time.</p>
+<button id="mbegin" class="go ln" style="animation-delay:3.4s" type="button">Start your journey</button>
 </div>
 </div>
 </div>
 <div id="help" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
 <div class="box">
 <h2 id="help-title">WILD WASTELAND // CONTROLS</h2>
-<p>Reach the red flag to leave an area and open the map. Pick a road, travel, and work your way east to the radio tower.</p>
+<p>Reach the red flag to leave an area and open the map. Pick a road and travel. Find the reactor control chip and bring it back to the Bunker 9 intercom.</p>
 <dl class="only-touch">
 <dt>Tap a tile</dt><dd>Walk there.</dd>
 <dt>Tap an enemy</dt><dd>Attack it.</dd>
@@ -353,7 +354,7 @@ function newLevel(){
  var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[SK.a]='g:'+gp[rnd(gp.length)];items[SK.b]='s';for(var gi=0;gi<(lv>1?1:0);gi++)items[free(3)]='g:'+gp[rnd(gp.length)];
  AP=MAXAP;WARNED=false;
 }
-function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];WMS=wmFresh();say('Bunker 9 is silent. Cross the wasteland to the radio tower.');say('Reach the red flag to leave an area and open the map.');newLevel();render();}
+function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];WMS=wmFresh();say('Find the reactor control chip and bring it back to the Bunker 9 intercom.');say('Reach the red flag to leave an area and open the map.');newLevel();render();}
 // ---- world map ----
 // Locations on the map. t: danger tier (feeds newLevel's lv), l: roads to other locations, x/y: spot on the 480x300 map.
 // safe: no enemies spawn there. cave: built from the fixed CAVE layout. ent: where you come back in (default: west edge).
@@ -362,7 +363,8 @@ var WMN={
  gulch:{n:'Dry Gulch',x:176,y:104,t:2,l:['out','scrap'],d:'A cracked riverbed. Rat nests line the banks.'},
  road:{n:'Broken Highway',x:204,y:246,t:2,l:['out','scrap'],d:'Wrecked cars and raider toll stops.'},
  scrap:{n:'Scrap Town',x:318,y:172,t:3,l:['gulch','road','tower'],d:'A sheet-metal shanty town. Raiders run it now.'},
- tower:{n:'Radio Tower',x:424,y:84,t:4,l:['scrap'],fin:1,d:'The relay mast. Reach its base and get the signal back on air.'}};
+ tower:{n:'Old Power Plant',x:424,y:84,t:4,l:['scrap'],fin:1,d:'A dead reactor plant, crawling with raiders. Somewhere inside is a working control chip.'}};
+// fin: the reactor control chip ('c' item) waits in this area until you pick it up
 // WMS: where you are, places you've been, saved state of each area you've left, and whether the map is open
 var WMS=null;
 function wmFresh(){return {at:'out',vis:{out:1},areas:{},open:false,noloot:1}}
@@ -374,13 +376,19 @@ function enterArea(id){
  if(a){T=a.T;items=a.items;E=nd.safe?[]:a.E;F=a.F;SK=a.SK;BD=a.BD;EX=a.EX;MV=[];PH=0;HQ=[];SQ=[];P=freeNear(nd.ent!==undefined?nd.ent:ix(0,H>>1));AP=MAXAP;WARNED=false;say('Back at '+nd.n+'.')}
  else newLevel();
  if(first){hp=Math.min(30,hp+6);say('You reach '+nd.n+', patching up on the road (+6 HP).')}
- if(nd.fin&&first)say('The mast looms to the east. Reach the red flag at its base.');
+ placeChip();
+ if(nd.fin&&first)say('The control chip is somewhere in this plant. Search the east side.');
  WASC=false;detect();
 }
-// reaching the red flag: the tower's flag wins the game, any other flag opens the map
+// in the final area, put the chip deep in the east side unless you already have it or it's lying there
+function placeChip(){
+ if(!WMN[WMS.at].fin||WMS.chip||Object.keys(items).some(function(k){return items[k]==='c'}))return;
+ var spots=[];for(var q=0;q<W*H;q++)if(!T[q]&&!items[q]&&!enemyAt(q)&&q!==EX&&q!==P&&q%W>=W-6)spots.push(q);
+ if(spots.length)items[spots[rnd(spots.length)]]='c';
+}
+// reaching the red flag opens the map
 function leaveArea(){
  WMS.areas[WMS.at]={T:T,items:items,E:E,F:F,SK:SK,BD:BD,EX:EX};
- if(WMN[WMS.at].fin){over=true;say('The tower hums. Your signal reaches the other bunkers.');say('YOU WIN. Press New game to play again.');return}
  WMS.open=true;WSEL=null;say('You reach the edge of '+WMN[WMS.at].n+'.');
 }
 function wmShown(id){return WMS.vis[id]||WMN[id].l.some(function(k){return WMS.vis[k]})}
@@ -423,12 +431,14 @@ function drawMap(){
  // locations
  Object.keys(WMN).forEach(function(id){
   if(!wmShown(id))return;var nd=WMN[id],v=WMS.vis[id];
-  if(nd.fin){c.strokeStyle=v?'#ffb347':'rgba(255,179,71,.6)';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-7,nd.y+8);c.lineTo(nd.x,nd.y-12);c.lineTo(nd.x+7,nd.y+8);c.moveTo(nd.x-4,nd.y);c.lineTo(nd.x+4,nd.y);c.stroke();
-   var bl=(now/500|0)%2;if(bl){c.fillStyle='#ff3b2a';c.fillRect(nd.x-1.5,nd.y-15,3,3)}}
+  // the power plant: a cooling tower with a short stack beside it
+  if(nd.fin){c.strokeStyle=v?'#ffb347':'rgba(255,179,71,.6)';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-9,nd.y+8);c.quadraticCurveTo(nd.x-4,nd.y-2,nd.x-6,nd.y-10);c.lineTo(nd.x+4,nd.y-10);c.quadraticCurveTo(nd.x+2,nd.y-2,nd.x+7,nd.y+8);c.closePath();c.stroke();
+   c.beginPath();c.moveTo(nd.x+10,nd.y+8);c.lineTo(nd.x+10,nd.y-6);c.stroke();
+   var bl=(now/500|0)%2;if(bl){c.fillStyle='#ff3b2a';c.fillRect(nd.x+8.5,nd.y-9,3,3)}}
   else{c.fillStyle=v?'#6dff95':'#07180d';c.strokeStyle=v?'#6dff95':'#2a8f50';c.lineWidth=2;c.fillRect(nd.x-5,nd.y-5,10,10);c.strokeRect(nd.x-5,nd.y-5,10,10);
    if(wmCleared(id)){c.strokeStyle='#04120a';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-3,nd.y);c.lineTo(nd.x-1,nd.y+3);c.lineTo(nd.x+3,nd.y-3);c.stroke()}}
   if(id===WSEL){c.strokeStyle='#ffb347';c.lineWidth=1.5;c.beginPath();c.arc(nd.x,nd.y,13,0,7);c.stroke()}
-  c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';c.fillText(nd.n.toUpperCase(),nd.x,nd.y+(nd.fin?24:20)+4*(fk-1));
+  c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';var lb=nd.n.toUpperCase(),tw=c.measureText(lb).width;c.fillText(lb,Math.max(tw/2+4,Math.min(w-tw/2-4,nd.x)),nd.y+(nd.fin?24:20)+4*(fk-1));
  });
  // you: a pulsing pip, sliding along the road while travelling
  var px=WMN[WMS.at].x,py=WMN[WMS.at].y;
@@ -474,6 +484,7 @@ function step(n){
  if(items[P]==='s'){stims++;say('Found a stim pack.');delete items[P]}
  // an ammo crate holds ammo for one of the guns you own, picked at random
  else if(items[P]==='a'){var own=SL.concat(BAG).filter(function(w){return ainf(w)}),t=own.length?own[rnd(own.length)]:'pistol';addAmmo(t,ainf(t).f);say('Found '+ainf(t).f+' '+ainf(t).u+' of '+ammoName(t).toLowerCase()+'.');delete items[P]}
+ else if(items[P]==='c'){WMS.chip=1;delete items[P];say('You found the reactor control chip! Bring it back to the Bunker 9 intercom.');POPS.push({o:'P',txt:'+CONTROL CHIP',t:performance.now(),dy:0,col:'#6dff95'})}
  else if(items[P]&&items[P][0]==='g'){say('Gear here: '+GEAR[items[P].slice(2)].n+'. Tap your own tile to equip (1 AP).')}
  if(P===EX){leaveArea();return false}
  // stop walking the moment someone spots you
@@ -512,7 +523,7 @@ function enemyTurn(){
   base+=mx;
  });
  PH=base;
- if(hp<=0){hp=0;over=true;say('Your vitals flatline. SIGNAL LOST. Press New game.')}
+ if(hp<=0){hp=0;over=true;say('Your vitals flatline. The wastes claim another wanderer. Press New game.')}
  AP=MAXAP;WARNED=false;
 }
 // walk up to the intercom if needed, then press it: the first call gets the voice, after that only static
@@ -524,6 +535,13 @@ function useIntercom(ic){
   if(mh(P,ic)>1){after();return}
  }
  PF=scr(ic)[0]>=scr(P)[0]?1:-1;
+ // with the chip in hand: the deal is done, the door opens and you win
+ if(WMS.chip&&!WMS.done){
+  WMS.done=1;over=true;
+  var end='The chip! You actually did it. Stand clear of the door, stranger. Welcome to Bunker 9.';
+  say('INTERCOM: "'+end+'"');say('The heavy door grinds open. Warm light spills out into the cave.');say('YOU WIN. You have a home now. Press New game to play again.');
+  after(function(){speak(ic,end,true)});return;
+ }
  var first=!WMS.ic;WMS.ic=(WMS.ic||0)+1;
  var txt=first?'Find the reactor control chip, and our deal will be complete.':'You hear static from the other end.';
  say(first?'INTERCOM: "'+txt+'"':txt);
@@ -1273,6 +1291,8 @@ function bunkerDoor(y0,y1){
  var Hd=30;function q(u0,v0,u1,v1,col,st){poly([pt(1,y0+(y1-y0)*u0,Hd*v0),pt(1,y0+(y1-y0)*u1,Hd*v0),pt(1,y0+(y1-y0)*u1,Hd*v1),pt(1,y0+(y1-y0)*u0,Hd*v1)],col,st)}
  q(0,0,1,1,'#2e3236','#15181a');
  for(var k=0;k<12;k++)q(k/12,.9,(k+1)/12,1,k%2?'#d4a632':'#1a1a1a');
+ // opened at the end: the leaf has slid up into the rock, leaving a lit doorway
+ if(WMS.done){q(.08,0,.92,.88,'#3a2a14');q(.14,0,.86,.82,'#c99a4a');q(.24,0,.76,.74,'#ffd890');q(.08,.84,.92,.88,'#7d868d','#3a3f44');return}
  q(.08,0,.92,.88,'#7d868d','#3a3f44');
  q(.08,.28,.92,.33,'#5e666c');q(.08,.58,.92,.63,'#5e666c');q(.495,0,.505,.88,'#2e3236');
  [.13,.87].forEach(function(u){[.12,.45,.76].forEach(function(v){q(u-.012,v-.02,u+.012,v+.02,'#c4cace')})});
@@ -1355,6 +1375,7 @@ function drawIso(){
    g.fillStyle='#d42a1e';g.strokeStyle='#7a120c';g.lineWidth=1;g.beginPath();g.moveTo(fx0+2,fy0-33);g.quadraticCurveTo(fx0+9,fy0-36,fx0+19,fy0-31);g.lineTo(fx0+17,fy0-26);g.lineTo(fx0+19,fy0-21);g.quadraticCurveTo(fx0+9,fy0-25,fx0+2,fy0-22);g.closePath();g.fill();g.stroke();
    g.fillStyle='#ff5a44';g.fillRect(fx0+3,fy0-31,6,2);}
   if(items[i]&&items[i][0]==='g')groundGear(items[i].slice(2),sx,sy,i);
+  else if(items[i]==='c')groundIcon(icoCanvas('chip'),sx,sy,i,'109,255,149');
   else if(items[i]){g.fillStyle='#1f4d2e';g.fillRect(sx-5,sy+TH/2-5,10,10);g.fillStyle='#fff4c9';g.font='bold 10px monospace';g.textAlign='center';g.fillText(items[i]==='s'?'+':items[i]==='a'?'=':GEAR[items[i].slice(2)].k==='w'?'/':'[',sx,sy+TH/2+3);}
   BD.forEach(function(b){if(b.i===i&&!(FX&&!FX.down&&(FX.body===b||(FX.bodies&&FX.bodies.indexOf(b)>=0))))corpse(sx,sy+TH/2,b)});
   // the door's tiles are drawn together at the first one, before anything that stands in front of them
@@ -1371,6 +1392,8 @@ function drawIso(){
   g.font='bold 11px monospace';g.textAlign='center';var hw=g.measureText(ht).width+8;
   g.fillStyle='rgba(3,13,7,.85)';g.fillRect(hs[0]-hw/2,hs[1]-30,hw,14);g.fillStyle=ok?ink:hot;g.fillText(ht,hs[0],hs[1]-19);
  }
+ // light from the opened bunker door spills across the cave floor (drawn over the floor it lands on)
+ if(cave&&WMS.done){g.save();g.globalAlpha=.22;poly([pt(1,6.3,0),pt(1,8.7,0),pt(3.4,9.3,0),pt(3.4,5.7,0)],'#ffd890');g.restore()}
  drawHeal();
  drawSpeech();
  drawPops();
@@ -1455,6 +1478,7 @@ function restore(s){
   // saves from when the cave still spawned loot: clear it once (gear you drop there later stays)
   if(!WMS.noloot){if(WMS.areas.out)WMS.areas.out.items={};if(WMS.at==='out')items={};WMS.noloot=1}
   if(WMN[WMS.at].safe)E=E.filter(function(e){return e.dummy});
+  placeChip();
   WASC=E.some(function(e){return e.al&&!e.dummy});
   MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
  catch(e){return false}
@@ -1634,6 +1658,7 @@ var ICONS={
  holy:['.....YY.....','....kYYk....','..kkYYYYkk..','..kYYYYYYk..','.....YY.....','...kkooookk.','..koooooOok.','.kooYooooOok','.koooooooOok','.koooooooOok','..kOoooOOOk.','...kkkkkkk..'],
  shotgun:['............','............','............','kkkkkkkkkkkk','kbbdgggggggw','kbbdggbggggw','kbbkkkkkkkkk','kbbkbk......','kkk.kk......','............','............','............'],
  fist:['............','....kkkk....','...kssssk...','..kssssssk..','..kskskssk..','..ksssssssk.','..kssssssk..','...kssssk...','....kssk....','....kssk....','....kkkk....','............'],
+ chip:['............','...Y.Y.Y.Y..','..LLLLLLLLL.','.YLkkkkkkLLY','..LkGGGGkGL.','.YLkGkkGkLLY','..LkGGGGkGL.','.YLkkkkkkLLY','..LGLGLLGLL.','..LLLLLLLLL.','...Y.Y.Y.Y..','............'],
  ammo:['............','..y...y...y.','.yyy.yyy.yyy','.yyy.yyy.yyy','.ooo.ooo.ooo','.ooo.ooo.ooo','.ooo.ooo.ooo','.ooo.ooo.ooo','.OOO.OOO.OOO','............','............','............'],
  stim:['............','.........k..','........kgk.','.......kgk..','...kk.kgk...','..kcckkk....','.kcGGck.....','kcGGck......','kccck.......','.kkk..r.....','......rr....','..r...r.....'],
  heart:['............','............','..kk...kk...','.kRrk.krrk..','kRrrrkrrrrk.','krrrrrrrrrk.','.krrrrrrrk..','..krrrrrk...','...krrrk....','....krk.....','.....k......','............'],
@@ -1657,9 +1682,10 @@ function icon(name,arm2){
  return '<img class="ico" src="'+ICACHE[key]+'" width="36" height="36" alt="">';
 }
 // gear lying on the ground: its own sprite with a shadow, bobbing slightly, on a faint orange tile marker
-function groundGear(id,sx,sy,i){
- var gd=GEAR[id],cv=gd.k==='a'?icoCanvas('armor',id):icoCanvas(ICONS[id]?id:'fist'),b=Math.round(Math.sin(performance.now()/450+i)*1.5);
- g.fillStyle='rgba(255,140,40,.18)';g.beginPath();g.moveTo(sx,sy+4);g.lineTo(sx+TW/2-6,sy+TH/2);g.lineTo(sx,sy+TH-4);g.lineTo(sx-TW/2+6,sy+TH/2);g.closePath();g.fill();
+function groundGear(id,sx,sy,i){var gd=GEAR[id];groundIcon(gd.k==='a'?icoCanvas('armor',id):icoCanvas(ICONS[id]?id:'fist'),sx,sy,i,'255,140,40')}
+function groundIcon(cv,sx,sy,i,glow){
+ var b=Math.round(Math.sin(performance.now()/450+i)*1.5);
+ g.fillStyle='rgba('+glow+',.18)';g.beginPath();g.moveTo(sx,sy+4);g.lineTo(sx+TW/2-6,sy+TH/2);g.lineTo(sx,sy+TH-4);g.lineTo(sx-TW/2+6,sy+TH/2);g.closePath();g.fill();
  g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(sx,sy+TH/2+3,9,3,0,0,7);g.fill();
  var sm=g.imageSmoothingEnabled;g.imageSmoothingEnabled=false;g.drawImage(cv,Math.round(sx-12),Math.round(sy+TH/2-20+b),24,24);g.imageSmoothingEnabled=sm;
  kick(500);
@@ -1679,6 +1705,7 @@ function fillInv(){
   +'<div class="slots2">'+SL.map(function(w,k){var gd=GEAR[w];return '<div class="zone wslot'+(k===AC?' on':'')+'" data-slot="'+k+'"'+(gd?' draggable="true"':'')+' data-src="w'+k+'" role="button" tabindex="0" aria-pressed="'+(k===AC)+'"><span>SLOT '+(k+1)+(k===AC?' ▸ ACTIVE':'')+(gd?'<button type="button" class="unq" data-unq="'+k+'" aria-label="Unequip">✕</button>':'')+'</span><div class="ws">'+wIcon(w)+'<div><b>'+(gd?gd.n:'Unarmed')+'</b><small>'+slotInfo(k,1)+'</small></div></div></div>'}).join('')+'</div>'
 ;
  h+='<div id="bagz" class="carried"><h3>CARRIED</h3>'
+  +(WMS.chip&&!WMS.done?'<div class="inv-row">'+icon('chip')+'<div class="nm">Reactor control chip<small>Bring it back to the Bunker 9 intercom</small></div><span class="n">Quest</span></div>':'')
   +Object.keys(AMMO).filter(function(w){return am(w)>0}).map(function(w){return '<div class="inv-row grab" draggable="true" data-src="ammo:'+w+'" role="button" tabindex="0">'+icon('ammo')+'<div class="nm">'+ammoName(w)+'<small>For the '+ammoFor(w)+'</small></div><span class="n">'+am(w)+' '+AMMO[w].u+'</span></div>'}).join('')
   +'<div class="inv-row grab" draggable="true" data-src="stim" role="button" tabindex="0">'+icon('stim')+'<div class="nm">Stim packs<small>+12 HP · 1 AP · drag into a slot to carry in hand'+(why?' · '+why:'')+'</small></div><span class="n">×'+stims+'</span><button id="invstim" type="button"'+(canStim?'':' disabled')+'>Use</button></div>'
   +BAG.map(function(b,k){var gd=GEAR[b],wp=gd.k==='w';return '<div class="inv-row grab'+(gd.cap?' bagw':'')+'" draggable="true" data-src="'+k+'" data-bi="'+k+'" role="button" tabindex="0">'+(wp?wIcon(b):icon('armor',b))+'<div class="nm">'+gd.n+'<small>'+(wp?'Weapon · '+gd.min+'-'+gd.max+' dmg · rng '+gd.rng+' · '+gd.ap+' AP'+(gd.aoe?' · ×'+GREN:'')+(gd.cap?' · '+(LOADED[b]||0)+'/'+gd.cap+' loaded · '+am(b)+' spare':''):'Armor · -'+gd.dr+' damage taken')+'</small></div><span class="n">'+(wp?'Equip':'Wear')+'</span></div>'}).join('')
