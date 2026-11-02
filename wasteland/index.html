@@ -212,6 +212,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <h2 id="sets-title">SETTINGS</h2>
 <div class="lrow"><label for="cursz">Crosshair size</label><input id="cursz" type="range" min="16" max="48" step="1"><output id="curszv" for="cursz"></output></div>
 <div id="curprev" aria-hidden="true"></div>
+<div class="lrow" style="margin-top:12px"><span>Fog of war</span><div class="opts" id="fogopts"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></div></div>
 <button id="setclose" class="go" type="button" style="margin-top:12px">Close</button>
 </div>
 </div>
@@ -341,6 +342,12 @@ function mh(a,b){return Math.abs(a%W-b%W)+Math.abs(((a/W)|0)-((b/W)|0))}
 function nbrs(i){var x=i%W,y=(i/W)|0,o=[];if(x>0)o.push(i-1);if(x<W-1)o.push(i+1);if(y>0)o.push(i-W);if(y<H-1)o.push(i+W);return o}
 function los(a,b){var ax=a%W+.5,ay=((a/W)|0)+.5,bx=b%W+.5,by=((b/W)|0)+.5,n=Math.ceil(mh(a,b)*4);for(var k=1;k<n;k++){var t=k/n,c=ix(Math.floor(ax+(bx-ax)*t),Math.floor(ay+(by-ay)*t));if(c!==a&&c!==b&&T[c]&&T[c]!==2)return false}return true}
 function enemyAt(i){for(var k=0;k<E.length;k++)if(E[k].i===i)return E[k];return null}
+// fog of war: you see VIS tiles around you; anything that blocks shots (walls, rocks, cars) blocks sight, cacti don't.
+// SEE holds the tiles in view, refreshed every frame by drawIso. FOG: the on/off setting (on unless turned off).
+var VIS=6,SEE={},FOG=get('bunker9-fog')!=='0';
+function sight(o){var s={},ox=o%W,oy=(o/W)|0,r=(VIS+.5)*(VIS+.5);for(var i=0;i<W*H;i++){var dx=i%W-ox,dy=((i/W)|0)-oy;if(!FOG||(dx*dx+dy*dy<=r&&los(o,i)))s[i]=1}return s}
+// an enemy you can actually see on tile i (enemies in the fog can't be targeted or inspected)
+function seenE(i){return SEE[i]?enemyAt(i):null}
 function nm(e){return e.t==='R'?'raider':'mutant rat'}
 function say(s){logs.push(s);if(logs.length>8)logs.shift();return false}
 function bfs(s,t,blockE){var prev={},q=[s];prev[s]=-1;
@@ -431,15 +438,15 @@ function leaveArea(){
  WMS.areas[WMS.at]={T:T,items:items,E:E,F:F,SK:SK,BD:BD,EX:EX};
  WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};WMS.open=true;WSEL=WMS.at;say('You reach the edge of '+WMN[WMS.at].n+'.');
 }
-// Free travel: the marker (WMS.pos) walks wherever you click. Locations show up once you get within SEE of them
-// (WMS.seen); stand on one and click it (or Enter) to go in.
-var SEE=70,WSPD=55,WTRAIL=[];
+// Free travel: the marker (WMS.pos) walks wherever you click. Locations show up once you get within WSEE of them
+// (WMS.seen): 2 grid squares (20 px each); stand on one and click it (or Enter) to go in.
+var WSEE=40,WSPD=55,WTRAIL=[];
 function wmShown(id){return !!(WMS.seen&&WMS.seen[id])||!!WMS.vis[id]}
 function wmCleared(id){var a=WMS.areas[id];return !!a&&!a.E.some(function(e){return !e.dummy})}
 function wmPos(){if(!WMS.pos)WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};return WMS.pos}
 // the location the marker is standing on, if any
 function wmAt(){var p=wmPos(),hit=null;Object.keys(WMN).forEach(function(id){if(Math.hypot(WMN[id].x-p.x,WMN[id].y-p.y)<4)hit=id});return hit}
-function wmSpot(){var p=wmPos(),nw=false;WMS.seen=WMS.seen||{};Object.keys(WMN).forEach(function(id){if(!WMS.seen[id]&&Math.hypot(WMN[id].x-p.x,WMN[id].y-p.y)<=SEE){WMS.seen[id]=1;nw=true}});return nw}
+function wmSpot(){var p=wmPos(),nw=false;WMS.seen=WMS.seen||{};Object.keys(WMN).forEach(function(id){if(!WMS.seen[id]&&Math.hypot(WMN[id].x-p.x,WMN[id].y-p.y)<=WSEE){WMS.seen[id]=1;nw=true}});return nw}
 var WMAP=document.getElementById('wmap'),WMCV=document.getElementById('wmcv'),WSEL=null,WTRAV=null;
 function openMap(){WMAP.hidden=false;if(!WSEL)WSEL=wmAt();wmSpot();wmInfo();requestAnimationFrame(wmLoop);document.getElementById('wmgo').focus()}
 function wmLoop(){if(WMAP.hidden)return;wmStep();drawMap();requestAnimationFrame(wmLoop)}
@@ -675,7 +682,7 @@ function play(done){
 }
 function tap(i){
  if(over||busy())return;
- var e=enemyAt(i);
+ var e=seenE(i);
  if(e){var ap0=AP,was=inCombat();attack(e);
   // an attack that went off (AP spent) is noisy; a surprise attack starts combat without a fresh turn
   if(AP<ap0){noise(e);if(!was&&inCombat()){WASC=true;say('Combat begins.')}}
@@ -684,7 +691,8 @@ function tap(i){
  if(T[i]===10){useIntercom(i);return}
  if(T[i]===9){say('The bunker door is sealed tight. It won\'t budge.');render();return}
  if(T[i])return;
- var p=bfs(P,i,true);if(!p){say('No path there.');render();return}
+ // clicking into the fog where an unseen enemy stands walks you toward it (you bump into it on arrival)
+ var p=bfs(P,i,!enemyAt(i));if(!p){say('No path there.');render();return}
  for(var k=0;k<p.length&&AP>0;k++){if(!step(p[k]))break;}
  after();
 }
@@ -1436,11 +1444,20 @@ function drawIso(){
   (DR[di]=DR[di]||[]).push({x:p[0]+jx,y:p[1]-lift,sh:lift,t:t,col:col,fl:fl,tint:tint,ta:ta,lie:o!=='P'&&!!o.down});
  }
  add('P','P',ink,PF,P);E.forEach(function(en){add(en,sk(en),hot,en.fl||1,en.i)});
+ // sight follows the player as they walk (mid-step it switches at the halfway point)
+ var pc=CUR&&CUR.get('P');SEE=sight(pc?(pc.a!==undefined?(pc.f<.5?pc.a:pc.b):pc.i):P);
+ var doorSeen=false;for(var di0 in SEE)if(T[di0]===9)doorSeen=true;
  var RI=ix(SK.x+3,SK.y+2),see=behindRoof(DR,RI);
  var hv=HOV>=0&&!over&&!busy()&&!T[HOV]?HOV:-1,hcost=null;
- if(hv>=0&&hv!==P&&!enemyAt(hv)){var hp2=bfs(P,hv,true);hcost=hp2?hp2.length:-1}
+ if(hv>=0&&hv!==P&&!seenE(hv)){var hp2=bfs(P,hv,!enemyAt(hv));hcost=hp2?hp2.length:-1}
  for(var y=0;y<H;y++)for(var x=0;x<W;x++){
   var i=ix(x,y),sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2,e=enemyAt(i);
+  // out of sight: black fog, nothing on the tile is drawn. A car shows if either half is in view; the door shows whole.
+  if(!SEE[i]&&!(T[i]===5&&SEE[i-1])&&!(T[i]===7&&SEE[i-W])&&!(T[i]===9&&doorSeen)){
+   diamond(x,y,0,'#000','#000');
+   if(i===hv)diamond(x,y,0,'rgba(109,255,149,.25)','rgb(109,255,149)');
+   continue;
+  }
   // door tiles after the first are already covered by the door (drawn earlier), so their floor would paint over it
   var hidden=T[i]===9&&T[i-W]===9;
   if(hidden){}
@@ -1496,9 +1513,9 @@ function drawMini(){
  var cave=isCave();
  for(var i=0;i<W*H;i++)cell(i,T[i]===8?'#3d352d':T[i]===9?'#9aa3aa':T[i]===10?'#6dff95':cave?((i%W+((i/W)|0))%2?'#6f6254':'#776a5b'):T[i]>=4?'#8a4a2a':T[i]===3?'#6e5235':F[i]?'#8a6a45':((i%W+((i/W)|0))%2?'#b8955a':'#c4a265'));
  for(i=0;i<W*H;i++)if(T[i]===2)cell(i,'#3f6b2f',.8);
- Object.keys(items).forEach(function(k){cell(+k,items[k][0]==='g'?'#e0702a':'#2f7a48',.7)});
+ Object.keys(items).forEach(function(k){if(SEE[k])cell(+k,items[k][0]==='g'?'#e0702a':'#2f7a48',.7)});
  [EX-W,EX,EX+W].forEach(function(q){if(isExit(q))cell(q,'#ff3b2a',1.1)});
- E.forEach(function(e){cell(e.i,'#ffb347',1.1)});
+ E.forEach(function(e){if(SEE[e.i])cell(e.i,'#ffb347',1.1)});
  var blink=(performance.now()/400|0)%2;cell(P,blink?'#b8ffcb':'#6dff95',1.3);
  g.restore();
 }
@@ -1506,6 +1523,7 @@ function drawOdds(){
  if(over)return;var wd=isWeap(SL[AC])?GEAR[SL[AC]]:null;
  g.font='bold 11px monospace';g.textAlign='center';
  E.forEach(function(e){
+  if(!SEE[e.i])return;
   var d=mh(P,e.i),ex=e.i%W,ey=(e.i/W)|0,sx=OX+(ex-ey)*TW/2,sy=OY+(ex+ey)*TH/2+TH/2,txt,ok;
   if(wd&&wd.aoe){txt=GREN>0?'BOOM':'--';ok=GREN>0&&AP>=wd.ap}
   else if(wd&&loadedOk()&&d<=wd.rng&&los(P,e.i)){txt=Math.round(Math.min(.95,Math.max(.25,.95-.09*d+wd.acc))*100)+'%';ok=AP>=wd.ap}
@@ -1576,7 +1594,7 @@ function saveGame(){say(put(SLOT,snap())?'Game saved.':'Save failed: browser sto
 function loadGame(){if(busy())return;var s=get(SLOT);if(s&&restore(s))say('Save loaded.');else say('No saved game found.');render();}
 
 function hit(px,py){var u=(px-OX)/(TW/2),v=(py-OY)/(TH/2),x=Math.floor((u+v)/2),y=Math.floor((v-u)/2);return(x<0||y<0||x>=W||y>=H)?-1:ix(x,y);}
-function pick(e){var r=grid.getBoundingClientRect(),px=((e.clientX-r.left)*grid.width/r.width-ZX*(1-Z))/Z,py=((e.clientY-r.top)*grid.height/r.height-ZY*(1-Z))/Z,a=hit(px,py),b=hit(px,py+12);if(b>=0&&enemyAt(b))a=b;
+function pick(e){var r=grid.getBoundingClientRect(),px=((e.clientX-r.left)*grid.width/r.width-ZX*(1-Z))/Z,py=((e.clientY-r.top)*grid.height/r.height-ZY*(1-Z))/Z,a=hit(px,py),b=hit(px,py+12);if(b>=0&&seenE(b))a=b;
  // the intercom stands up off its tile, so a click on its box counts too
  [12,22,30].forEach(function(o){var c=hit(px,py+o);if(c>=0&&T[c]===10)a=c});return a}
 grid.addEventListener('click',function(e){var a=pick(e);if(a>=0)tap(a);});
@@ -1592,7 +1610,7 @@ function hideFoe(){FOE.hidden=true}
 grid.addEventListener('contextmenu',function(ev){ev.preventDefault();showFoe(ev)});
 // ev is anything with clientX/clientY: a mouse event or a touch point
 function showFoe(ev){
- var i=pick(ev),e=i>=0?enemyAt(i):null;
+ var i=pick(ev),e=i>=0?seenE(i):null;
  if(!e||busy()){hideFoe();return}
  var f=foeInfo(e),h=Math.max(0,e.hp);
  FOE.innerHTML='<b>'+f.n.toUpperCase()+'</b>'+(e.down?'<small style="color:var(--hot)">Knocked down: loses its next turn</small>':'')+'<div style="margin-top:4px">HP <span style="float:right;color:var(--hot)">'+h+'/'+f.max+'</span>'+bar(h,f.max,'#e0453a')+'</div>'
@@ -1645,7 +1663,7 @@ function buildCursors(){var h=Math.floor(CURS/2);['g','r'].forEach(function(k){C
 // same reach rules as attack(): bare hands punch adjacent, melee adjacent, guns need range and a clear line; grenades always reach
 function canHit(e){var w=SL[AC],gd=GEAR[w],d=mh(P,e.i);if(!isWeap(w))return d===1;if(gd.aoe)return true;if(gd.melee)return d<=1;return d<=gd.rng&&los(P,e.i)}
 // exploring: the normal pointer. In combat: the crosshair, red over an enemy you can't hit.
-function updateCursor(){var c=E&&inCombat(),e=c&&HOV>=0?enemyAt(HOV):null,k=!c?'n':e&&!canHit(e)?'r':'g';if(k===CURK)return;CURK=k;grid.style.cursor=k==='n'?'':CURURL[k]}
+function updateCursor(){var c=E&&inCombat(),e=c&&HOV>=0?seenE(HOV):null,k=!c?'n':e&&!canHit(e)?'r':'g';if(k===CURK)return;CURK=k;grid.style.cursor=k==='n'?'':CURURL[k]}
 buildCursors();
 grid.addEventListener('mousemove',function(e){hover(pick(e))});
 grid.addEventListener('mouseleave',function(){hover(-1)});
@@ -1673,7 +1691,11 @@ var CURSZ=document.getElementById('cursz');
 function syncSets(){
  CURSZ.value=CURS;document.getElementById('curszv').textContent=CURS+' px';
  var pv=document.getElementById('curprev');pv.innerHTML='';pv.appendChild(cursorImg('#6dff95',CURS));pv.appendChild(cursorImg('#ff4a3a',CURS));
+ [].forEach.call(FOGOPTS.children,function(b){b.setAttribute('aria-pressed',String(b.dataset.v===(FOG?'1':'0')))});
 }
+// fog of war on/off: saved like the cursor size, and the map redraws right away
+var FOGOPTS=document.getElementById('fogopts');
+FOGOPTS.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;FOG=b.dataset.v==='1';put('bunker9-fog',FOG?'1':'0');syncSets();render()});
 // preview follows the drag live; the real cursor is rebuilt and saved when the drag ends
 CURSZ.addEventListener('input',function(){CURS=+CURSZ.value;syncSets()});
 CURSZ.addEventListener('change',function(){put('bunker9-cursor',CURS);buildCursors()});
@@ -1744,7 +1766,7 @@ function openInv(){
  if(!over){if(AP<INVAP){say('Opening your inventory costs '+INVAP+' AP.');render();return}AP-=INVAP;say('You open your inventory (-'+INVAP+' AP).');after()}
  fillInv();showModal(INV,'invclose');
 }
-var IPAL={k:'#0b0f0c',g:'#8a9096',w:'#d8dde0',d:'#4a4f54',b:'#7a5230',s:'#e0a870',y:'#d98c4a',o:'#c9a245',O:'#8a6d2a',r:'#e0453a',R:'#ff8a7a',Y:'#ffd27a',G:'#6dff95',c:'#e8f0f4',L:'#5a6640',l:'#3e4a2a',W:'#d8b080',B:'#a07a4a',E:'#9ad8ff'};
+var IPAL={k:'#0b0f0c',g:'#8a9096',w:'#d8dde0',d:'#4a4f54',b:'#7a5230',s:'#e0a870',S:'#a8703f',y:'#d98c4a',o:'#c9a245',O:'#8a6d2a',r:'#e0453a',R:'#ff8a7a',Y:'#ffd27a',G:'#6dff95',c:'#e8f0f4',L:'#5a6640',l:'#3e4a2a',W:'#d8b080',B:'#a07a4a',E:'#9ad8ff'};
 var ICONS={
  pistol:['............','............','..kkkkkkkkkk','.kgggggggggw','.kgddgkkkkkk','.kgddgk.....','.kkbbkk.....','..kbbk......','..kbbk......','..kbbk......','..kkkk......','............'],
  rifle:['............','............','............','............','.......kkkkk','kkkkkkkdgggw','kbbbbkdddddk','kbbbbbkkkkk.','kbbbkkbk....','kkkk.kbk....','.....kk.....','............'],
@@ -1760,7 +1782,8 @@ var ICONS={
  sniper:['............','............','.....kkkk...','....kdddwk..','....kkkkk...','kkkkkddggggw','kbbbkddkkkkk','kbbkkbk.....','kbk..kk.....','kk..........','............','............'],
  holy:['.....YY.....','....kYYk....','..kkYYYYkk..','..kYYYYYYk..','.....YY.....','...kkooookk.','..koooooOok.','.kooYooooOok','.koooooooOok','.koooooooOok','..kOoooOOOk.','...kkkkkkk..'],
  shotgun:['............','............','............','kkkkkkkkkkkk','kbbdgggggggw','kbbdggbggggw','kbbkkkkkkkkk','kbbkbk......','kkk.kk......','............','............','............'],
- fist:['............','....kkkk....','...kssssk...','..kssssssk..','..kskskssk..','..ksssssssk.','..kssssssk..','...kssssk...','....kssk....','....kssk....','....kkkk....','............'],
+ // bare hand: a closed fist, 16x16 so the four curled fingers and the thumb across them are split by darker lines (S)
+ fist:['................','................','..kkkkkkkkkkkkk.','..kssSssSssSssk.','..kssSssSssSssk.','..kssSssSssSssk.','..kSSSSSSSSSSSk.','..kssSssSssSssk.','.kSSSSSSSSsSssk.','.kssssssssSsssk.','.kssssssssSsssk.','..kSSSSSSSSsssk.','...kssssssssssk.','...kssssssssssk.','...kSSSSSSSSSSk.','...kkkkkkkkkkkk.'],
  chip:['............','...Y.Y.Y.Y..','..LLLLLLLLL.','.YLkkkkkkLLY','..LkGGGGkGL.','.YLkGkkGkLLY','..LkGGGGkGL.','.YLkkkkkkLLY','..LGLGLLGLL.','..LLLLLLLLL.','...Y.Y.Y.Y..','............'],
  ammo:['............','..y...y...y.','.yyy.yyy.yyy','.yyy.yyy.yyy','.ooo.ooo.ooo','.ooo.ooo.ooo','.ooo.ooo.ooo','.ooo.ooo.ooo','.OOO.OOO.OOO','............','............','............'],
  stim:['............','.........k..','........kgk.','.......kgk..','...kk.kgk...','..kcckkk....','.kcGGck.....','kcGGck......','kccck.......','.kkk..r.....','......rr....','..r...r.....'],
@@ -1769,11 +1792,11 @@ var ICONS={
  armor:['..kk....kk..','.kjjk..kjjk.','kjjjjkkjjjjk','kjjljjjjljjk','kkkjjjjjjkkk','..kjjjjjjk..','..kjljjljk..','..kjjjjjjk..','..kjjjjjjk..','..kkkkkkkk..','............','............']
 };
 var ICACHE={},ICV={};
-// 12x12 pixel canvas for an icon (armor is tinted with that armor's colors); shared by the inventory and the ground
+// pixel canvas for an icon, sized to its data (most are 12x12) (armor is tinted with that armor's colors); shared by the inventory and the ground
 function icoCanvas(name,arm2){
  var key=name+(arm2||'');
  if(!ICV[key]){
-  var d=ICONS[name],cv=document.createElement('canvas'),c=cv.getContext('2d'),a=ARMC[arm2]||{j:'#26262c',l:'#4a4a55'};cv.width=12;cv.height=12;
+  var d=ICONS[name],cv=document.createElement('canvas'),c=cv.getContext('2d'),a=ARMC[arm2]||{j:'#26262c',l:'#4a4a55'};cv.width=d[0].length;cv.height=d.length;
   d.forEach(function(row,y){for(var x=0;x<row.length;x++){var ch=row[x];if(ch==='.')continue;c.fillStyle=ch==='j'?a.j:ch==='l'?a.l:IPAL[ch];c.fillRect(x,y,1,1)}});
   ICV[key]=cv;
  }
