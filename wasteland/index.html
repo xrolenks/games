@@ -67,6 +67,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 #locn:not(:empty)::before{content:"// "}
 #cmb{float:right;font-size:.7rem;letter-spacing:.1em;padding:1px 6px;border:1px solid var(--dim);color:var(--dim);font-weight:normal}
 #cmb:empty{display:none}
+#clk{float:right;font-size:.7rem;letter-spacing:.06em;padding:2px 8px 0 0;color:var(--dim);font-weight:normal}
 #cmb.on{color:#ff5a4a;border-color:#ff5a4a;font-weight:bold;animation:cmbPulse 1.2s ease-in-out infinite}
 @keyframes cmbPulse{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){#cmb.on{animation:none}}
@@ -176,7 +177,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 </head>
 <body>
 <div id="app">
-<h1>WILD WASTELAND <span id="locn"></span><span id="cmb"></span></h1>
+<h1>WILD WASTELAND <span id="locn"></span><span id="cmb"></span><span id="clk"></span></h1>
 <div id="wmap" class="modal" role="dialog" aria-modal="true" aria-labelledby="wm-title" hidden>
 <div class="box wmbox">
 <h2 id="wm-title">THE WASTELAND</h2>
@@ -398,7 +399,17 @@ var WMN={
 // fin: the reactor control chip ('c' item) waits in this area until you pick it up
 // WMS: where you are, places you've been, saved state of each area you've left, and whether the map is open
 var WMS=null;
-function wmFresh(){return {at:'out',vis:{out:1},seen:{out:1},areas:{},open:false,noloot:1}}
+function wmFresh(){return {at:'out',vis:{out:1},seen:{out:1},areas:{},open:false,noloot:1,time:480}}
+// ---- in-game clock ----
+// WMS.time counts minutes since midnight of day 1 (the game starts at 8:00 AM). Map travel costs MPP minutes per
+// map pixel; each step in an area and each combat turn costs a minute.
+var MPP=2;
+function tick(min){WMS.time=(WMS.time||480)+min}
+function clockMin(){return Math.floor(WMS.time||480)%1440}
+function clockStr(){var m=clockMin(),h=Math.floor(m/60),mm=m%60;return ((h+11)%12+1)+':'+(mm<10?'0':'')+mm+(h<12?' AM':' PM')}
+function dayNum(){return Math.floor((WMS.time||480)/1440)+1}
+// 0 by day (6 AM-8 PM), 1 at night; fades in over the first half hour after 8 PM and out over the last half hour before 6 AM
+function nightF(){var m=clockMin();return m>=1200?Math.min(1,(m-1200)/30):m<360?Math.min(1,(360-m)/30):0}
 // on a return visit you come in at the west edge; step aside if something is standing there
 function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift();if(!T[c]&&!enemyAt(c)&&!isExit(c))return c;nbrs(c).forEach(function(n){if(!seen[n]){seen[n]=1;q.push(n)}})}return s}
 function enterArea(id){
@@ -439,8 +450,8 @@ function wmGo(x,y,to){WTRAV={x:x,y:y,to:to||null,last:performance.now(),tr:0};wm
 function wmStep(){
  if(!WTRAV)return;var now=performance.now(),dt=Math.min(.1,(now-WTRAV.last)/1000),p=wmPos(),dx=WTRAV.x-p.x,dy=WTRAV.y-p.y,d=Math.hypot(dx,dy),s=WSPD*dt;WTRAV.last=now;
  if(now-WTRAV.tr>90){WTRAV.tr=now;WTRAIL.push({x:p.x,y:p.y});if(WTRAIL.length>10)WTRAIL.shift()}
- if(d<=s){p.x=WTRAV.x;p.y=WTRAV.y;WTRAV=null;WTRAIL=[];wmSpot();WSEL=wmAt()||WSEL;wmInfo();put(AUTO,snap());return}
- p.x+=dx/d*s;p.y+=dy/d*s;if(wmSpot())wmInfo();
+ if(d<=s){tick(d*MPP);p.x=WTRAV.x;p.y=WTRAV.y;WTRAV=null;WTRAIL=[];wmSpot();WSEL=wmAt()||WSEL;wmInfo();put(AUTO,snap());return}
+ p.x+=dx/d*s;p.y+=dy/d*s;tick(s*MPP);if(wmSpot())wmInfo();
 }
 function wmEnter(id){WTRAV=null;WTRAIL=[];WMS.open=false;WMAP.hidden=true;enterArea(id);render()}
 function wmInfo(){
@@ -488,12 +499,31 @@ function drawMap(){
   if(id===WSEL){c.strokeStyle='#ffb347';c.lineWidth=1.5;c.beginPath();c.arc(nd.x,nd.y,13,0,7);c.stroke()}
   c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';var lb=nd.n.toUpperCase(),tw=c.measureText(lb).width;c.fillText(lb,Math.max(tw/2+4,Math.min(w-tw/2-4,nd.x)),nd.y+(nd.fin?24:20)+4*(fk-1));
  });
+ // night wash (the marker and the clock stay bright on top)
+ var nf=nightF();if(nf){c.fillStyle='rgba(4,10,40,'+(.5*nf)+')';c.fillRect(0,0,w,h)}
  // you: a pulsing pip with footprints behind it; an X marks where you're headed in open desert
  var pp=wmPos(),px=pp.x,py=pp.y;
  c.fillStyle='rgba(255,179,71,.5)';WTRAIL.forEach(function(t){c.fillRect(t.x-1,t.y-1,2,2)});
  if(WTRAV&&!WTRAV.to){c.strokeStyle='rgba(255,179,71,.8)';c.lineWidth=1.5;c.beginPath();c.moveTo(WTRAV.x-4,WTRAV.y-4);c.lineTo(WTRAV.x+4,WTRAV.y+4);c.moveTo(WTRAV.x+4,WTRAV.y-4);c.lineTo(WTRAV.x-4,WTRAV.y+4);c.stroke()}
  var pr=6+3*Math.sin(now/220);c.strokeStyle='rgba(255,179,71,.55)';c.lineWidth=1.5;c.beginPath();c.arc(px,py-14,pr,0,7);c.stroke();
  c.fillStyle='#ffb347';c.beginPath();c.moveTo(px,py-8);c.lineTo(px-4,py-15);c.lineTo(px+4,py-15);c.closePath();c.fill();
+ drawClock(c,fk);
+}
+// world-map clock: an analog face whose hands follow the in-game time (they sweep round while you travel),
+// a sun or moon in the face, and the digital time and day beneath
+function drawClock(c,fk){
+ var cx=32,cy=30,R=19,m=(WMS.time||480)%1440,hA=((m/60)%12)/12*Math.PI*2,mA=(m%60)/60*Math.PI*2,night=nightF()>.5;fk=Math.min(fk,1.25);
+ c.fillStyle='rgba(3,13,7,.88)';c.fillRect(4,4,56,72);c.strokeStyle='#2a8f50';c.lineWidth=1;c.strokeRect(4.5,4.5,56,72);
+ c.fillStyle='#07180d';c.strokeStyle='#6dff95';c.lineWidth=2;c.beginPath();c.arc(cx,cy,R,0,7);c.fill();c.stroke();
+ for(var k=0;k<12;k++){var a=k/12*Math.PI*2,r0=k%3?R-4:R-6;c.strokeStyle=k%3?'rgba(109,255,149,.5)':'#6dff95';c.lineWidth=k%3?1:2;c.beginPath();c.moveTo(cx+Math.sin(a)*r0,cy-Math.cos(a)*r0);c.lineTo(cx+Math.sin(a)*(R-2),cy-Math.cos(a)*(R-2));c.stroke()}
+ // sun or crescent moon in the lower half of the face
+ if(night){c.fillStyle='#cfe0ff';c.beginPath();c.arc(cx,cy+8,4,0,7);c.fill();c.fillStyle='#07180d';c.beginPath();c.arc(cx+2,cy+7,3.5,0,7);c.fill()}
+ else{c.fillStyle='#ffd27a';c.beginPath();c.arc(cx,cy+8,3,0,7);c.fill()}
+ c.lineCap='round';c.strokeStyle='#ffb347';c.lineWidth=3;c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.sin(hA)*(R-9),cy-Math.cos(hA)*(R-9));c.stroke();
+ c.strokeStyle='#6dff95';c.lineWidth=1.5;c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.sin(mA)*(R-4),cy-Math.cos(mA)*(R-4));c.stroke();c.lineCap='butt';
+ c.fillStyle='#ffb347';c.beginPath();c.arc(cx,cy,2,0,7);c.fill();
+ c.textAlign='center';c.fillStyle='#6dff95';c.font='bold '+Math.round(9*fk)+'px "Courier New",monospace';c.fillText(clockStr(),cx,cy+R+12);
+ c.fillStyle='rgba(109,255,149,.6)';c.font=Math.round(8*fk)+'px "Courier New",monospace';c.fillText('DAY '+dayNum(),cx,cy+R+21);
 }
 // click a location (its marker or name) to travel there, or click it again once you're standing on it to go in;
 // click anywhere else to walk there. You can change course mid-trip.
@@ -529,7 +559,7 @@ function noise(e){if(E.indexOf(e)>=0)alertFrom(e);E.forEach(function(o){if(!o.du
 function step(n){
  var free=!inCombat();
  if(T[n]||enemyAt(n)||(!free&&AP<1)||over)return false;
- walk('P',P,n,PH++);P=n;if(!free)AP--;
+ walk('P',P,n,PH++);P=n;if(!free)AP--;tick(1);
  if(items[P]==='s'){stims++;say('Found a stim pack.');delete items[P]}
  // an ammo crate holds ammo for one of the guns you own, picked at random
  else if(items[P]==='a'){var own=SL.concat(BAG).filter(function(w){return ainf(w)}),t=own.length?own[rnd(own.length)]:'pistol';addAmmo(t,ainf(t).f);say('Found '+ainf(t).f+' '+ainf(t).u+' of '+ammoName(t).toLowerCase()+'.');delete items[P]}
@@ -1129,7 +1159,7 @@ function drawHeal(){
   xs.forEach(function(x,k){var v=u-k*.06;if(v<0||v>1)return;var y=cy-6-v*30-(k%3)*4;g.globalAlpha=1-v;g.fillStyle=k%2?'#6dff95':'#b8ffcb';g.fillRect(cx+x-2,y,5,1);g.fillRect(cx+x,y-2,1,5);g.globalAlpha=1});
  }
 }
-function endTurn(){if(over||busy())return;if(!inCombat()){say('Nobody is after you. Move freely.');render();return}AP=0;WARNED=false;say('You end your turn.');play(function(){enemyTurn();detect();AP=MAXAP;play(after)})}
+function endTurn(){if(over||busy())return;if(!inCombat()){say('Nobody is after you. Move freely.');render();return}AP=0;WARNED=false;tick(1);say('You end your turn.');play(function(){enemyTurn();detect();AP=MAXAP;play(after)})}
 var COL=getComputedStyle(document.documentElement);
 function cv(n){return COL.getPropertyValue(n).trim()}
 function diamond(x,y,dz,fill,stroke){var sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2-dz;g.beginPath();g.moveTo(sx,sy);g.lineTo(sx+TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx-TW/2,sy+TH/2);g.closePath();g.fillStyle=fill;g.fill();if(stroke){g.strokeStyle=stroke;g.lineWidth=1;g.stroke()}}
@@ -1344,8 +1374,8 @@ function bunkerDoor(y0,y1){
  q(.08,0,.92,.88,'#7d868d','#3a3f44');
  q(.08,.28,.92,.33,'#5e666c');q(.08,.58,.92,.63,'#5e666c');q(.495,0,.505,.88,'#2e3236');
  [.13,.87].forEach(function(u){[.12,.45,.76].forEach(function(v){q(u-.012,v-.02,u+.012,v+.02,'#c4cace')})});
- // stencilled 9
- ['###','#.#','###','..#','###'].forEach(function(r,j){for(var c=0;c<3;c++)if(r[c]==='#')q(.42+c*.055,.78-j*.075,.42+(c+1)*.055,.78-(j+1)*.075,'#d4a632')});
+ // stencilled 9: u runs right-to-left on screen (higher y is further left), so columns are laid out mirrored
+ ['###','#.#','###','..#','###'].forEach(function(r,j){for(var c=0;c<3;c++)if(r[c]==='#'){var k=2-c;q(.42+k*.055,.78-j*.075,.42+(k+1)*.055,.78-(j+1)*.075,'#d4a632')}});
  var on=(performance.now()/600|0)%2,lp=pt(1,(y0+y1)/2,Hd*.95);g.fillStyle=on?'#ff3b2a':'#5a1410';g.beginPath();g.arc(lp[0],lp[1],2.5,0,7);g.fill();kick(700);
 }
 // intercom on a post beside the door; its light blinks until you've used it
@@ -1388,8 +1418,10 @@ function camera(){
 }
 function drawIso(){
  var ink=cv('--ink'),dim=cv('--dim'),hot=cv('--hot'),pan=cv('--panel'),edge=cv('--edge');
- var cave=isCave();
+ var cave=isCave(),nf=nightF();
  g.setTransform(1,0,0,1,0,0);g.drawImage(cave?caveBackdrop():backdrop(),0,0);
+ // stars come out over the desert sky at night (the map tiles drawn next cover the ones below the horizon)
+ if(nf&&!cave){var sd=3;function srng(){sd=(sd*16807)%2147483647;return sd/2147483647}g.fillStyle='rgba(220,230,255,'+(.8*nf)+')';for(var st=0;st<70;st++){var sx0=srng()*grid.width,sy0=srng()*140,tw=(Math.sin(performance.now()/700+st)+1)/2;g.globalAlpha=.4+.6*tw;g.fillRect(sx0,sy0,st%9?1:2,st%9?1:2)}g.globalAlpha=1}
  camera();
  // zoom about the player's feet (camera keeps them at ZX,ZY); stays set for odds/FX drawn afterwards
  g.setTransform(Z,0,0,Z,ZX*(1-Z),ZY*(1-Z));
@@ -1443,6 +1475,8 @@ function drawIso(){
  }
  // light from the opened bunker door spills across the cave floor (drawn over the floor it lands on)
  if(cave&&WMS.done){g.save();g.globalAlpha=.22;poly([pt(1,6.3,0),pt(1,8.7,0),pt(3.4,9.3,0),pt(3.4,5.7,0)],'#ffd890');g.restore()}
+ // night: a cool blue wash over the whole scene (lighter inside the cave); text and pop-ups are drawn on top
+ if(nf){g.save();g.setTransform(1,0,0,1,0,0);g.fillStyle='rgba(8,16,52,'+((cave?.25:.5)*nf)+')';g.fillRect(0,0,grid.width,grid.height);g.restore();kick(300)}
  drawHeal();
  drawSpeech();
  drawPops();
@@ -1506,6 +1540,7 @@ function render(){
  document.getElementById('log').innerHTML=logs.map(function(l){return '<div>&gt; '+l.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'}).join('');
  put(AUTO,snap());updateCursor();
  document.getElementById('locn').textContent=WMN[WMS.at].n.toUpperCase();
+ document.getElementById('clk').textContent=(nightF()>.5?'☾ ':'☼ ')+clockStr();
  var cb=document.getElementById('cmb'),inc=!over&&inCombat();cb.textContent=over?'':inc?'COMBAT':'EXPLORING';cb.className=inc?'on':'';
  // the map stays open (and comes back after a reload) until you pick where to go
  if(WMS.open&&WMAP.hidden&&document.getElementById('menu').hidden)openMap();
@@ -1524,6 +1559,7 @@ function restore(s){
   // saves from the road-based map: everything you could see then counts as discovered, and you stand at your last location
   if(!WMS.seen){WMS.seen={};Object.keys(WMN).forEach(function(id){if(WMS.vis[id]||WMN[id].l.some(function(k){return WMS.vis[k]}))WMS.seen[id]=1})}
   if(!WMS.pos)WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};
+  if(typeof WMS.time!=='number')WMS.time=480;
   // saves from before the gate became a cave: forget the old desert layout, rebuild it if you're standing in it
   if(WMS.areas.out&&!WMS.areas.out.T.some(function(v){return v===8}))delete WMS.areas.out;
   if(WMS.at==='out'&&!T.some(function(v){return v===8}))buildCave();
