@@ -257,7 +257,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="help" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
 <div class="box">
 <h2 id="help-title">WILD WASTELAND // CONTROLS</h2>
-<p>Reach the red flag to leave an area and open the map. Pick a road and travel. Find the reactor control chip and bring it back to the Bunker 9 intercom.</p>
+<p>Step on a red exit square at the east edge to leave an area and open the map. Pick a road and travel. Find the reactor control chip and bring it back to the Bunker 9 intercom.</p>
 <dl class="only-touch">
 <dt>Tap a tile</dt><dd>Walk there.</dd>
 <dt>Tap an enemy</dt><dd>Attack it.</dd>
@@ -348,15 +348,20 @@ function bfs(s,t,blockE){var prev={},q=[s];prev[s]=-1;
  while(q.length){var c=q.shift();if(c===t)break;nbrs(c).forEach(function(n){if(n in prev||T[n])return;if(blockE&&enemyAt(n))return;prev[n]=c;q.push(n)})}
  if(!(t in prev))return null;var p=[],c2=t;while(c2!==s){p.unshift(c2);c2=prev[c2]}return p}
 // Bunker 9 Gate is a fixed cave inside the mountain. #: rock, D: the bunker's sealed door (west wall),
-// I: intercom post beside it, P: where you start, X: the cave mouth (red flag). Tile types: 8 rock, 9 door, 10 intercom.
+// I: intercom post beside it, P: where you start, X: the cave mouth (exit squares). Tile types: 8 rock, 9 door, 10 intercom.
 var CAVE=['##################','######....########','####.......#######','###.........######','##...#.......#####','#I.......##.....##',
  'D.........#......#','DP...............X','D......#.........#','#...........##..##','##..##.........###','###......#....####','#####.......######','##################'];
 function isCave(){return !!(WMS&&WMN[WMS.at].cave)}
 function buildCave(){
  T=[];items={};E=[];F={};BD=[];MV=[];PH=0;HQ=[];SQ=[];SK={x:-20,y:-20,a:-1,b:-1,door:-1};
  for(var y=0;y<H;y++)for(var x=0;x<W;x++){var ch=CAVE[y][x],i=ix(x,y);T.push(ch==='#'?8:ch==='D'?9:ch==='I'?10:0);if(ch==='P')P=i;if(ch==='X')EX=i}
+ openExits();
  AP=MAXAP;WARNED=false;
 }
+// Exits: EX on the east edge plus the open tiles directly above and below it, drawn as red squares.
+// Stepping on any of them leaves the area. openExits clears small clutter (crates, cacti, loose rock) off them.
+function isExit(i){return i===EX||((i===EX-W||i===EX+W)&&T[i]===0)}
+function openExits(){[EX-W,EX+W].forEach(function(q){if(q>=0&&q<W*H&&(T[q]===1||T[q]===2||T[q]===8)){T[q]=0;delete items[q]}})}
 function newLevel(){
  if(isCave())return buildCave();
  var ok=false;
@@ -372,14 +377,15 @@ function newLevel(){
   for(var w=0;w<CRATES+CACTI;w++){var r=rnd(W*H);if(r!==P&&r!==EX&&r%W>0&&r%W<W-1&&!T[r]&&!F[r]&&r!==SK.door+W)T[r]=w<CRATES?1:2;}
   ok=!!bfs(P,EX,false)&&!!bfs(P,SK.door,false);
  }
- function free(minx){var r;do{r=rnd(W*H)}while(T[r]||F[r]||r===P||r===EX||items[r]||enemyAt(r)||r%W<minx);return r}
+ openExits();
+ function free(minx){var r;do{r=rnd(W*H)}while(T[r]||F[r]||r===P||isExit(r)||items[r]||enemyAt(r)||r%W<minx);return r}
  if(!WMN[WMS.at].safe)for(var a=0;a<Math.min(lv,3)+1;a++)E.push({i:free(6),t:'R',hp:14,g:rnd(2)?'f':'m',w:rnd(100)<40?'m':'g'});
  if(!WMN[WMS.at].safe)for(var b=0;b<lv+2;b++)E.push({i:free(5),t:'r',hp:6});
  items[free(2)]='s';items[free(2)]='s';for(var am=0;am<4;am++)items[free(2)]='a';
  var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[SK.a]='g:'+gp[rnd(gp.length)];items[SK.b]='s';for(var gi=0;gi<(lv>1?1:0);gi++)items[free(3)]='g:'+gp[rnd(gp.length)];
  AP=MAXAP;WARNED=false;
 }
-function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];WMS=wmFresh();say('Find the reactor control chip and bring it back to the Bunker 9 intercom.');say('Reach the red flag to leave an area and open the map.');newLevel();render();}
+function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];WMS=wmFresh();say('Find the reactor control chip and bring it back to the Bunker 9 intercom.');say('Step on a red exit square to leave an area and open the map.');newLevel();render();}
 // ---- world map ----
 // Locations on the map. t: danger tier (feeds newLevel's lv), l: roads to other locations, x/y: spot on the 480x300 map.
 // safe: no enemies spawn there. cave: built from the fixed CAVE layout. ent: where you come back in (default: west edge).
@@ -394,7 +400,7 @@ var WMN={
 var WMS=null;
 function wmFresh(){return {at:'out',vis:{out:1},areas:{},open:false,noloot:1}}
 // on a return visit you come in at the west edge; step aside if something is standing there
-function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift();if(!T[c]&&!enemyAt(c)&&c!==EX)return c;nbrs(c).forEach(function(n){if(!seen[n]){seen[n]=1;q.push(n)}})}return s}
+function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift();if(!T[c]&&!enemyAt(c)&&!isExit(c))return c;nbrs(c).forEach(function(n){if(!seen[n]){seen[n]=1;q.push(n)}})}return s}
 function enterArea(id){
  var nd=WMN[id],a=WMS.areas[id],first=!WMS.vis[id];
  WMS.at=id;WMS.vis[id]=1;lv=nd.t;SPEECH=null;
@@ -408,10 +414,10 @@ function enterArea(id){
 // in the final area, put the chip deep in the east side unless you already have it or it's lying there
 function placeChip(){
  if(!WMN[WMS.at].fin||WMS.chip||Object.keys(items).some(function(k){return items[k]==='c'}))return;
- var spots=[];for(var q=0;q<W*H;q++)if(!T[q]&&!items[q]&&!enemyAt(q)&&q!==EX&&q!==P&&q%W>=W-6)spots.push(q);
+ var spots=[];for(var q=0;q<W*H;q++)if(!T[q]&&!items[q]&&!enemyAt(q)&&!isExit(q)&&q!==P&&q%W>=W-6)spots.push(q);
  if(spots.length)items[spots[rnd(spots.length)]]='c';
 }
-// reaching the red flag opens the map
+// stepping on an exit square opens the map
 function leaveArea(){
  WMS.areas[WMS.at]={T:T,items:items,E:E,F:F,SK:SK,BD:BD,EX:EX};
  WMS.open=true;WSEL=null;say('You reach the edge of '+WMN[WMS.at].n+'.');
@@ -511,7 +517,7 @@ function step(n){
  else if(items[P]==='a'){var own=SL.concat(BAG).filter(function(w){return ainf(w)}),t=own.length?own[rnd(own.length)]:'pistol';addAmmo(t,ainf(t).f);say('Found '+ainf(t).f+' '+ainf(t).u+' of '+ammoName(t).toLowerCase()+'.');delete items[P]}
  else if(items[P]==='c'){WMS.chip=1;delete items[P];say('You found the reactor control chip! Bring it back to the Bunker 9 intercom.');POPS.push({o:'P',txt:'+CONTROL CHIP',t:performance.now(),dy:0,col:'#6dff95'})}
  else if(items[P]&&items[P][0]==='g'){say('Gear here: '+GEAR[items[P].slice(2)].n+'. Tap your own tile to equip (1 AP).')}
- if(P===EX){leaveArea();return false}
+ if(isExit(P)){leaveArea();return false}
  // stop walking the moment someone spots you
  if(detect())return false;
  return true;
@@ -1392,12 +1398,13 @@ function drawIso(){
   else diamond(x,y,0,F[i]?'#8a6a45':['#d9b877','#cfae6c','#d4b370','#c9a763'][(x*3+y*5)%4],F[i]?'#5e4429':'#b8934f');
   if(i===hv){var hc=hcost===null||(hcost>0&&(hcost<=AP||!inCombat()))?'109,255,149':'255,179,71';diamond(x,y,0,'rgba('+hc+',.45)','rgb('+hc+')')}
   if((x*5+y*3)%7===0&&!F[i]&&T[i]!==9){g.fillStyle=cave?'#8a7b6a':'#a98448';g.fillRect(sx-6,sy+TH/2-2,3,2);g.fillRect(sx+4,sy+TH/2+2,2,2);}
-  if(i===EX){diamond(x,y,0,'#4a3a26','#fff4c9');
-   var fx0=sx,fy0=sy+TH/2+2;
-   g.fillStyle='rgba(0,0,0,.4)';g.beginPath();g.ellipse(fx0,fy0,5,2.5,0,0,7);g.fill();
-   g.fillStyle='#3a2a1a';g.fillRect(fx0-1,fy0-34,3,34);g.fillStyle='#c9b48a';g.fillRect(fx0-1,fy0-36,3,3);
-   g.fillStyle='#d42a1e';g.strokeStyle='#7a120c';g.lineWidth=1;g.beginPath();g.moveTo(fx0+2,fy0-33);g.quadraticCurveTo(fx0+9,fy0-36,fx0+19,fy0-31);g.lineTo(fx0+17,fy0-26);g.lineTo(fx0+19,fy0-21);g.quadraticCurveTo(fx0+9,fy0-25,fx0+2,fy0-22);g.closePath();g.fill();g.stroke();
-   g.fillStyle='#ff5a44';g.fillRect(fx0+3,fy0-31,6,2);}
+  // exit square: a pulsing red pad with an arrow pointing out of the area (east)
+  if(isExit(i)){var pu=.5+.5*Math.sin(NOW/320),cx0=sx,cy0=sy+TH/2;
+   diamond(x,y,0,'rgba(150,24,16,.9)','#ff5a44');
+   g.fillStyle='rgba(255,70,50,'+(.25+.3*pu)+')';g.beginPath();g.moveTo(cx0,cy0-TH*.32);g.lineTo(cx0+TW*.32,cy0);g.lineTo(cx0,cy0+TH*.32);g.lineTo(cx0-TW*.32,cy0);g.closePath();g.fill();
+   g.strokeStyle='#ffd0c4';g.lineWidth=2;g.beginPath();g.moveTo(cx0-6,cy0-6);g.lineTo(cx0+4,cy0);g.lineTo(cx0-6,cy0+6);g.stroke();
+   if(i===hv){g.strokeStyle='#6dff95';g.lineWidth=1.5;g.beginPath();g.moveTo(sx,sy);g.lineTo(sx+TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx-TW/2,sy+TH/2);g.closePath();g.stroke()}
+   kick(400);}
   if(items[i]&&items[i][0]==='g')groundGear(items[i].slice(2),sx,sy,i);
   else if(items[i]==='c')groundIcon(icoCanvas('chip'),sx,sy,i,'109,255,149');
   else if(items[i]){g.fillStyle='#1f4d2e';g.fillRect(sx-5,sy+TH/2-5,10,10);g.fillStyle='#fff4c9';g.font='bold 10px monospace';g.textAlign='center';g.fillText(items[i]==='s'?'+':items[i]==='a'?'=':GEAR[items[i].slice(2)].k==='w'?'/':'[',sx,sy+TH/2+3);}
@@ -1438,7 +1445,7 @@ function drawMini(){
  for(var i=0;i<W*H;i++)cell(i,T[i]===8?'#3d352d':T[i]===9?'#9aa3aa':T[i]===10?'#6dff95':cave?((i%W+((i/W)|0))%2?'#6f6254':'#776a5b'):T[i]>=4?'#8a4a2a':T[i]===3?'#6e5235':F[i]?'#8a6a45':((i%W+((i/W)|0))%2?'#b8955a':'#c4a265'));
  for(i=0;i<W*H;i++)if(T[i]===2)cell(i,'#3f6b2f',.8);
  Object.keys(items).forEach(function(k){cell(+k,items[k][0]==='g'?'#e0702a':'#2f7a48',.7)});
- cell(EX,'#ff3b2a',1.2);
+ [EX-W,EX,EX+W].forEach(function(q){if(isExit(q))cell(q,'#ff3b2a',1.1)});
  E.forEach(function(e){cell(e.i,'#ffb347',1.1)});
  var blink=(performance.now()/400|0)%2;cell(P,blink?'#b8ffcb':'#6dff95',1.3);
  g.restore();
@@ -1502,6 +1509,7 @@ function restore(s){
   // saves from when the cave still spawned loot: clear it once (gear you drop there later stays)
   if(!WMS.noloot){if(WMS.areas.out)WMS.areas.out.items={};if(WMS.at==='out')items={};WMS.noloot=1}
   if(WMN[WMS.at].safe)E=E.filter(function(e){return e.dummy});
+  openExits();Object.keys(WMS.areas).forEach(function(k){var a=WMS.areas[k];[a.EX-W,a.EX+W].forEach(function(q){if(a.T[q]===8||a.T[q]===1||a.T[q]===2)a.T[q]=0})});
   placeChip();
   WASC=E.some(function(e){return e.al&&!e.dummy});
   MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
@@ -1644,7 +1652,7 @@ document.getElementById('cheatform').addEventListener('submit',function(e){
   say('CHEAT: Charged Laser pistol and 24 spare cells added to your inventory. Equip it from Carried.');
   POPS.push({o:'P',txt:'+LASER PISTOL',t:performance.now(),dy:0,col:'#ffd27a'});kick(0);
  }else if(code==='testdummy'){
-  var spot=nbrs(P).concat(nbrs(P).reduce(function(a,n){return a.concat(nbrs(n))},[])).filter(function(n){return n!==P&&n!==EX&&!T[n]&&!enemyAt(n)})[0];
+  var spot=nbrs(P).concat(nbrs(P).reduce(function(a,n){return a.concat(nbrs(n))},[])).filter(function(n){return n!==P&&!isExit(n)&&!T[n]&&!enemyAt(n)})[0];
   if(spot===undefined)say('No room next to you for a test dummy.');
   else{E.push({i:spot,t:'R',hp:1,g:rnd(2)?'f':'m',w:'g',dummy:1});say('CHEAT: A 1 HP test dummy appears next to you. It never attacks.');POPS.push({o:'P',txt:'+DUMMY',t:performance.now(),dy:0,col:'#ffd27a'});kick(0)}
  }else if(code==='zeus'){
