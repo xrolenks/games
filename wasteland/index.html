@@ -257,7 +257,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="help" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
 <div class="box">
 <h2 id="help-title">WILD WASTELAND // CONTROLS</h2>
-<p>Step on a red exit square at the east edge to leave an area and open the map. Pick a road and travel. Find the reactor control chip and bring it back to the Bunker 9 intercom.</p>
+<p>Step on a red exit square at the east edge to leave an area and open the map. On the map, click anywhere to travel there; click a location you're standing on to enter it. Find the reactor control chip and bring it back to the Bunker 9 intercom.</p>
 <dl class="only-touch">
 <dt>Tap a tile</dt><dd>Walk there.</dd>
 <dt>Tap an enemy</dt><dd>Attack it.</dd>
@@ -398,7 +398,7 @@ var WMN={
 // fin: the reactor control chip ('c' item) waits in this area until you pick it up
 // WMS: where you are, places you've been, saved state of each area you've left, and whether the map is open
 var WMS=null;
-function wmFresh(){return {at:'out',vis:{out:1},areas:{},open:false,noloot:1}}
+function wmFresh(){return {at:'out',vis:{out:1},seen:{out:1},areas:{},open:false,noloot:1}}
 // on a return visit you come in at the west edge; step aside if something is standing there
 function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift();if(!T[c]&&!enemyAt(c)&&!isExit(c))return c;nbrs(c).forEach(function(n){if(!seen[n]){seen[n]=1;q.push(n)}})}return s}
 function enterArea(id){
@@ -420,20 +420,37 @@ function placeChip(){
 // stepping on an exit square opens the map
 function leaveArea(){
  WMS.areas[WMS.at]={T:T,items:items,E:E,F:F,SK:SK,BD:BD,EX:EX};
- WMS.open=true;WSEL=null;say('You reach the edge of '+WMN[WMS.at].n+'.');
+ WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};WMS.open=true;WSEL=WMS.at;say('You reach the edge of '+WMN[WMS.at].n+'.');
 }
-function wmShown(id){return WMS.vis[id]||WMN[id].l.some(function(k){return WMS.vis[k]})}
+// Free travel: the marker (WMS.pos) walks wherever you click. Locations show up once you get within SEE of them
+// (WMS.seen); stand on one and click it (or Enter) to go in.
+var SEE=130,WSPD=110,WTRAIL=[];
+function wmShown(id){return !!(WMS.seen&&WMS.seen[id])||!!WMS.vis[id]}
 function wmCleared(id){var a=WMS.areas[id];return !!a&&!a.E.some(function(e){return !e.dummy})}
+function wmPos(){if(!WMS.pos)WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};return WMS.pos}
+// the location the marker is standing on, if any
+function wmAt(){var p=wmPos(),hit=null;Object.keys(WMN).forEach(function(id){if(Math.hypot(WMN[id].x-p.x,WMN[id].y-p.y)<4)hit=id});return hit}
+function wmSpot(){var p=wmPos(),nw=false;WMS.seen=WMS.seen||{};Object.keys(WMN).forEach(function(id){if(!WMS.seen[id]&&Math.hypot(WMN[id].x-p.x,WMN[id].y-p.y)<=SEE){WMS.seen[id]=1;nw=true}});return nw}
 var WMAP=document.getElementById('wmap'),WMCV=document.getElementById('wmcv'),WSEL=null,WTRAV=null;
-function openMap(){WMAP.hidden=false;if(!WSEL)WSEL=WMS.at;wmInfo();requestAnimationFrame(wmLoop);document.getElementById('wmgo').focus()}
-function wmLoop(){if(WMAP.hidden)return;drawMap();requestAnimationFrame(wmLoop)}
+function openMap(){WMAP.hidden=false;if(!WSEL)WSEL=wmAt();wmSpot();wmInfo();requestAnimationFrame(wmLoop);document.getElementById('wmgo').focus()}
+function wmLoop(){if(WMAP.hidden)return;wmStep();drawMap();requestAnimationFrame(wmLoop)}
+// head for a map point; to: the location there, if any
+function wmGo(x,y,to){WTRAV={x:x,y:y,to:to||null,last:performance.now(),tr:0};wmInfo()}
+function wmStep(){
+ if(!WTRAV)return;var now=performance.now(),dt=Math.min(.1,(now-WTRAV.last)/1000),p=wmPos(),dx=WTRAV.x-p.x,dy=WTRAV.y-p.y,d=Math.hypot(dx,dy),s=WSPD*dt;WTRAV.last=now;
+ if(now-WTRAV.tr>90){WTRAV.tr=now;WTRAIL.push({x:p.x,y:p.y});if(WTRAIL.length>10)WTRAIL.shift()}
+ if(d<=s){p.x=WTRAV.x;p.y=WTRAV.y;WTRAV=null;WTRAIL=[];wmSpot();WSEL=wmAt()||WSEL;wmInfo();put(AUTO,snap());return}
+ p.x+=dx/d*s;p.y+=dy/d*s;if(wmSpot())wmInfo();
+}
+function wmEnter(id){WTRAV=null;WTRAIL=[];WMS.open=false;WMAP.hidden=true;enterArea(id);render()}
 function wmInfo(){
- var id=WSEL,nd=WMN[id],here=id===WMS.at,road=WMN[WMS.at].l.indexOf(id)>=0,danger='';
+ var b=document.getElementById('wmgo'),info=document.getElementById('wminfo');
+ if(!WSEL){info.innerHTML='<b>OPEN WASTELAND</b><small>'+(WTRAV?'Travelling…':'Nothing here but sand')+'</small><p>Click anywhere on the map to travel there, or click a location.</p>';b.disabled=true;b.textContent=WTRAV?'Travelling…':'Pick a location';return}
+ var id=WSEL,nd=WMN[id],here=!WTRAV&&wmAt()===id,danger='';
  if(nd.safe)danger='<small style="display:inline;color:var(--ink)">SAFE</small>';else for(var q=1;q<=4;q++)danger+='<i'+(q<=nd.t?' class="on"':'')+'></i>';
  var st=here?'You are here':WMS.vis[id]?(wmCleared(id)?'Visited · cleared':'Visited'):'Not explored';
- document.getElementById('wminfo').innerHTML='<b>'+nd.n.toUpperCase()+'</b> <span class="danger" title="Danger">'+danger+'</span><small>'+st+'</small><p>'+nd.d+'</p>';
- var b=document.getElementById('wmgo');b.disabled=!!WTRAV||!(here||road);
- b.textContent=here?'Go back in':road?'Travel to '+nd.n:'No road from here';
+ info.innerHTML='<b>'+nd.n.toUpperCase()+'</b> <span class="danger" title="Danger">'+danger+'</span><small>'+st+'</small><p>'+nd.d+'</p>';
+ b.disabled=!!WTRAV&&WTRAV.to===id;b.textContent=here?'Enter '+nd.n:WTRAV&&WTRAV.to===id?'Travelling…':'Travel to '+nd.n;
 }
 // seeded scatter so the terrain is the same every time the map is drawn
 function drawMap(){
@@ -471,24 +488,25 @@ function drawMap(){
   if(id===WSEL){c.strokeStyle='#ffb347';c.lineWidth=1.5;c.beginPath();c.arc(nd.x,nd.y,13,0,7);c.stroke()}
   c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';var lb=nd.n.toUpperCase(),tw=c.measureText(lb).width;c.fillText(lb,Math.max(tw/2+4,Math.min(w-tw/2-4,nd.x)),nd.y+(nd.fin?24:20)+4*(fk-1));
  });
- // you: a pulsing pip, sliding along the road while travelling
- var px=WMN[WMS.at].x,py=WMN[WMS.at].y;
- if(WTRAV){var tt=Math.min(1,(now-WTRAV.t0)/WTRAV.dur),e=tt<.5?2*tt*tt:1-Math.pow(-2*tt+2,2)/2,A=WMN[WTRAV.from],B=WMN[WTRAV.to];px=A.x+(B.x-A.x)*e;py=A.y+(B.y-A.y)*e;
-  c.fillStyle='rgba(255,179,71,.5)';for(var f=1;f<8;f++){var fe=Math.max(0,e-f*.05);c.fillRect(A.x+(B.x-A.x)*fe-1,A.y+(B.y-A.y)*fe-1,2,2)}}
+ // you: a pulsing pip with footprints behind it; an X marks where you're headed in open desert
+ var pp=wmPos(),px=pp.x,py=pp.y;
+ c.fillStyle='rgba(255,179,71,.5)';WTRAIL.forEach(function(t){c.fillRect(t.x-1,t.y-1,2,2)});
+ if(WTRAV&&!WTRAV.to){c.strokeStyle='rgba(255,179,71,.8)';c.lineWidth=1.5;c.beginPath();c.moveTo(WTRAV.x-4,WTRAV.y-4);c.lineTo(WTRAV.x+4,WTRAV.y+4);c.moveTo(WTRAV.x+4,WTRAV.y-4);c.lineTo(WTRAV.x-4,WTRAV.y+4);c.stroke()}
  var pr=6+3*Math.sin(now/220);c.strokeStyle='rgba(255,179,71,.55)';c.lineWidth=1.5;c.beginPath();c.arc(px,py-14,pr,0,7);c.stroke();
  c.fillStyle='#ffb347';c.beginPath();c.moveTo(px,py-8);c.lineTo(px-4,py-15);c.lineTo(px+4,py-15);c.closePath();c.fill();
 }
+// click a location (its marker or name) to travel there, or click it again once you're standing on it to go in;
+// click anywhere else to walk there. You can change course mid-trip.
 WMCV.addEventListener('click',function(e){
- if(WTRAV)return;var r=WMCV.getBoundingClientRect(),x=(e.clientX-r.left)*WMCV.width/r.width,y=(e.clientY-r.top)*WMCV.height/r.height,best=null,bd=26;
- Object.keys(WMN).forEach(function(id){if(!wmShown(id))return;var d=Math.hypot(WMN[id].x-x,WMN[id].y-y);if(d<bd){bd=d;best=id}});
- if(best){WSEL=best;wmInfo()}
+ var r=WMCV.getBoundingClientRect(),x=(e.clientX-r.left)*WMCV.width/r.width,y=(e.clientY-r.top)*WMCV.height/r.height,best=null,bd=1e9;
+ Object.keys(WMN).forEach(function(id){if(!wmShown(id))return;var n=WMN[id],d=Math.hypot(n.x-x,n.y-y),onLabel=Math.abs(x-n.x)<45&&y>n.y&&y<n.y+30;if((d<18||onLabel)&&d<bd){bd=d;best=id}});
+ if(best){if(!WTRAV&&wmAt()===best){wmEnter(best);return}WSEL=best;wmGo(WMN[best].x,WMN[best].y,best);return}
+ WSEL=null;wmGo(Math.max(4,Math.min(WMCV.width-4,x)),Math.max(4,Math.min(WMCV.height-4,y)),null);
 });
 document.getElementById('wmgo').addEventListener('click',function(){
- if(WTRAV||!WSEL)return;var to=WSEL;
- if(to===WMS.at){WMS.open=false;WMAP.hidden=true;enterArea(to);render();return}
- if(WMN[WMS.at].l.indexOf(to)<0)return;
- WTRAV={from:WMS.at,to:to,t0:performance.now(),dur:1100};wmInfo();
- setTimeout(function(){WTRAV=null;WMS.open=false;WMAP.hidden=true;enterArea(to);render()},1150);
+ if(!WSEL)return;
+ if(!WTRAV&&wmAt()===WSEL){wmEnter(WSEL);return}
+ if(!(WTRAV&&WTRAV.to===WSEL))wmGo(WMN[WSEL].x,WMN[WSEL].y,WSEL);
 });
 // ---- combat state ----
 // Enemies idle until they notice you (al = alerted). You're in combat while any enemy is alerted;
@@ -1503,6 +1521,9 @@ function restore(s){
   // saves from before the world map: put the player on the route at the matching step
   if(d.WM)WMS=d.WM;else{WMS=wmFresh();var at=['out','gulch','scrap','tower'][Math.min(3,Math.max(0,(lv||1)-1))];WMS.at=at;WMS.vis[at]=1;if(at==='scrap')WMS.vis.gulch=1;lv=WMN[at].t}
   if(!WMN[WMS.at])WMS=wmFresh();
+  // saves from the road-based map: everything you could see then counts as discovered, and you stand at your last location
+  if(!WMS.seen){WMS.seen={};Object.keys(WMN).forEach(function(id){if(WMS.vis[id]||WMN[id].l.some(function(k){return WMS.vis[k]}))WMS.seen[id]=1})}
+  if(!WMS.pos)WMS.pos={x:WMN[WMS.at].x,y:WMN[WMS.at].y};
   // saves from before the gate became a cave: forget the old desert layout, rebuild it if you're standing in it
   if(WMS.areas.out&&!WMS.areas.out.T.some(function(v){return v===8}))delete WMS.areas.out;
   if(WMS.at==='out'&&!T.some(function(v){return v===8}))buildCave();
