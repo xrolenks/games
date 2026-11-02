@@ -102,6 +102,9 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 #lookcv{display:block;margin:0 auto 14px;width:96px;height:128px;image-rendering:pixelated;border:2px solid var(--edge);background:#2b1c10;padding:6px;box-sizing:content-box}
 .lrow{display:flex;align-items:center;gap:10px;margin:0 0 10px;text-align:left}
 .lrow>span,.lrow>label{min-width:5.5em;white-space:nowrap;flex:none;color:var(--ink);font-size:.85rem}
+#lookname{flex:1;min-width:0;font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg);border:2px solid var(--edge);padding:6px 8px;letter-spacing:.04em}
+#lookname:focus{outline:none;border-color:var(--hot)}
+#lookname::placeholder{color:var(--dim)}
 #cursz{flex:1;min-width:0;accent-color:#6dff95;height:28px;cursor:pointer}
 #curszv{min-width:3.4em;text-align:right;color:var(--hot);font-size:.85rem}
 .opts{display:flex;gap:6px;flex-wrap:wrap;flex:1}
@@ -236,13 +239,14 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="m-look" hidden>
 <h2>CREATE YOUR WANDERER</h2>
 <canvas id="lookcv" width="96" height="128" aria-label="Character preview"></canvas>
+<div class="lrow"><label for="lookname">Name</label><input id="lookname" type="text" maxlength="16" placeholder="Wanderer" autocomplete="off" spellcheck="false"></div>
 <div class="lrow"><span>Character</span><div class="opts" data-k="sex"><button type="button" data-v="m">Male</button><button type="button" data-v="f">Female</button></div></div>
 <div class="lrow"><span>Hat</span><div class="opts" data-k="hat"><button type="button" data-v="1">Hat</button><button type="button" data-v="0">No hat</button></div></div>
 <div class="lrow"><span>Shirt</span><div class="opts sw" data-k="shirt" id="lookshirts"></div></div>
 <button id="mlook" class="go" type="button">Continue</button>
 </div>
 <div id="m-intro" hidden>
-<h2>THE WANDERER // A DEAL IN THE DARK</h2>
+<h2 id="intro-title">WANDERER // A RARE OPPORTUNITY</h2>
 <p class="ln" style="animation-delay:.1s">You have wandered the wastes for as long as you can remember. You scavenge through old ruins and sell anything you can find to make a living.</p>
 <p class="ln" style="animation-delay:1.2s">One day while traveling, you explore a cave and find the entrance to a highly secured bunker. You heard stories about them, but you never thought they actually existed. While investigating, you hear a voice over the intercom. <q>Stranger, our reactor system is slowly failing and we need a control chip to ensure this bunker's survival. If you can find the chip and bring it to us, we will let you join our community.</q></p>
 <p class="ln" style="animation-delay:2.6s">This is the opportunity you have been waiting for your whole life. No more selling scraps just for a meager existence. You unholster your old revolver and head out to the wastes one last time.</p>
@@ -1843,8 +1847,15 @@ function syncLook(){
  for(var j=0;j<d.length;j++)for(var i=0;i<d[j].length;i++){var ch=d[j][i];if(ch==='.'||ch==='g')continue;c.fillStyle=SPR.P.p[ch];c.fillRect(i*S,j*S,S,S)}
 }
 LOOKEL.addEventListener('click',function(e){var b=e.target.closest('.opts button');if(!b)return;var k=b.parentNode.dataset.k;LOOK[k]=k==='hat'?+b.dataset.v:b.dataset.v;syncLook()});
-document.getElementById('mstart').addEventListener('click',function(){document.getElementById('m-title').hidden=true;LOOKEL.hidden=false;syncLook();document.getElementById('mlook').focus()});
-document.getElementById('mlook').addEventListener('click',function(){LOOKEL.hidden=true;document.getElementById('m-intro').hidden=false;document.getElementById('mbegin').focus()});
+// the name is kept with the look (LOOK.name) so it's saved with the game; blank means "Wanderer"
+var NAMEIN=document.getElementById('lookname');
+function pname(){return (LOOK.name||'').trim()||'Wanderer'}
+NAMEIN.addEventListener('input',function(){LOOK.name=NAMEIN.value.replace(/\s+/g,' ').slice(0,16)});
+NAMEIN.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();document.getElementById('mlook').click()}});
+document.getElementById('mstart').addEventListener('click',function(){document.getElementById('m-title').hidden=true;LOOKEL.hidden=false;NAMEIN.value=LOOK.name||'';syncLook();NAMEIN.focus()});
+document.getElementById('mlook').addEventListener('click',function(){LOOK.name=(LOOK.name||'').trim();
+ document.getElementById('intro-title').textContent=pname().toUpperCase()+' // A RARE OPPORTUNITY';
+ LOOKEL.hidden=true;document.getElementById('m-intro').hidden=false;document.getElementById('mbegin').focus()});
 document.getElementById('mbegin').addEventListener('click',function(){MENU.hidden=true;newGame();openHelp()});
 document.getElementById('mcont').addEventListener('click',function(){MENU.hidden=true;render();if(!WMS.open)openHelp()});
 startMenu();
