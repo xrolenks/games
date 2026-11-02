@@ -19,7 +19,7 @@ h1{font-size:1.05rem;margin:0 0 8px;letter-spacing:.06em;font-weight:bold}
 .pips{display:flex;gap:3px}
 .pips i{flex:1;height:10px;border:1px solid var(--dim)}
 .pips i.on{background:var(--ink);border-color:var(--ink)}
-#grid{display:block;width:100%;height:auto;border:2px solid var(--edge);background:#2b1c10;touch-action:manipulation}
+#grid{display:block;width:100%;height:auto;border:2px solid var(--edge);background:#2b1c10;touch-action:pan-x pan-y}
 .c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:calc(min(100vw - 24px,520px)/12*.62);line-height:1;color:var(--dim)}
 .c.p{color:var(--ink);font-weight:bold;text-shadow:0 0 6px var(--ink)}
 .c.e{color:var(--hot);font-weight:bold;text-shadow:0 0 6px var(--hot)}
@@ -70,6 +70,15 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .mbox .go{width:100%;margin-top:10px;font-size:1rem;padding:10px}
 #m-intro h2{font-size:1rem;letter-spacing:.08em;margin:0 0 14px}
 #m-intro p{text-align:left;font-size:.92rem;line-height:1.5;margin:0 0 12px;color:var(--ink)}
+#m-look h2{font-size:1rem;letter-spacing:.08em;margin:0 0 12px}
+#lookcv{display:block;margin:0 auto 14px;width:96px;height:128px;image-rendering:pixelated;border:2px solid var(--edge);background:#2b1c10;padding:6px;box-sizing:content-box}
+.lrow{display:flex;align-items:center;gap:10px;margin:0 0 10px;text-align:left}
+.lrow>span{width:5.5em;flex:none;color:var(--ink);font-size:.85rem}
+.opts{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.opts button{flex:1;padding:6px 8px}
+.opts button[aria-pressed="true"]{border-color:var(--hot);color:var(--hot);box-shadow:0 0 0 1px var(--hot) inset}
+.opts.sw button{flex:none;width:34px;height:34px;padding:0}
+.opts.sw button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--bg) inset,0 0 0 4px var(--hot) inset}
 .ln{opacity:0;animation:lnIn .7s ease forwards}
 @keyframes lnIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.ln{animation:none;opacity:1}}
@@ -81,6 +90,15 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 #foe .w{display:flex;gap:6px;align-items:center;margin-top:5px}
 #foe .ico{width:24px;height:24px}
 #foe small{color:var(--dim);display:block;font-size:.7rem}
+/* touch screens get their own action row and help text instead of key/mouse hints */
+.tctl,.modal dl.only-touch{display:none}
+@media (hover:none) and (pointer:coarse){
+ .tctl{display:flex}
+ .modal dl.only-touch{display:grid}
+ .modal dl.only-mouse{display:none}
+ .ctl button{min-height:44px}
+ .tctl .zm{min-width:44px;font-weight:bold}
+}
 .paper{display:flex;gap:12px;align-items:flex-start}
 #model{width:120px;height:128px;flex:none;image-rendering:pixelated;background:var(--bg);border:1px solid var(--edge)}
 .pd{flex:1;min-width:0}
@@ -130,6 +148,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="foe" hidden></div>
 <div id="hud" aria-label="Health and action points"></div>
 <div id="slots"></div>
+<div class="ctl tctl"><button id="treload" type="button">Reload</button><button id="tpick" type="button">Pick up</button><button id="tmap" type="button">Map</button><button id="tzout" class="zm" type="button" aria-label="Zoom out">&minus;</button><button id="tzin" class="zm" type="button" aria-label="Zoom in">+</button></div>
 <div id="log" aria-live="polite"></div>
 <div class="ctl"><button id="end" type="button">End turn</button><button id="save" type="button">Save</button><button id="load" type="button">Load</button><button id="new" type="button">New game</button><button id="invbtn" type="button">Inventory</button><button id="helpbtn" type="button">Controls</button></div>
 <div id="inv" class="modal" role="dialog" aria-modal="true" aria-labelledby="inv-title" hidden>
@@ -154,6 +173,14 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <button id="mstart" class="go" type="button">Start</button>
 <button id="mcont" class="go" type="button" hidden>Continue</button>
 </div>
+<div id="m-look" hidden>
+<h2>CREATE YOUR WANDERER</h2>
+<canvas id="lookcv" width="96" height="128" aria-label="Character preview"></canvas>
+<div class="lrow"><span>Character</span><div class="opts" data-k="sex"><button type="button" data-v="m">Male</button><button type="button" data-v="f">Female</button></div></div>
+<div class="lrow"><span>Hat</span><div class="opts" data-k="hat"><button type="button" data-v="1">Hat</button><button type="button" data-v="0">No hat</button></div></div>
+<div class="lrow"><span>Shirt</span><div class="opts sw" data-k="shirt" id="lookshirts"></div></div>
+<button id="mlook" class="go" type="button">Continue</button>
+</div>
 <div id="m-intro" hidden>
 <h2>BUNKER 9 // FINAL BRIEFING</h2>
 <p class="ln" style="animation-delay:.1s">The bombs fell a lifetime ago. You grew up in Bunker 9, one of the last shelters still talking to the others by radio.</p>
@@ -168,7 +195,20 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div class="box">
 <h2 id="help-title">WILD WASTELAND // CONTROLS</h2>
 <p>Cross 3 areas of desert. Reach the red flag in each one to move on.</p>
-<dl>
+<dl class="only-touch">
+<dt>Tap a tile</dt><dd>Walk there.</dd>
+<dt>Tap an enemy</dt><dd>Attack it.</dd>
+<dt>Hold an enemy</dt><dd>Show its HP and equipped weapons.</dd>
+<dt>Tap a slot</dt><dd>Swap to that item slot. Free.</dd>
+<dt>Pick up</dt><dd>Equip gear you're standing on (1 AP). Orange tiles are gear.</dd>
+<dt>Reload</dt><dd>Reload your current weapon (2 AP).</dd>
+<dt>Tap yourself</dt><dd>Use the stim pack in your active slot.</dd>
+<dt>Inventory</dt><dd>Open your inventory (2 AP).</dd>
+<dt>Map</dt><dd>Show or hide the minimap.</dd>
+<dt>Pinch or &minus; / +</dt><dd>Zoom out and in.</dd>
+<dt>End turn</dt><dd>End your turn.</dd>
+</dl>
+<dl class="only-mouse">
 <dt>Click a tile</dt><dd>Walk there. Hovering shows the AP cost.</dd>
 <dt>WASD / Arrows</dt><dd>Step one tile.</dd>
 <dt>Click an enemy</dt><dd>Attack selected enemy.</dd>
@@ -787,8 +827,8 @@ var COL=getComputedStyle(document.documentElement);
 function cv(n){return COL.getPropertyValue(n).trim()}
 function diamond(x,y,dz,fill,stroke){var sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2-dz;g.beginPath();g.moveTo(sx,sy);g.lineTo(sx+TW/2,sy+TH/2);g.lineTo(sx,sy+TH);g.lineTo(sx-TW/2,sy+TH/2);g.closePath();g.fillStyle=fill;g.fill();if(stroke){g.strokeStyle=stroke;g.lineWidth=1;g.stroke()}}
 var SPR={
- P:{p:{k:'#1a1208',h:'#c9a15a',n:'#5a3b1a',s:'#e0a870',e:'#201000',j:'#26262c',l:'#4a4a55',p:'#3e5c76',g:'#aab0b6',m:'#2a1a0f'},d:[
-  '....kkkk....','...khhhhk...','...knnnnk...','kkkhhhhhhkkk','...ksesk....','...kssssk...','..kjjjjjjk..','.kjjjjjjjjgg','.kjlljjjjkg.','.kjjjjjjjk..','..kjjjjjjk..','..kppppppk..','..kppkkppk..','..kpp..ppk..','..kmm..mmk..','.kkkk..kkkk.']},
+ // player: rows come from buildPlayer() so the character creator can swap head, hair and shirt
+ P:{p:{k:'#1a1208',h:'#c9a15a',n:'#5a3b1a',s:'#e0a870',e:'#201000',j:'#26262c',l:'#4a4a55',p:'#3e5c76',g:'#aab0b6',m:'#2a1a0f',a:'#3a2414'},d:[]},
  // male raider: broad shoulders, bulky bare arms, open vest, red mohawk and beard
  R:{p:{r:'#c0392b',s:'#e0a870',S:'#b97e4c',d:'#4a2c18',k:'#1a1208',e:'#201000',b:'#7a5230',t:'#4f3420',g:'#aab0b6',p:'#4a4a52'},d:[
   '.....krrk.....','....ksrrsk....','....kssesk....','....kdddsk....','..kkkbssbkkk..','.kSsbtssbbsSk.','.kSsbbssbbsSgg','.kssbbssbtssk.','..kkbbbbbbkk..','...kppppppk...','...kppkkppk...','...kpp..ppk...','...kpp..ppk...','..kkkk..kkkk..']},
@@ -798,6 +838,24 @@ var SPR={
  r:{p:{k:'#120d08',p:'#e08a9a',f:'#8a7560',g:'#7dff4a',e:'#ff3030',w:'#ffffff',b:'#b8a58c',t:'#d98c9b'},d:[
   '..........kk..','.........kppk.','...kkkkkkfffk.','..kffgffffeffk','.kffffffffffwk','tkbbbbbbbbbwwk','t.kkk..kkk.kk.','tt............']}
 };
+// character creator: head rows 0-6 (hat or hair) and body rows 7-15; 'a' is hair, j/l the shirt
+var LOOK={sex:'m',hat:1,shirt:'charcoal'};
+var SHIRTS={charcoal:['#26262c','#4a4a55'],blue:['#2c4a7a','#4a6ea8'],red:['#7a2a24','#a8473c'],green:['#34502a','#557a42'],mustard:['#8a6a22','#b8933c'],purple:['#4e2e6a','#75509a'],white:['#b8b4a8','#dedad0']};
+var HAIR={m:'#3a2414',f:'#7a4422'};
+var HEADS={
+ mh:['....kkkk....','...khhhhk...','...knnnnk...','kkkhhhhhhkkk','...ksesk....','...kssssk...','..kjjjjjjk..'],
+ mn:['............','....kkkk....','...kaaaak...','...kaaaak...','...kaesk....','...kssssk...','..kjjjjjjk..'],
+ fh:['....kkkk....','...khhhhk...','...knnnnk...','kkkhhhhhhkkk','..kasesk....','..kassssk...','..kajjjjjk..'],
+ fn:['............','....kkkk....','...kaaaak...','..kaaaaaak..','..kaasesk...','..kaassssk..','..kajjjjjk..']};
+var BODY={
+ m:['.kjjjjjjjjgg','.kjlljjjjkg.','.kjjjjjjjk..','..kjjjjjjk..','..kppppppk..','..kppkkppk..','..kpp..ppk..','..kmm..mmk..','.kkkk..kkkk.'],
+ f:['.kjjjjjjjjgg','.kjlljjjjkg.','..kjjjjjjk..','..kjjjjjjk..','..kppppppk..','..kppkkppk..','..kpp..ppk..','..kmm..mmk..','.kkkk..kkkk.']};
+function buildPlayer(){
+ var f=LOOK.sex==='f'?'f':'m',sh=SHIRTS[LOOK.shirt]||SHIRTS.charcoal;
+ SPR.P.d=HEADS[f+(LOOK.hat?'h':'n')].concat(BODY[f]);
+ SPR.P.p.j=sh[0];SPR.P.p.l=sh[1];SPR.P.p.a=HAIR[f];
+}
+buildPlayer();
 // melee raider variants: gun pixels swapped for a raised blade or pipe
 // hr/hc: hand cell that grips the handle; bc: column the raised blade or pipe runs up
 function meleeSpr(src,blade,hr,hc,bc){var d=src.d.map(function(r){return r.replace(/g/g,'.').split('')});d[hr][hc]='m';for(var r=hr-4;r<hr;r++)d[r][bc]='x';if(blade.tip)d[hr-5][bc]='x';
@@ -828,7 +886,7 @@ function heldGun(cx,cy,fl,tint,ta){
  if(GUNS[w]&&since>=0&&since<60){var tip=px[px.length-1],tc=tip[0]+1;g.fillStyle='#fffbe0';g.fillRect(x0+(fl<0?11-tc:tc)*2,y0+tip[1]*2-1,2,2)}
 }
 var ARMC={jacket:{j:'#6b4226',l:'#8f5d36'},plate:{j:'#6f757a',l:'#a9aeb3'},vest:{j:'#34402a',l:'#56683f'},
- power:{j:'#5f6a72',l:'#a3adb4',h:'#6f7a82',n:'#2e363c',s:'#7f8a92',e:'#6dff95',p:'#4f5a62',m:'#2f363c',k:'#14181b'}};
+ power:{j:'#5f6a72',l:'#a3adb4',h:'#6f7a82',a:'#6f7a82',n:'#2e363c',s:'#7f8a92',e:'#6dff95',p:'#4f5a62',m:'#2f363c',k:'#14181b'}};
 function pcol(t,ch){var a=t==='P'&&ARMC[arm];return a&&a[ch]||SPR[t].p[ch]}
 function drawModel(cv){
  var c=cv.getContext('2d'),S=8,d=SPR.P.d;c.clearRect(0,0,cv.width,cv.height);
@@ -1077,10 +1135,10 @@ function render(){
 var AUTO='bunker9-auto',SLOT='bunker9-slot';
 function put(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
 function get(k){try{return localStorage.getItem(k)}catch(e){return null}}
-function snap(){return JSON.stringify({T:T,items:items,E:E,P:P,EX:EX,AP:AP,ammo:ammo,stims:stims,hp:hp,lv:lv,over:over,logs:logs,SL:SL,MAG:MAG,LOADED:LOADED,HRALL:HRALL,GREN:GREN,AC:AC,arm:arm,BAG:BAG,F:F,SK:SK,BD:BD,PF:PF})}
+function snap(){return JSON.stringify({T:T,items:items,E:E,P:P,EX:EX,AP:AP,ammo:ammo,stims:stims,hp:hp,lv:lv,over:over,logs:logs,SL:SL,MAG:MAG,LOADED:LOADED,HRALL:HRALL,GREN:GREN,AC:AC,arm:arm,BAG:BAG,F:F,SK:SK,BD:BD,PF:PF,LOOK:LOOK})}
 function restore(s){
  try{var d=JSON.parse(s);if(!d||!d.T||d.T.length!==W*H)return false;var sl=d.SL||[d.wpn||'pistol',''];if(!sl.every(function(w){return !w||GEAR[w]}))return false;
-  T=d.T;items=d.items;E=d.E;P=d.P;EX=d.EX;AP=d.AP;ammo=d.ammo;stims=d.stims;hp=d.hp;lv=d.lv;over=d.over;logs=d.logs;SL=sl;GREN=d.GREN||0;LOADED=d.LOADED||{};HRALL=!!d.HRALL;MAG=d.MAG||sl.map(function(w){return GEAR[w]&&GEAR[w].cap||0});AC=d.AC?1:0;arm=d.arm;BAG=(d.BAG||[]).filter(function(b){return GEAR[b]});F=d.F;SK=d.SK;BD=d.BD||[];PF=d.PF||1;MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
+  T=d.T;items=d.items;E=d.E;P=d.P;EX=d.EX;AP=d.AP;ammo=d.ammo;stims=d.stims;hp=d.hp;lv=d.lv;over=d.over;logs=d.logs;SL=sl;GREN=d.GREN||0;LOADED=d.LOADED||{};HRALL=!!d.HRALL;MAG=d.MAG||sl.map(function(w){return GEAR[w]&&GEAR[w].cap||0});AC=d.AC?1:0;arm=d.arm;BAG=(d.BAG||[]).filter(function(b){return GEAR[b]});F=d.F;SK=d.SK;BD=d.BD||[];PF=d.PF||1;if(d.LOOK){LOOK=d.LOOK;buildPlayer()}MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
  catch(e){return false}
 }
 function saveGame(){say(put(SLOT,snap())?'Game saved.':'Save failed: browser storage is unavailable.');render();}
@@ -1098,8 +1156,10 @@ function foeInfo(e){
 }
 var FOE=document.getElementById('foe');
 function hideFoe(){FOE.hidden=true}
-grid.addEventListener('contextmenu',function(ev){
- ev.preventDefault();var i=pick(ev),e=i>=0?enemyAt(i):null;
+grid.addEventListener('contextmenu',function(ev){ev.preventDefault();showFoe(ev)});
+// ev is anything with clientX/clientY: a mouse event or a touch point
+function showFoe(ev){
+ var i=pick(ev),e=i>=0?enemyAt(i):null;
  if(!e||busy()){hideFoe();return}
  var f=foeInfo(e),h=Math.max(0,e.hp);
  FOE.innerHTML='<b>'+f.n.toUpperCase()+'</b>'+(e.down?'<small style="color:var(--hot)">Knocked down: loses its next turn</small>':'')+'<div style="margin-top:4px">HP <span style="float:right;color:var(--hot)">'+h+'/'+f.max+'</span>'+bar(h,f.max,'#e0453a')+'</div>'
@@ -1108,7 +1168,31 @@ grid.addEventListener('contextmenu',function(ev){
  FOE.hidden=false;
  var ar=document.getElementById('app').getBoundingClientRect(),x=ev.clientX-ar.left+14,y=ev.clientY-ar.top+14;
  FOE.style.left=Math.max(0,Math.min(x,ar.width-FOE.offsetWidth))+'px';FOE.style.top=y+'px';
-});
+}
+// touch: hold an enemy to inspect it, pinch to zoom
+var HOLD=null,HELD=false,PINCH=0,HX=0,HY=0;
+function pinchDist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY)}
+grid.addEventListener('touchstart',function(e){
+ clearTimeout(HOLD);HELD=false;
+ if(e.touches.length===2){PINCH=pinchDist(e.touches);return}
+ var t=e.touches[0];HX=t.clientX;HY=t.clientY;hideFoe();
+ HOLD=setTimeout(function(){HELD=true;showFoe({clientX:HX,clientY:HY})},450);
+},{passive:true});
+grid.addEventListener('touchmove',function(e){
+ if(e.touches.length===2&&PINCH){var d=pinchDist(e.touches);zoom(d/PINCH);PINCH=d;clearTimeout(HOLD);return}
+ var t=e.touches[0];if(Math.hypot(t.clientX-HX,t.clientY-HY)>10)clearTimeout(HOLD);
+},{passive:true});
+grid.addEventListener('touchend',function(e){
+ clearTimeout(HOLD);if(e.touches.length<2)PINCH=0;
+ // a hold already showed the enemy card, so don't let it also count as an attack tap
+ if(HELD){e.preventDefault();HELD=false}
+},{passive:false});
+grid.addEventListener('touchcancel',function(){clearTimeout(HOLD);HELD=false;PINCH=0});
+document.getElementById('treload').addEventListener('click',reload);
+document.getElementById('tpick').addEventListener('click',function(){if(over||busy())return;equipHere();after()});
+document.getElementById('tmap').addEventListener('click',function(){MINI=!MINI;if(!busy()){drawIso();drawOdds()}});
+document.getElementById('tzout').addEventListener('click',function(){zoom(1/1.15)});
+document.getElementById('tzin').addEventListener('click',function(){zoom(1.15)});
 document.addEventListener('mousedown',function(ev){if(ev.button!==2)hideFoe()});
 window.addEventListener('keydown',hideFoe);
 function hover(a){if(a===HOV)return;HOV=a;if(!busy()){drawIso();drawOdds()}}
@@ -1314,7 +1398,18 @@ function startMenu(){
  var can=!!get(AUTO)&&!over;document.getElementById('mcont').hidden=!can;
  MENU.hidden=false;document.getElementById(can?'mcont':'mstart').focus();
 }
-document.getElementById('mstart').addEventListener('click',function(){document.getElementById('m-title').hidden=true;document.getElementById('m-intro').hidden=false;document.getElementById('mbegin').focus()});
+// character creator: Start -> pick a look -> briefing
+var LOOKEL=document.getElementById('m-look');
+Object.keys(SHIRTS).forEach(function(k){var b=document.createElement('button');b.type='button';b.dataset.v=k;b.title=k.charAt(0).toUpperCase()+k.slice(1)+' shirt';b.setAttribute('aria-label',b.title);b.style.background=SHIRTS[k][0];document.getElementById('lookshirts').appendChild(b)});
+function syncLook(){
+ buildPlayer();
+ [].forEach.call(LOOKEL.querySelectorAll('.opts'),function(o){[].forEach.call(o.children,function(b){b.setAttribute('aria-pressed',String(b.dataset.v===String(LOOK[o.dataset.k])))})});
+ var c=document.getElementById('lookcv').getContext('2d'),d=SPR.P.d,S=8;c.clearRect(0,0,96,128);
+ for(var j=0;j<d.length;j++)for(var i=0;i<d[j].length;i++){var ch=d[j][i];if(ch==='.'||ch==='g')continue;c.fillStyle=SPR.P.p[ch];c.fillRect(i*S,j*S,S,S)}
+}
+LOOKEL.addEventListener('click',function(e){var b=e.target.closest('.opts button');if(!b)return;var k=b.parentNode.dataset.k;LOOK[k]=k==='hat'?+b.dataset.v:b.dataset.v;syncLook()});
+document.getElementById('mstart').addEventListener('click',function(){document.getElementById('m-title').hidden=true;LOOKEL.hidden=false;syncLook();document.getElementById('mlook').focus()});
+document.getElementById('mlook').addEventListener('click',function(){LOOKEL.hidden=true;document.getElementById('m-intro').hidden=false;document.getElementById('mbegin').focus()});
 document.getElementById('mbegin').addEventListener('click',function(){MENU.hidden=true;newGame();openHelp()});
 document.getElementById('mcont').addEventListener('click',function(){MENU.hidden=true;render();openHelp()});
 startMenu();
