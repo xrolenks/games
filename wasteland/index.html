@@ -59,12 +59,6 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .modal{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(1,6,3,.78)}
 .modal[hidden]{display:none}
 #locn{color:var(--dim);font-weight:normal}
-.msgbox{width:min(100%,400px)}
-#msg-text{font-size:1rem;line-height:1.5;color:var(--ink);margin:10px 0 16px}
-#msg-text.voice::before,#msg-text.voice::after{color:var(--hot)}
-#msg-text.voice::before{content:"\201C"}
-#msg-text.voice::after{content:"\201D"}
-#msg-text.quiet{color:var(--dim);font-style:italic}
 #locn:not(:empty)::before{content:"// "}
 #cmb{float:right;font-size:.7rem;letter-spacing:.1em;padding:1px 6px;border:1px solid var(--dim);color:var(--dim);font-weight:normal}
 #cmb.on{color:#ff5a4a;border-color:#ff5a4a;font-weight:bold;animation:cmbPulse 1.2s ease-in-out infinite}
@@ -173,13 +167,6 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <body>
 <div id="app">
 <h1>WILD WASTELAND <span id="locn"></span><span id="cmb"></span></h1>
-<div id="msg" class="modal" role="dialog" aria-modal="true" aria-labelledby="msg-title" hidden>
-<div class="box msgbox">
-<h2 id="msg-title">INTERCOM</h2>
-<p id="msg-text"></p>
-<button id="msgok" class="go" type="button">OK</button>
-</div>
-</div>
 <div id="wmap" class="modal" role="dialog" aria-modal="true" aria-labelledby="wm-title" hidden>
 <div class="box wmbox">
 <h2 id="wm-title">THE WASTELAND</h2>
@@ -342,9 +329,6 @@ function isCave(){return !!(WMS&&WMN[WMS.at].cave)}
 function buildCave(){
  T=[];items={};E=[];F={};BD=[];MV=[];PH=0;HQ=[];SQ=[];SK={x:-20,y:-20,a:-1,b:-1,door:-1};
  for(var y=0;y<H;y++)for(var x=0;x<W;x++){var ch=CAVE[y][x],i=ix(x,y);T.push(ch==='#'?8:ch==='D'?9:ch==='I'?10:0);if(ch==='P')P=i;if(ch==='X')EX=i}
- function free(){var r;do{r=rnd(W*H)}while(T[r]||r===P||r===EX||items[r]||r%W<3);return r}
- items[free()]='s';items[free()]='s';for(var am=0;am<4;am++)items[free()]='a';
- var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[free()]='g:'+gp[rnd(gp.length)];
  AP=MAXAP;WARNED=false;
 }
 function newLevel(){
@@ -381,12 +365,12 @@ var WMN={
  tower:{n:'Radio Tower',x:424,y:84,t:4,l:['scrap'],fin:1,d:'The relay mast. Reach its base and get the signal back on air.'}};
 // WMS: where you are, places you've been, saved state of each area you've left, and whether the map is open
 var WMS=null;
-function wmFresh(){return {at:'out',vis:{out:1},areas:{},open:false}}
+function wmFresh(){return {at:'out',vis:{out:1},areas:{},open:false,noloot:1}}
 // on a return visit you come in at the west edge; step aside if something is standing there
 function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift();if(!T[c]&&!enemyAt(c)&&c!==EX)return c;nbrs(c).forEach(function(n){if(!seen[n]){seen[n]=1;q.push(n)}})}return s}
 function enterArea(id){
  var nd=WMN[id],a=WMS.areas[id],first=!WMS.vis[id];
- WMS.at=id;WMS.vis[id]=1;lv=nd.t;
+ WMS.at=id;WMS.vis[id]=1;lv=nd.t;SPEECH=null;
  if(a){T=a.T;items=a.items;E=nd.safe?[]:a.E;F=a.F;SK=a.SK;BD=a.BD;EX=a.EX;MV=[];PH=0;HQ=[];SQ=[];P=freeNear(nd.ent!==undefined?nd.ent:ix(0,H>>1));AP=MAXAP;WARNED=false;say('Back at '+nd.n+'.')}
  else newLevel();
  if(first){hp=Math.min(30,hp+6);say('You reach '+nd.n+', patching up on the road (+6 HP).')}
@@ -543,12 +527,25 @@ function useIntercom(ic){
  var first=!WMS.ic;WMS.ic=(WMS.ic||0)+1;
  var txt=first?'Find the reactor control chip, and our deal will be complete.':'You hear static from the other end.';
  say(first?'INTERCOM: "'+txt+'"':txt);
- after(function(){showMsg('INTERCOM',txt,first?'voice':'quiet')});
+ after(function(){speak(ic,txt,first)});
 }
-var MSG=document.getElementById('msg');
-function showMsg(title,txt,cls){document.getElementById('msg-title').textContent=title;var p=document.getElementById('msg-text');p.textContent=txt;p.className=cls||'';showModal(MSG,'msgok')}
-document.getElementById('msgok').addEventListener('click',function(){closeModal(MSG)});
-MSG.addEventListener('click',function(e){if(e.target===MSG)closeModal(MSG)});
+// floating text over a tile: types itself out, holds, then fades. voice=true for someone talking, false for narration.
+var SPEECH=null;
+function speak(i,txt,voice){var dur=900+txt.length*35+3500;SPEECH={i:i,txt:txt,voice:voice,t0:performance.now(),dur:dur};kick(dur)}
+function drawSpeech(){
+ if(!SPEECH)return;var now=performance.now(),t=now-SPEECH.t0;if(t>SPEECH.dur){SPEECH=null;return}
+ var shown=SPEECH.txt.slice(0,Math.floor(t/35)),a=Math.min(1,(SPEECH.dur-t)/500),s=scr(SPEECH.i),x=s[0],y=s[1]-46;
+ g.save();g.globalAlpha=a;g.font=(SPEECH.voice?'bold ':'italic ')+'11px "Courier New",monospace';g.textAlign='center';
+ // wrap the full text (so the box doesn't grow while typing), then draw only what's typed so far
+ var words=SPEECH.txt.split(' '),lines=[''],maxW=170;words.forEach(function(w){var tl=lines[lines.length-1],tr=tl?tl+' '+w:w;if(g.measureText(tr).width>maxW&&tl)lines.push(w);else lines[lines.length-1]=tr});
+ var lh=13,bw=Math.max.apply(null,lines.map(function(l){return g.measureText(l).width}))+14,bh=lines.length*lh+8,bx=x-bw/2,by=y-bh;
+ g.fillStyle='rgba(3,13,7,.9)';g.strokeStyle=SPEECH.voice?'#2a8f50':'#4a5a50';g.lineWidth=1;
+ g.beginPath();g.rect(bx+.5,by+.5,bw,bh);g.moveTo(x-4,by+bh+.5);g.lineTo(x,by+bh+6);g.lineTo(x+4,by+bh+.5);g.fill();g.stroke();
+ g.fillStyle='rgba(3,13,7,.9)';g.fillRect(x-3,by+bh-1,7,2);
+ g.fillStyle=SPEECH.voice?'#6dff95':'#9aa59e';var left=shown.length;
+ lines.forEach(function(l,k){var part=l.slice(0,Math.max(0,left));left-=l.length+1;if(part){var lw=g.measureText(l).width;g.textAlign='left';g.fillText(part,x-lw/2,by+12+k*lh)}});
+ g.restore();
+}
 function after(cb){
  if(!over){var c=inCombat();if(!c){if(WASC)say('Combat over. You can move freely.');AP=MAXAP;WARNED=false}WASC=c}
  if(!over&&AP<=0&&!WARNED){WARNED=true;say('Out of AP. Press End turn (Space).')}play(cb?function(){render();cb()}:render)}
@@ -1344,17 +1341,21 @@ function drawIso(){
  if(hv>=0&&hv!==P&&!enemyAt(hv)){var hp2=bfs(P,hv,true);hcost=hp2?hp2.length:-1}
  for(var y=0;y<H;y++)for(var x=0;x<W;x++){
   var i=ix(x,y),sx=OX+(x-y)*TW/2,sy=OY+(x+y)*TH/2,e=enemyAt(i);
-  if(cave)diamond(x,y,0,['#77695a','#706354','#7a6c5c','#6c5f51'][(x*3+y*5)%4],'#5c5044');
+  // door tiles after the first are already covered by the door (drawn earlier), so their floor would paint over it
+  var hidden=T[i]===9&&T[i-W]===9;
+  if(hidden){}
+  else if(cave)diamond(x,y,0,['#77695a','#706354','#7a6c5c','#6c5f51'][(x*3+y*5)%4],'#5c5044');
   else diamond(x,y,0,F[i]?'#8a6a45':['#d9b877','#cfae6c','#d4b370','#c9a763'][(x*3+y*5)%4],F[i]?'#5e4429':'#b8934f');
   if(i===hv){var hc=hcost===null||(hcost>0&&(hcost<=AP||!inCombat()))?'109,255,149':'255,179,71';diamond(x,y,0,'rgba('+hc+',.45)','rgb('+hc+')')}
-  if((x*5+y*3)%7===0&&!F[i]){g.fillStyle=cave?'#8a7b6a':'#a98448';g.fillRect(sx-6,sy+TH/2-2,3,2);g.fillRect(sx+4,sy+TH/2+2,2,2);}
+  if((x*5+y*3)%7===0&&!F[i]&&T[i]!==9){g.fillStyle=cave?'#8a7b6a':'#a98448';g.fillRect(sx-6,sy+TH/2-2,3,2);g.fillRect(sx+4,sy+TH/2+2,2,2);}
   if(i===EX){diamond(x,y,0,'#4a3a26','#fff4c9');
    var fx0=sx,fy0=sy+TH/2+2;
    g.fillStyle='rgba(0,0,0,.4)';g.beginPath();g.ellipse(fx0,fy0,5,2.5,0,0,7);g.fill();
    g.fillStyle='#3a2a1a';g.fillRect(fx0-1,fy0-34,3,34);g.fillStyle='#c9b48a';g.fillRect(fx0-1,fy0-36,3,3);
    g.fillStyle='#d42a1e';g.strokeStyle='#7a120c';g.lineWidth=1;g.beginPath();g.moveTo(fx0+2,fy0-33);g.quadraticCurveTo(fx0+9,fy0-36,fx0+19,fy0-31);g.lineTo(fx0+17,fy0-26);g.lineTo(fx0+19,fy0-21);g.quadraticCurveTo(fx0+9,fy0-25,fx0+2,fy0-22);g.closePath();g.fill();g.stroke();
    g.fillStyle='#ff5a44';g.fillRect(fx0+3,fy0-31,6,2);}
-  if(items[i]){g.fillStyle=items[i][0]==='g'?'#b34a12':'#1f4d2e';g.fillRect(sx-5,sy+TH/2-5,10,10);g.fillStyle='#fff4c9';g.font='bold 10px monospace';g.textAlign='center';g.fillText(items[i]==='s'?'+':items[i]==='a'?'=':GEAR[items[i].slice(2)].k==='w'?'/':'[',sx,sy+TH/2+3);}
+  if(items[i]&&items[i][0]==='g')groundGear(items[i].slice(2),sx,sy,i);
+  else if(items[i]){g.fillStyle='#1f4d2e';g.fillRect(sx-5,sy+TH/2-5,10,10);g.fillStyle='#fff4c9';g.font='bold 10px monospace';g.textAlign='center';g.fillText(items[i]==='s'?'+':items[i]==='a'?'=':GEAR[items[i].slice(2)].k==='w'?'/':'[',sx,sy+TH/2+3);}
   BD.forEach(function(b){if(b.i===i&&!(FX&&!FX.down&&(FX.body===b||(FX.bodies&&FX.bodies.indexOf(b)>=0))))corpse(sx,sy+TH/2,b)});
   // the door's tiles are drawn together at the first one, before anything that stands in front of them
   if(T[i]===8)rockBlock(x,y);
@@ -1371,6 +1372,7 @@ function drawIso(){
   g.fillStyle='rgba(3,13,7,.85)';g.fillRect(hs[0]-hw/2,hs[1]-30,hw,14);g.fillStyle=ok?ink:hot;g.fillText(ht,hs[0],hs[1]-19);
  }
  drawHeal();
+ drawSpeech();
  drawPops();
  if(MINI)drawMini();
 }
@@ -1450,6 +1452,8 @@ function restore(s){
   // saves from before the gate became a cave: forget the old desert layout, rebuild it if you're standing in it
   if(WMS.areas.out&&!WMS.areas.out.T.some(function(v){return v===8}))delete WMS.areas.out;
   if(WMS.at==='out'&&!T.some(function(v){return v===8}))buildCave();
+  // saves from when the cave still spawned loot: clear it once (gear you drop there later stays)
+  if(!WMS.noloot){if(WMS.areas.out)WMS.areas.out.items={};if(WMS.at==='out')items={};WMS.noloot=1}
   if(WMN[WMS.at].safe)E=E.filter(function(e){return e.dummy});
   WASC=E.some(function(e){return e.al&&!e.dummy});
   MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
@@ -1536,7 +1540,7 @@ document.getElementById('new').addEventListener('click',newGame);
 document.getElementById('save').addEventListener('click',saveGame);
 var HELP=document.getElementById('help'),INV=document.getElementById('inv');
 var CHEAT=document.getElementById('cheat'),SETS=document.getElementById('sets');
-function openModal(){return !MENU.hidden?MENU:!MSG.hidden?MSG:!WMAP.hidden?WMAP:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
+function openModal(){return !MENU.hidden?MENU:!WMAP.hidden?WMAP:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
 // settings: cursor size, with a green and red preview at the real size
 var CURSZ=document.getElementById('cursz');
 function syncSets(){
@@ -1636,15 +1640,29 @@ var ICONS={
  bolt:['......kkk...','.....kYYk...','....kYYk....','...kYYk.....','..kYYYYYkk..','..kkkYYYk...','....kYYk....','...kYYk.....','...kYk......','...kk.......','............','............'],
  armor:['..kk....kk..','.kjjk..kjjk.','kjjjjkkjjjjk','kjjljjjjljjk','kkkjjjjjjkkk','..kjjjjjjk..','..kjljjljk..','..kjjjjjjk..','..kjjjjjjk..','..kkkkkkkk..','............','............']
 };
-var ICACHE={};
-function icon(name,arm2){
+var ICACHE={},ICV={};
+// 12x12 pixel canvas for an icon (armor is tinted with that armor's colors); shared by the inventory and the ground
+function icoCanvas(name,arm2){
  var key=name+(arm2||'');
- if(!ICACHE[key]){
+ if(!ICV[key]){
   var d=ICONS[name],cv=document.createElement('canvas'),c=cv.getContext('2d'),a=ARMC[arm2]||{j:'#26262c',l:'#4a4a55'};cv.width=12;cv.height=12;
   d.forEach(function(row,y){for(var x=0;x<row.length;x++){var ch=row[x];if(ch==='.')continue;c.fillStyle=ch==='j'?a.j:ch==='l'?a.l:IPAL[ch];c.fillRect(x,y,1,1)}});
-  ICACHE[key]=cv.toDataURL();
+  ICV[key]=cv;
  }
+ return ICV[key];
+}
+function icon(name,arm2){
+ var key=name+(arm2||'');
+ if(!ICACHE[key])ICACHE[key]=icoCanvas(name,arm2).toDataURL();
  return '<img class="ico" src="'+ICACHE[key]+'" width="36" height="36" alt="">';
+}
+// gear lying on the ground: its own sprite with a shadow, bobbing slightly, on a faint orange tile marker
+function groundGear(id,sx,sy,i){
+ var gd=GEAR[id],cv=gd.k==='a'?icoCanvas('armor',id):icoCanvas(ICONS[id]?id:'fist'),b=Math.round(Math.sin(performance.now()/450+i)*1.5);
+ g.fillStyle='rgba(255,140,40,.18)';g.beginPath();g.moveTo(sx,sy+4);g.lineTo(sx+TW/2-6,sy+TH/2);g.lineTo(sx,sy+TH-4);g.lineTo(sx-TW/2+6,sy+TH/2);g.closePath();g.fill();
+ g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(sx,sy+TH/2+3,9,3,0,0,7);g.fill();
+ var sm=g.imageSmoothingEnabled;g.imageSmoothingEnabled=false;g.drawImage(cv,Math.round(sx-12),Math.round(sy+TH/2-20+b),24,24);g.imageSmoothingEnabled=sm;
+ kick(500);
 }
 function wIcon(w){return icon(w==='stim'?'stim':GUNS[w]?w:'fist')}
 function invRow(ico,name,sub,n,btn){return '<div class="inv-row">'+(ico||'')+'<div class="nm">'+name+(sub?'<small>'+sub+'</small>':'')+'</div>'+(n!==undefined?'<span class="n">'+n+'</span>':'')+(btn||'')+'</div>'}
@@ -1739,7 +1757,7 @@ window.addEventListener('keydown',function(e){
  var k=e.key.toLowerCase(),dx=0,dy=0;
  var mo=openModal();
  if(mo===MENU||mo===WMAP)return;
- if(mo){if(k==='escape'||(k==='i'&&mo===INV)||((mo===HELP||mo===MSG)&&(k==='enter'||k===' '))){e.preventDefault();closeModal(mo)}return}
+ if(mo){if(k==='escape'||(k==='i'&&mo===INV)||(mo===HELP&&(k==='enter'||k===' '))){e.preventDefault();closeModal(mo)}return}
  if(k==='arrowup'||k==='w')dy=-1;else if(k==='arrowdown'||k==='s')dy=1;else if(k==='arrowleft'||k==='a')dx=-1;else if(k==='arrowright'||k==='d')dx=1;
  else if(k==='h'){useStim();return}else if(k==='i'){openInv();return}else if(k==='+'||k==='='){zoom(1.15);return}else if(k==='-'||k==='_'){zoom(1/1.15);return}else if(k==='m'){MINI=!MINI;if(!busy()){drawIso();drawOdds()}return}else if(k==='q'){setSlot(1-AC);return}else if(k==='r'){reload();return}else if(k==='`'||k==='~'){e.preventDefault();openCheat();return}else if(k==='1'||k==='2'){setSlot(+k-1);return}else if(k==='e'){tap(P);return}else if(k===' '){e.preventDefault();endTurn();return}else return;
  e.preventDefault();var x=P%W+dx,y=((P/W)|0)+dy;if(x<0||x>=W||y<0||y>=H)return;tap(ix(x,y));
