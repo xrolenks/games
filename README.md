@@ -1,5 +1,5 @@
 # ricksong.github.io
-random projects and games
+random projects and games (hopefully weekly?)
 
 Live at https://ricksong.github.io/
 
