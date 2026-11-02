@@ -58,6 +58,19 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .hint{font-size:.8rem;color:var(--dim);margin:8px 2px 0}
 .modal{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(1,6,3,.78)}
 .modal[hidden]{display:none}
+#locn{color:var(--dim);font-weight:normal}
+#locn:not(:empty)::before{content:"// "}
+.wmbox{width:min(100%,560px)}
+#wmcv{display:block;width:100%;height:auto;margin:8px 0 0;border:2px solid var(--edge);background:#04120a;cursor:pointer;touch-action:manipulation}
+#wminfo{min-height:5.2em;margin:10px 0 2px;font-size:.88rem}
+#wminfo b{color:var(--hot);letter-spacing:.06em}
+#wminfo small{display:block;color:var(--dim);font-size:.75rem;margin-top:2px}
+#wminfo p{margin:6px 0 0;color:var(--ink)}
+.danger{margin-left:6px;white-space:nowrap}
+.danger i{display:inline-block;width:9px;height:9px;border:1px solid var(--dim);margin-right:2px;vertical-align:-1px}
+.danger i.on{background:#e0453a;border-color:#e0453a}
+#wmgo:disabled{opacity:.45;cursor:default}
+#wmgo:disabled:hover{background:var(--panel);color:var(--ink)}
 .modal .box{width:min(100%,440px);max-height:calc(100vh - 32px);overflow:auto;background:var(--panel);border:2px solid var(--edge);box-shadow:0 0 0 1px var(--bg),0 0 24px rgba(109,255,149,.18);padding:14px 16px}
 .modal h2{margin:0 0 4px;font-size:1.05rem;letter-spacing:.06em}
 .modal p{margin:0 0 10px;font-size:.85rem;color:var(--dim)}
@@ -149,7 +162,15 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 </head>
 <body>
 <div id="app">
-<h1>WILD WASTELAND</h1>
+<h1>WILD WASTELAND <span id="locn"></span></h1>
+<div id="wmap" class="modal" role="dialog" aria-modal="true" aria-labelledby="wm-title" hidden>
+<div class="box wmbox">
+<h2 id="wm-title">THE WASTELAND</h2>
+<canvas id="wmcv" width="480" height="300" aria-label="World map. Pick a location, then travel."></canvas>
+<div id="wminfo" aria-live="polite"></div>
+<button id="wmgo" class="go" type="button">Travel</button>
+</div>
+</div>
 <canvas id="grid" width="504" height="290" aria-label="Isometric wasteland map"></canvas>
 <div id="foe" hidden></div>
 <div id="hud" aria-label="Health and action points"></div>
@@ -200,7 +221,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <p class="ln" style="animation-delay:.1s">The bombs fell a lifetime ago. You grew up in Bunker 9, one of the last shelters still talking to the others by radio.</p>
 <p class="ln" style="animation-delay:.9s">Three weeks ago, the radio went silent.</p>
 <p class="ln" style="animation-delay:1.7s">Someone has to cross the wasteland to the old radio tower and get the signal back on air. The elders drew straws. You drew the short one.</p>
-<p class="ln" style="animation-delay:2.5s">Raiders and mutant rats roam the dunes between here and the tower. Reach the red flag in each of the three areas to push on.</p>
+<p class="ln" style="animation-delay:2.5s">Raiders and mutant rats roam the dunes between here and the tower. Reach the red flag at the edge of each area, then pick your road on the map.</p>
 <button id="mbegin" class="go ln" style="animation-delay:3.1s" type="button">Begin</button>
 </div>
 </div>
@@ -208,7 +229,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="help" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
 <div class="box">
 <h2 id="help-title">WILD WASTELAND // CONTROLS</h2>
-<p>Cross 3 areas of desert. Reach the red flag in each one to move on.</p>
+<p>Reach the red flag to leave an area and open the map. Pick a road, travel, and work your way east to the radio tower.</p>
 <dl class="only-touch">
 <dt>Tap a tile</dt><dd>Walk there.</dd>
 <dt>Tap an enemy</dt><dd>Attack it.</dd>
@@ -317,12 +338,100 @@ function newLevel(){
  var gp=['rifle','shotgun','jacket','plate','vest','sniper','rocket','bat','flamer','laser','tesla'];items[SK.a]='g:'+gp[rnd(gp.length)];items[SK.b]='s';for(var gi=0;gi<(lv>1?1:0);gi++)items[free(3)]='g:'+gp[rnd(gp.length)];
  AP=MAXAP;WARNED=false;
 }
-function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];say('Bunker 9 is silent. Cross the wasteland to the radio tower.');say('Reach the red flag in each of 3 areas.');newLevel();render();}
-function nextLevel(){
- lv++;
- if(lv>3){over=true;say('The tower hums. Your signal reaches the other bunkers.');say('YOU WIN. Press New game to play again.');return}
- hp=Math.min(30,hp+6);say('Area '+lv+' of 3. You patch up a little (+6 HP).');newLevel();
+function newGame(){if(busy())return;hp=30;PF=1;AM={pistol:12};GOT={pistol:1};stims=2;lv=1;MAG=[6,0];GREN=0;SL=['pistol',''];AC=0;arm='';BAG=['jacket'];LOADED={};over=false;logs=[];WMS=wmFresh();say('Bunker 9 is silent. Cross the wasteland to the radio tower.');say('Reach the red flag to leave an area and open the map.');newLevel();render();}
+// ---- world map ----
+// Locations on the map. t: danger tier (feeds newLevel's lv), l: roads to other locations, x/y: spot on the 480x300 map.
+var WMN={
+ out:{n:'Bunker 9 Gate',x:104,y:198,t:1,l:['gulch','road'],d:'Scrubland outside your bunker door. Mostly rats.'},
+ gulch:{n:'Dry Gulch',x:176,y:104,t:2,l:['out','scrap'],d:'A cracked riverbed. Rat nests line the banks.'},
+ road:{n:'Broken Highway',x:204,y:246,t:2,l:['out','scrap'],d:'Wrecked cars and raider toll stops.'},
+ scrap:{n:'Scrap Town',x:318,y:172,t:3,l:['gulch','road','tower'],d:'A sheet-metal shanty town. Raiders run it now.'},
+ tower:{n:'Radio Tower',x:424,y:84,t:4,l:['scrap'],fin:1,d:'The relay mast. Reach its base and get the signal back on air.'}};
+// WMS: where you are, places you've been, saved state of each area you've left, and whether the map is open
+var WMS=null;
+function wmFresh(){return {at:'out',vis:{out:1},areas:{},open:false}}
+// on a return visit you come in at the west edge; step aside if something is standing there
+function freeNear(s){var seen={},q=[s];seen[s]=1;while(q.length){var c=q.shift();if(!T[c]&&!enemyAt(c)&&c!==EX)return c;nbrs(c).forEach(function(n){if(!seen[n]){seen[n]=1;q.push(n)}})}return s}
+function enterArea(id){
+ var nd=WMN[id],a=WMS.areas[id],first=!WMS.vis[id];
+ WMS.at=id;WMS.vis[id]=1;lv=nd.t;
+ if(a){T=a.T;items=a.items;E=a.E;F=a.F;SK=a.SK;BD=a.BD;EX=a.EX;MV=[];PH=0;HQ=[];SQ=[];P=freeNear(ix(0,H>>1));AP=MAXAP;WARNED=false;say('Back at '+nd.n+'.')}
+ else newLevel();
+ if(first){hp=Math.min(30,hp+6);say('You reach '+nd.n+', patching up on the road (+6 HP).')}
+ if(nd.fin&&first)say('The mast looms to the east. Reach the red flag at its base.');
 }
+// reaching the red flag: the tower's flag wins the game, any other flag opens the map
+function leaveArea(){
+ WMS.areas[WMS.at]={T:T,items:items,E:E,F:F,SK:SK,BD:BD,EX:EX};
+ if(WMN[WMS.at].fin){over=true;say('The tower hums. Your signal reaches the other bunkers.');say('YOU WIN. Press New game to play again.');return}
+ WMS.open=true;WSEL=null;say('You reach the edge of '+WMN[WMS.at].n+'.');
+}
+function wmShown(id){return WMS.vis[id]||WMN[id].l.some(function(k){return WMS.vis[k]})}
+function wmCleared(id){var a=WMS.areas[id];return !!a&&!a.E.some(function(e){return !e.dummy})}
+var WMAP=document.getElementById('wmap'),WMCV=document.getElementById('wmcv'),WSEL=null,WTRAV=null;
+function openMap(){WMAP.hidden=false;if(!WSEL)WSEL=WMS.at;wmInfo();requestAnimationFrame(wmLoop);document.getElementById('wmgo').focus()}
+function wmLoop(){if(WMAP.hidden)return;drawMap();requestAnimationFrame(wmLoop)}
+function wmInfo(){
+ var id=WSEL,nd=WMN[id],here=id===WMS.at,road=WMN[WMS.at].l.indexOf(id)>=0,danger='';
+ for(var q=1;q<=4;q++)danger+='<i'+(q<=nd.t?' class="on"':'')+'></i>';
+ var st=here?'You are here':WMS.vis[id]?(wmCleared(id)?'Visited · cleared':'Visited'):'Not explored';
+ document.getElementById('wminfo').innerHTML='<b>'+nd.n.toUpperCase()+'</b> <span class="danger" title="Danger">'+danger+'</span><small>'+st+'</small><p>'+nd.d+'</p>';
+ var b=document.getElementById('wmgo');b.disabled=!!WTRAV||!(here||road);
+ b.textContent=here?'Go back in':road?'Travel to '+nd.n:'No road from here';
+}
+// seeded scatter so the terrain is the same every time the map is drawn
+function drawMap(){
+ var c=WMCV.getContext('2d'),w=WMCV.width,h=WMCV.height,now=performance.now(),seed=7;
+ // on narrow screens the map is drawn smaller, so grow the label text to stay readable
+ var cw=WMCV.getBoundingClientRect().width,fk=cw?Math.min(1.5,Math.max(1,w/cw)):1;
+ function rng(){seed=(seed*16807)%2147483647;return seed/2147483647}
+ c.fillStyle='#04120a';c.fillRect(0,0,w,h);
+ c.strokeStyle='rgba(109,255,149,.06)';c.lineWidth=1;for(var gx=0;gx<=w;gx+=20){c.beginPath();c.moveTo(gx+.5,0);c.lineTo(gx+.5,h);c.stroke()}for(var gy=0;gy<=h;gy+=20){c.beginPath();c.moveTo(0,gy+.5);c.lineTo(w,gy+.5);c.stroke()}
+ // dry riverbed down through the gulch
+ c.strokeStyle='rgba(109,255,149,.13)';c.lineWidth=3;c.beginPath();c.moveTo(110,0);c.bezierCurveTo(200,60,120,120,230,150);c.bezierCurveTo(300,175,260,250,330,300);c.stroke();
+ // mountains (north and east) and dunes (south)
+ c.strokeStyle='rgba(109,255,149,.22)';c.lineWidth=1;
+ for(var m=0;m<26;m++){var mx=240+rng()*230,my=8+rng()*70;if(m>16){mx=rng()*120;my=10+rng()*60}var s=5+rng()*6;c.beginPath();c.moveTo(mx-s,my+s*.8);c.lineTo(mx,my-s*.6);c.lineTo(mx+s,my+s*.8);c.stroke()}
+ c.strokeStyle='rgba(109,255,149,.12)';for(var d=0;d<22;d++){var dx=rng()*w,dy=200+rng()*95,r=8+rng()*10;c.beginPath();c.arc(dx,dy+r,r,Math.PI*1.15,Math.PI*1.85);c.stroke()}
+ // scrap town shacks
+ c.fillStyle='rgba(109,255,149,.16)';for(var k=0;k<9;k++)c.fillRect(296+rng()*46,150+rng()*40,4+rng()*4,3+rng()*3);
+ // roads
+ c.setLineDash([4,4]);c.lineWidth=2;
+ c.strokeStyle='rgba(42,143,80,.9)';c.beginPath();c.moveTo(34,226);c.lineTo(WMN.out.x,WMN.out.y);c.stroke();
+ Object.keys(WMN).forEach(function(a){WMN[a].l.forEach(function(b){if(a>b||!wmShown(a)||!wmShown(b))return;var both=WMS.vis[a]&&WMS.vis[b];c.strokeStyle=both?'rgba(109,255,149,.75)':'rgba(42,143,80,.6)';c.beginPath();c.moveTo(WMN[a].x,WMN[a].y);c.lineTo(WMN[b].x,WMN[b].y);c.stroke()})});
+ c.setLineDash([]);
+ // Bunker 9: the vault-style door you came out of
+ c.fillStyle='#07180d';c.strokeStyle='#6dff95';c.lineWidth=2;c.beginPath();c.arc(30,228,9,0,7);c.fill();c.stroke();c.fillStyle='#6dff95';c.font='bold 8px "Courier New",monospace';c.textAlign='center';c.fillText('B9',30,231);
+ c.font=Math.round(10*fk)+'px "Courier New",monospace';c.fillStyle='rgba(109,255,149,.6)';c.textAlign='left';c.fillText('BUNKER 9',6,250+4*(fk-1));
+ // locations
+ Object.keys(WMN).forEach(function(id){
+  if(!wmShown(id))return;var nd=WMN[id],v=WMS.vis[id];
+  if(nd.fin){c.strokeStyle=v?'#ffb347':'rgba(255,179,71,.6)';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-7,nd.y+8);c.lineTo(nd.x,nd.y-12);c.lineTo(nd.x+7,nd.y+8);c.moveTo(nd.x-4,nd.y);c.lineTo(nd.x+4,nd.y);c.stroke();
+   var bl=(now/500|0)%2;if(bl){c.fillStyle='#ff3b2a';c.fillRect(nd.x-1.5,nd.y-15,3,3)}}
+  else{c.fillStyle=v?'#6dff95':'#07180d';c.strokeStyle=v?'#6dff95':'#2a8f50';c.lineWidth=2;c.fillRect(nd.x-5,nd.y-5,10,10);c.strokeRect(nd.x-5,nd.y-5,10,10);
+   if(wmCleared(id)){c.strokeStyle='#04120a';c.lineWidth=2;c.beginPath();c.moveTo(nd.x-3,nd.y);c.lineTo(nd.x-1,nd.y+3);c.lineTo(nd.x+3,nd.y-3);c.stroke()}}
+  if(id===WSEL){c.strokeStyle='#ffb347';c.lineWidth=1.5;c.beginPath();c.arc(nd.x,nd.y,13,0,7);c.stroke()}
+  c.font='bold '+Math.round(11*fk)+'px "Courier New",monospace';c.textAlign='center';c.fillStyle=v?'#6dff95':'rgba(109,255,149,.55)';c.fillText(nd.n.toUpperCase(),nd.x,nd.y+(nd.fin?24:20)+4*(fk-1));
+ });
+ // you: a pulsing pip, sliding along the road while travelling
+ var px=WMN[WMS.at].x,py=WMN[WMS.at].y;
+ if(WTRAV){var tt=Math.min(1,(now-WTRAV.t0)/WTRAV.dur),e=tt<.5?2*tt*tt:1-Math.pow(-2*tt+2,2)/2,A=WMN[WTRAV.from],B=WMN[WTRAV.to];px=A.x+(B.x-A.x)*e;py=A.y+(B.y-A.y)*e;
+  c.fillStyle='rgba(255,179,71,.5)';for(var f=1;f<8;f++){var fe=Math.max(0,e-f*.05);c.fillRect(A.x+(B.x-A.x)*fe-1,A.y+(B.y-A.y)*fe-1,2,2)}}
+ var pr=6+3*Math.sin(now/220);c.strokeStyle='rgba(255,179,71,.55)';c.lineWidth=1.5;c.beginPath();c.arc(px,py-14,pr,0,7);c.stroke();
+ c.fillStyle='#ffb347';c.beginPath();c.moveTo(px,py-8);c.lineTo(px-4,py-15);c.lineTo(px+4,py-15);c.closePath();c.fill();
+}
+WMCV.addEventListener('click',function(e){
+ if(WTRAV)return;var r=WMCV.getBoundingClientRect(),x=(e.clientX-r.left)*WMCV.width/r.width,y=(e.clientY-r.top)*WMCV.height/r.height,best=null,bd=26;
+ Object.keys(WMN).forEach(function(id){if(!wmShown(id))return;var d=Math.hypot(WMN[id].x-x,WMN[id].y-y);if(d<bd){bd=d;best=id}});
+ if(best){WSEL=best;wmInfo()}
+});
+document.getElementById('wmgo').addEventListener('click',function(){
+ if(WTRAV||!WSEL)return;var to=WSEL;
+ if(to===WMS.at){WMS.open=false;WMAP.hidden=true;enterArea(to);render();return}
+ if(WMN[WMS.at].l.indexOf(to)<0)return;
+ WTRAV={from:WMS.at,to:to,t0:performance.now(),dur:1100};wmInfo();
+ setTimeout(function(){WTRAV=null;WMS.open=false;WMAP.hidden=true;enterArea(to);render()},1150);
+});
 function step(n){
  if(T[n]||enemyAt(n)||AP<1||over)return false;
  walk('P',P,n,PH++);P=n;AP--;
@@ -330,7 +439,7 @@ function step(n){
  // an ammo crate holds ammo for one of the guns you own, picked at random
  else if(items[P]==='a'){var own=SL.concat(BAG).filter(function(w){return ainf(w)}),t=own.length?own[rnd(own.length)]:'pistol';addAmmo(t,ainf(t).f);say('Found '+ainf(t).f+' '+ainf(t).u+' of '+ammoName(t).toLowerCase()+'.');delete items[P]}
  else if(items[P]&&items[P][0]==='g'){say('Gear here: '+GEAR[items[P].slice(2)].n+'. Tap your own tile to equip (1 AP).')}
- if(P===EX){nextLevel();return false}
+ if(P===EX){leaveArea();return false}
  return true;
 }
 function attack(e){
@@ -1190,14 +1299,22 @@ function render(){
  drawIso();if(!CUR)drawOdds();
  document.getElementById('log').innerHTML=logs.map(function(l){return '<div>&gt; '+l.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'}).join('');
  put(AUTO,snap());updateCursor();
+ document.getElementById('locn').textContent=WMN[WMS.at].n.toUpperCase();
+ // the map stays open (and comes back after a reload) until you pick where to go
+ if(WMS.open&&WMAP.hidden&&document.getElementById('menu').hidden)openMap();
+ if(!WMS.open&&!WMAP.hidden)WMAP.hidden=true;
 }
 var AUTO='bunker9-auto',SLOT='bunker9-slot';
 function put(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
 function get(k){try{return localStorage.getItem(k)}catch(e){return null}}
-function snap(){return JSON.stringify({T:T,items:items,E:E,P:P,EX:EX,AP:AP,AM:AM,GOT:GOT,stims:stims,hp:hp,lv:lv,over:over,logs:logs,SL:SL,MAG:MAG,LOADED:LOADED,HRALL:HRALL,GREN:GREN,AC:AC,arm:arm,BAG:BAG,F:F,SK:SK,BD:BD,PF:PF,LOOK:LOOK})}
+function snap(){return JSON.stringify({T:T,items:items,E:E,P:P,EX:EX,AP:AP,AM:AM,GOT:GOT,stims:stims,hp:hp,lv:lv,over:over,logs:logs,SL:SL,MAG:MAG,LOADED:LOADED,HRALL:HRALL,GREN:GREN,AC:AC,arm:arm,BAG:BAG,F:F,SK:SK,BD:BD,PF:PF,LOOK:LOOK,WM:WMS})}
 function restore(s){
  try{var d=JSON.parse(s);if(!d||!d.T||d.T.length!==W*H)return false;var sl=d.SL||[d.wpn||'pistol',''];if(!sl.every(function(w){return !w||GEAR[w]}))return false;
-  T=d.T;items=d.items;E=d.E;P=d.P;EX=d.EX;AP=d.AP;AM=d.AM||{pistol:d.ammo||0};Object.keys(SHARED).forEach(function(w){if(AM[w]){AM[SHARED[w]]=(AM[SHARED[w]]||0)+AM[w];delete AM[w]}});GOT=d.GOT||{pistol:1};stims=d.stims;hp=d.hp;lv=d.lv;over=d.over;logs=d.logs;SL=sl;GREN=d.GREN||0;LOADED=d.LOADED||{};HRALL=!!d.HRALL;MAG=d.MAG||sl.map(function(w){return GEAR[w]&&GEAR[w].cap||0});AC=d.AC?1:0;arm=d.arm;BAG=(d.BAG||[]).filter(function(b){return GEAR[b]});F=d.F;SK=d.SK;BD=d.BD||[];PF=d.PF||1;if(d.LOOK){LOOK=d.LOOK;buildPlayer()}MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
+  T=d.T;items=d.items;E=d.E;P=d.P;EX=d.EX;AP=d.AP;AM=d.AM||{pistol:d.ammo||0};Object.keys(SHARED).forEach(function(w){if(AM[w]){AM[SHARED[w]]=(AM[SHARED[w]]||0)+AM[w];delete AM[w]}});GOT=d.GOT||{pistol:1};stims=d.stims;hp=d.hp;lv=d.lv;over=d.over;logs=d.logs;SL=sl;GREN=d.GREN||0;LOADED=d.LOADED||{};HRALL=!!d.HRALL;MAG=d.MAG||sl.map(function(w){return GEAR[w]&&GEAR[w].cap||0});AC=d.AC?1:0;arm=d.arm;BAG=(d.BAG||[]).filter(function(b){return GEAR[b]});F=d.F;SK=d.SK;BD=d.BD||[];PF=d.PF||1;if(d.LOOK){LOOK=d.LOOK;buildPlayer()}
+  // saves from before the world map: put the player on the route at the matching step
+  if(d.WM)WMS=d.WM;else{WMS=wmFresh();var at=['out','gulch','scrap','tower'][Math.min(3,Math.max(0,(lv||1)-1))];WMS.at=at;WMS.vis[at]=1;if(at==='scrap')WMS.vis.gulch=1;lv=WMN[at].t}
+  if(!WMN[WMS.at])WMS=wmFresh();
+  MV=[];PH=0;HQ=[];SQ=[];POPS=[];PHIT=-1e9;E.forEach(function(e){delete e.hitAt});return true}
  catch(e){return false}
 }
 function saveGame(){say(put(SLOT,snap())?'Game saved.':'Save failed: browser storage is unavailable.');render();}
@@ -1279,7 +1396,7 @@ document.getElementById('new').addEventListener('click',newGame);
 document.getElementById('save').addEventListener('click',saveGame);
 var HELP=document.getElementById('help'),INV=document.getElementById('inv');
 var CHEAT=document.getElementById('cheat'),SETS=document.getElementById('sets');
-function openModal(){return !MENU.hidden?MENU:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
+function openModal(){return !MENU.hidden?MENU:!WMAP.hidden?WMAP:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
 // settings: cursor size, with a green and red preview at the real size
 var CURSZ=document.getElementById('cursz');
 function syncSets(){
@@ -1481,7 +1598,7 @@ document.getElementById('load').addEventListener('click',loadGame);
 window.addEventListener('keydown',function(e){
  var k=e.key.toLowerCase(),dx=0,dy=0;
  var mo=openModal();
- if(mo===MENU)return;
+ if(mo===MENU||mo===WMAP)return;
  if(mo){if(k==='escape'||(k==='i'&&mo===INV)||(mo===HELP&&(k==='enter'||k===' '))){e.preventDefault();closeModal(mo)}return}
  if(k==='arrowup'||k==='w')dy=-1;else if(k==='arrowdown'||k==='s')dy=1;else if(k==='arrowleft'||k==='a')dx=-1;else if(k==='arrowright'||k==='d')dx=1;
  else if(k==='h'){useStim();return}else if(k==='i'){openInv();return}else if(k==='+'||k==='='){zoom(1.15);return}else if(k==='-'||k==='_'){zoom(1/1.15);return}else if(k==='m'){MINI=!MINI;if(!busy()){drawIso();drawOdds()}return}else if(k==='q'){setSlot(1-AC);return}else if(k==='r'){reload();return}else if(k==='`'||k==='~'){e.preventDefault();openCheat();return}else if(k==='1'||k==='2'){setSlot(+k-1);return}else if(k==='e'){tap(P);return}else if(k===' '){e.preventDefault();endTurn();return}else return;
@@ -1509,7 +1626,7 @@ LOOKEL.addEventListener('click',function(e){var b=e.target.closest('.opts button
 document.getElementById('mstart').addEventListener('click',function(){document.getElementById('m-title').hidden=true;LOOKEL.hidden=false;syncLook();document.getElementById('mlook').focus()});
 document.getElementById('mlook').addEventListener('click',function(){LOOKEL.hidden=true;document.getElementById('m-intro').hidden=false;document.getElementById('mbegin').focus()});
 document.getElementById('mbegin').addEventListener('click',function(){MENU.hidden=true;newGame();openHelp()});
-document.getElementById('mcont').addEventListener('click',function(){MENU.hidden=true;render();openHelp()});
+document.getElementById('mcont').addEventListener('click',function(){MENU.hidden=true;render();if(!WMS.open)openHelp()});
 startMenu();
 
 })();
