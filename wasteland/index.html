@@ -59,6 +59,11 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .modal{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(1,6,3,.78)}
 .modal[hidden]{display:none}
 #locn{color:var(--dim);font-weight:normal}
+.pbox{width:min(100%,300px);text-align:center}
+.pmenu{display:grid;gap:8px;margin-top:12px}
+.pbox p{margin:12px 0 0;font-size:.75rem}
+#new.arm{border-color:#e0453a;color:#ff5a4a}
+@media (hover:none) and (pointer:coarse){.only-mouse-hint{display:none}}
 #locn:not(:empty)::before{content:"// "}
 #cmb{float:right;font-size:.7rem;letter-spacing:.1em;padding:1px 6px;border:1px solid var(--dim);color:var(--dim);font-weight:normal}
 #cmb:empty{display:none}
@@ -183,11 +188,25 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <div id="slots"></div>
 <div class="ctl tctl"><button id="treload" type="button">Reload</button><button id="tpick" type="button">Pick up</button><button id="tmap" type="button">Map</button><button id="tzout" class="zm" type="button" aria-label="Zoom out">&minus;</button><button id="tzin" class="zm" type="button" aria-label="Zoom in">+</button></div>
 <div id="log" aria-live="polite"></div>
-<div class="ctl"><button id="end" type="button">End turn</button><button id="save" type="button">Save</button><button id="load" type="button">Load</button><button id="new" type="button">New game</button><button id="invbtn" type="button">Inventory</button><button id="helpbtn" type="button">Controls</button><button id="setbtn" type="button">Settings</button></div>
+<div class="ctl"><button id="end" type="button">End turn</button><button id="invbtn" type="button">Inventory</button><button id="menubtn" type="button" aria-haspopup="dialog">Menu</button></div>
+<div id="pause" class="modal" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+<div class="box pbox">
+<h2 id="pause-title">MENU</h2>
+<div class="pmenu">
+<button id="presume" class="go" type="button">Resume</button>
+<button id="save" class="go" type="button">Save game</button>
+<button id="load" class="go" type="button">Load game</button>
+<button id="helpbtn" class="go" type="button">Controls</button>
+<button id="setbtn" class="go" type="button">Settings</button>
+<button id="new" class="go" type="button">New game</button>
+</div>
+<p class="only-mouse-hint">Press Esc to close.</p>
+</div>
+</div>
 <div id="sets" class="modal" role="dialog" aria-modal="true" aria-labelledby="sets-title" hidden>
 <div class="box">
 <h2 id="sets-title">SETTINGS</h2>
-<div class="lrow"><label for="cursz">Cursor size</label><input id="cursz" type="range" min="16" max="48" step="1"><output id="curszv" for="cursz"></output></div>
+<div class="lrow"><label for="cursz">Crosshair size</label><input id="cursz" type="range" min="16" max="48" step="1"><output id="curszv" for="cursz"></output></div>
 <div id="curprev" aria-hidden="true"></div>
 <button id="setclose" class="go" type="button" style="margin-top:12px">Close</button>
 </div>
@@ -247,6 +266,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <dt>Map</dt><dd>Show or hide the minimap.</dd>
 <dt>Pinch or &minus; / +</dt><dd>Zoom out and in.</dd>
 <dt>End turn</dt><dd>End your turn.</dd>
+<dt>Menu</dt><dd>Save, load, settings, controls and new game.</dd>
 </dl>
 <dl class="only-mouse">
 <dt>Click a tile</dt><dd>Walk there. Hovering shows the AP cost.</dd>
@@ -263,6 +283,7 @@ button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 <dt>M</dt><dd>Show or hide the minimap.</dd>
 <dt>Scroll wheel</dt><dd>Zoom in and out.</dd>
 <dt>Space</dt><dd>End your turn.</dd>
+<dt>Esc</dt><dd>Open the menu: save, load, settings, controls and new game.</dd>
 </dl>
 <p>Exploring is free: walk anywhere at no AP cost. Once an enemy spots you (or hears you attack), combat starts and you get 10 AP a turn. Walls block bullets; cacti don't. Your game autosaves.</p>
 <button id="helpgo" class="go" type="button">Play</button>
@@ -567,8 +588,7 @@ function drawSpeech(){
 function after(cb){
  if(!over){var c=inCombat();if(!c){if(WASC)say('Combat over. You can move freely.');AP=MAXAP;WARNED=false}WASC=c}
  if(!over&&AP<=0&&!WARNED){WARNED=true;say('Out of AP. Press End turn (Space).')}play(cb?function(){render();cb()}:render)}
-function busy(){return !!(FX||CUR)}
-function walk(o,a,b,ph){MV.push({o:o,a:a,b:b,ph:ph})}
+function busy(){return !!(FX||CUR)}function walk(o,a,b,ph){MV.push({o:o,a:a,b:b,ph:ph})}
 function hq(o,txt,hit,ph){HQ.push({o:o,txt:txt,hit:hit,ph:ph})}
 function hitFx(o,txt,hit){
  var now=performance.now();if(hit){if(o==='P')PHIT=now;else o.hitAt=now}
@@ -1555,16 +1575,30 @@ function cursorImg(col,N){
 function buildCursors(){var h=Math.floor(CURS/2);['g','r'].forEach(function(k){CURURL[k]='url('+cursorImg(k==='g'?'#6dff95':'#ff4a3a',CURS).toDataURL()+') '+h+' '+h+', crosshair'});CURK='';updateCursor()}
 // same reach rules as attack(): bare hands punch adjacent, melee adjacent, guns need range and a clear line; grenades always reach
 function canHit(e){var w=SL[AC],gd=GEAR[w],d=mh(P,e.i);if(!isWeap(w))return d===1;if(gd.aoe)return true;if(gd.melee)return d<=1;return d<=gd.rng&&los(P,e.i)}
-function updateCursor(){var e=HOV>=0?enemyAt(HOV):null,k=e&&!canHit(e)?'r':'g';if(k===CURK)return;CURK=k;grid.style.cursor=CURURL[k]}
+// exploring: the normal pointer. In combat: the crosshair, red over an enemy you can't hit.
+function updateCursor(){var c=E&&inCombat(),e=c&&HOV>=0?enemyAt(HOV):null,k=!c?'n':e&&!canHit(e)?'r':'g';if(k===CURK)return;CURK=k;grid.style.cursor=k==='n'?'':CURURL[k]}
 buildCursors();
 grid.addEventListener('mousemove',function(e){hover(pick(e))});
 grid.addEventListener('mouseleave',function(){hover(-1)});
 document.getElementById('end').addEventListener('click',endTurn);
-document.getElementById('new').addEventListener('click',newGame);
+// New game wipes the autosave, so it asks for a second click first
+var NEWBTN=document.getElementById('new');
+function disarmNew(){NEWBTN.classList.remove('arm');NEWBTN.textContent='New game'}
+NEWBTN.addEventListener('click',function(){if(!NEWBTN.classList.contains('arm')){NEWBTN.classList.add('arm');NEWBTN.textContent='Click again to start over';return}disarmNew();newGame()});
 document.getElementById('save').addEventListener('click',saveGame);
 var HELP=document.getElementById('help'),INV=document.getElementById('inv');
-var CHEAT=document.getElementById('cheat'),SETS=document.getElementById('sets');
-function openModal(){return !MENU.hidden?MENU:!WMAP.hidden?WMAP:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
+var CHEAT=document.getElementById('cheat'),SETS=document.getElementById('sets'),PAUSE=document.getElementById('pause');
+// in-game menu (Menu button or Esc): its buttons do their job after the menu closes
+function openPause(){if(busy())return;disarmNew();showModal(PAUSE,'presume')}
+document.getElementById('menubtn').addEventListener('click',openPause);
+document.getElementById('presume').addEventListener('click',function(){closeModal(PAUSE)});
+PAUSE.addEventListener('click',function(e){
+ if(e.target===PAUSE){closeModal(PAUSE);return}
+ var b=e.target.closest('button');if(!b||b.id==='presume')return;
+ if(b.id==='new'&&!NEWBTN.classList.contains('arm'))return;// first click only arms it
+ PAUSE.hidden=true;
+},true);
+function openModal(){return !MENU.hidden?MENU:!WMAP.hidden?WMAP:!PAUSE.hidden?PAUSE:!HELP.hidden?HELP:!INV.hidden?INV:!CHEAT.hidden?CHEAT:!SETS.hidden?SETS:null}
 // settings: cursor size, with a green and red preview at the real size
 var CURSZ=document.getElementById('cursz');
 function syncSets(){
@@ -1785,6 +1819,7 @@ window.addEventListener('keydown',function(e){
  var mo=openModal();
  if(mo===MENU||mo===WMAP)return;
  if(mo){if(k==='escape'||(k==='i'&&mo===INV)||(mo===HELP&&(k==='enter'||k===' '))){e.preventDefault();closeModal(mo)}return}
+ if(k==='escape'){e.preventDefault();openPause();return}
  if(k==='arrowup'||k==='w')dy=-1;else if(k==='arrowdown'||k==='s')dy=1;else if(k==='arrowleft'||k==='a')dx=-1;else if(k==='arrowright'||k==='d')dx=1;
  else if(k==='h'){useStim();return}else if(k==='i'){openInv();return}else if(k==='+'||k==='='){zoom(1.15);return}else if(k==='-'||k==='_'){zoom(1/1.15);return}else if(k==='m'){MINI=!MINI;if(!busy()){drawIso();drawOdds()}return}else if(k==='q'){setSlot(1-AC);return}else if(k==='r'){reload();return}else if(k==='`'||k==='~'){e.preventDefault();openCheat();return}else if(k==='1'||k==='2'){setSlot(+k-1);return}else if(k==='e'){tap(P);return}else if(k===' '){e.preventDefault();endTurn();return}else return;
  e.preventDefault();var x=P%W+dx,y=((P/W)|0)+dy;if(x<0||x>=W||y<0||y>=H)return;tap(ix(x,y));
