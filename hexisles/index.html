@@ -3,35 +3,2622 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hex Isles · Coming soon</title>
-<meta name="description" content="A multiplayer island-building board game. Coming soon.">
+<title>Hex Isles</title>
+<meta name="description" content="Build roads, towns and forts on a hex island and race to 10 points.">
+<!-- Three.js (the 3D board) is only fetched when the 3D view starts; this map tells the browser where it lives -->
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
-:root{color-scheme:dark;--bg:#0b1620;--ink:#ecefed;--dim:#8b9aa3;--accent:#ffcf5a}
+:root{color-scheme:dark;--bg:#0b1620;--panel:#12222f;--line:#22394a;--ink:#ecefed;--dim:#8b9aa3;--accent:#ffcf5a}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center;padding:24px 16px}
-svg{width:min(280px,80vw);height:auto;display:block;margin:0 auto 24px}
-h1{margin:0;font-size:2rem;letter-spacing:.02em}
-.tag{display:inline-block;margin:10px 0 18px;padding:3px 12px;border-radius:99px;background:var(--accent);color:#1a1405;font-weight:700;font-size:.8rem;letter-spacing:.12em}
-p{color:var(--dim);max-width:420px;margin:0 auto 8px;line-height:1.5}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.35;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:var(--ink);background:#1b3345;border:1px solid #2f4c61;border-radius:8px;padding:9px 10px;cursor:pointer;touch-action:manipulation}
+button:hover:not(:disabled){background:#234258}
+button:disabled{opacity:.38;cursor:default}
+button.on{background:var(--accent);color:#1a1405;border-color:var(--accent);font-weight:700}
+button.big{background:var(--accent);color:#1a1405;border-color:var(--accent);font-weight:700}
 a{color:var(--accent)}
-.back{display:inline-block;margin-top:24px}
+
+#app{max-width:1500px;margin:0 auto;padding:6px 10px 8px;display:grid;gap:10px;grid-template-columns:1fr;grid-template-areas:"top" "board" "players" "side"}
+header{grid-area:top;display:flex;align-items:center;gap:12px}
+header h1{font-size:1.15rem;margin:0;flex:1;letter-spacing:.03em}
+header a{font-size:.85rem;text-decoration:none}
+header button{padding:5px 10px;font-size:.85rem}
+
+#players{grid-area:players;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pl{display:flex;align-items:center;gap:8px;min-width:0;background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:6px 8px;font-size:.76rem;transition:background .3s,border-color .3s}
+.pl.cur{background:color-mix(in srgb,var(--c) 16%,var(--panel));border-color:color-mix(in srgb,var(--c) 60%,var(--line));box-shadow:0 0 12px color-mix(in srgb,var(--c) 22%,transparent)}
+.pl .av{flex:none;width:32px;height:32px;border-radius:50%;background:var(--c);color:#111;border:2px solid #000;display:grid;place-items:center;font-weight:800;font-size:.95rem}
+.pl .pi{flex:1;min-width:0;display:flex;flex-direction:column}
+.pl b{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl span{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl em{font-style:normal;color:var(--accent);font-weight:700}
+.pl .aw{flex:none;display:flex;flex-direction:column;gap:2px}
+.pl .aw svg{display:block;width:24px;height:24px;border-radius:6px;background:#0b1620;border:1.5px solid var(--accent);filter:drop-shadow(0 0 4px rgba(255,207,90,.5))}
+
+#boardwrap{grid-area:board;min-width:0;position:relative;container-type:inline-size}
+/* #view is the sea-coloured window; the board inside leans back (tilt) and its sea spills past its edges to fill the corners */
+#view{overflow:hidden;border-radius:14px;background:radial-gradient(ellipse at center,#17506e 0,#0f3550 55%,#0b2233 100%);cursor:grab}
+/* zoom and drag: #zoom holds the board and is scaled/moved as a flat picture (scroll wheel, dragging, the +/− buttons) */
+#zoom{perspective:1500px;transform-origin:0 0;position:relative}
+/* boats on port trades: a layer exactly over the board (same box, viewBox and tilt) that render() never rebuilds */
+#ships{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;transform:rotateX(20deg);transform-origin:50% 55%}
+#view.dragging{cursor:grabbing}
+#view.zin{touch-action:none}      /* zoomed in on a phone: a finger drags the map instead of scrolling the page */
+#zbtns{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:3}
+#zbtns button{width:34px;height:34px;padding:0;border-radius:50%;font:700 1.15rem/1 system-ui,sans-serif;background:rgba(8,18,28,.6);border:1px solid rgba(255,255,255,.25);color:#fff;cursor:pointer}
+#zbtns button:hover{background:rgba(8,18,28,.85)}
+#zbtns button:disabled{opacity:.35;cursor:default}
+#zbtns #z-3d{font-size:.72rem;letter-spacing:.02em}
+/* the 3D board: a WebGL canvas laid over the flat board, which stays in place (hidden) to keep the window's size */
+#board3d{position:absolute;left:0;top:0;width:100%;height:100%;display:none!important}
+#view.is3d #board3d{display:block!important}
+#view.is3d #zoom{visibility:hidden}
+#board3d.pick{cursor:pointer}
+#board{display:block;width:100%;height:auto;max-height:calc(100vh - 110px);overflow:visible;user-select:none;transform:rotateX(20deg);transform-origin:50% 55%}
+/* the moving sea: drifting ripples, foam breaking on the beach, twinkles of light */
+.wave{animation:drift 11s linear infinite}
+.wave.b{animation-duration:17s;animation-direction:reverse}
+@keyframes drift{to{transform:translateX(60px)}}
+.foam{fill:none;stroke:#e8f6ff;stroke-linejoin:round;animation:foam 3.6s ease-out infinite}
+@keyframes foam{0%{stroke-width:16;opacity:.6}100%{stroke-width:46;opacity:0}}
+.spark{fill:#fff;animation:spark 4s ease-in-out infinite}
+@keyframes spark{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.75;transform:scale(1)}}
+.spark,.hglow{transform-box:fill-box;transform-origin:center}
+/* the dice thrown onto the board: real 3D cubes (six faces) that fall, bounce and tumble, then settle on the roll */
+#view{position:relative}
+#roll{position:absolute;inset:0;pointer-events:none;perspective:700px}
+.d3{position:absolute;left:50%;top:50%;transform-style:preserve-3d;--s:52px;width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2)}
+.d3 .sh{position:absolute;left:-10%;right:-10%;bottom:-22%;height:34%;border-radius:50%;background:radial-gradient(rgba(0,0,0,.6),rgba(0,0,0,0) 70%)}
+.d3 .lift,.d3 .cube{position:absolute;inset:0;transform-style:preserve-3d}
+.cube .f{position:absolute;inset:0;border-radius:14%;padding:13%;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);background:linear-gradient(145deg,#fffdf6,#ddd4bf);box-shadow:inset 0 0 0 1.5px rgba(120,105,70,.5),inset 0 -4px 8px rgba(0,0,0,.12);backface-visibility:hidden}
+.cube .f i{margin:13%;border-radius:50%}
+.cube .f i.on{background:radial-gradient(circle at 35% 30%,#555,#111)}
+.d3.red .f i.on{background:radial-gradient(circle at 35% 30%,#e0524a,#8f1410)}
+.f1{transform:translateZ(calc(var(--s) / 2))}
+.f6{transform:rotateY(180deg) translateZ(calc(var(--s) / 2))}
+.f3{transform:rotateY(90deg) translateZ(calc(var(--s) / 2))}
+.f4{transform:rotateY(-90deg) translateZ(calc(var(--s) / 2))}
+.f5{transform:rotateX(90deg) translateZ(calc(var(--s) / 2))}
+.f2{transform:rotateX(-90deg) translateZ(calc(var(--s) / 2))}
+@media(max-width:600px){.d3{--s:38px}}
+/* wheat rows lean with the wind, a row at a time, so a wave rolls across the field */
+.sway{animation:sway 3.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes sway{0%,100%{transform:skewX(0)}50%{transform:skewX(-7deg)}}
+.sway.tree{animation-name:swayt;animation-duration:5.2s}      /* trees lean less and slower than wheat */
+.graze{animation:graze 7s ease-in-out infinite;transform-box:fill-box;transform-origin:30% 100%}      /* a sheep dips its head to eat */
+@keyframes graze{0%,55%,100%{transform:rotate(0)}63%,88%{transform:rotate(9deg)}}
+.bob{animation:bob 1.7s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}      /* a boat rocking on the water */
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-1.5deg)}50%{transform:translateY(1.2px) rotate(1.5deg)}}
+@keyframes swayt{0%,100%{transform:skewX(0)}50%{transform:skewX(-2.5deg)}}
+/* harvest: lands that paid out glow, and cards fly from them to whoever got them */
+.hglow{fill:rgba(255,236,150,.4);stroke:#ffe27a;stroke-width:4;animation:hglow 1.6s ease-out both}
+@keyframes hglow{0%{opacity:0;transform:scale(.9)}15%{opacity:1;transform:scale(1.04)}100%{opacity:0;transform:scale(1)}}
+.fly{position:fixed;left:0;top:0;z-index:30;pointer-events:none;width:30px;height:42px;margin:-21px 0 0 -15px;border-radius:5px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));box-shadow:0 4px 10px rgba(0,0,0,.6);display:grid;place-items:center}
+.fly .ico{width:20px;height:20px}.beach{fill:#ead9a4;stroke:#ead9a4;stroke-width:16;stroke-linejoin:round}
+.hex{stroke:rgba(0,0,0,.45);stroke-width:1.5;stroke-linejoin:round}
+.deco{pointer-events:none}
+.tok{fill:url(#g-tok);stroke:#5b4a2a;stroke-width:1.5}
+.num{font:700 16px system-ui,sans-serif;text-anchor:middle;fill:#2a2212}
+.num.hot{fill:#c62828}
+.spot{animation:pulse 1s ease-in-out infinite alternate}
+.hit{fill:transparent;stroke:transparent;cursor:pointer}
+.fall{animation:fall .65s cubic-bezier(.3,0,.7,1) both;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes fall{0%{transform:translateY(-90px) scale(1.25);opacity:0}15%{opacity:1}60%{transform:translateY(0) scale(1.12,.86)}78%{transform:translateY(-7px) scale(.97,1.05)}100%{transform:translateY(0) scale(1)}}
+@keyframes pulse{from{opacity:.55}to{opacity:1}}
+
+#side{grid-area:side;display:flex;flex-direction:column;gap:10px;min-width:0}
+/* the bar under/over the bottom of the play window: hand | trade and build buttons | dice | End turn */
+#bar{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:8px}
+#barend{display:flex;gap:8px;align-items:center;margin-left:auto}
+#b-end{align-self:stretch;padding:8px 14px}
+/* the dice: tap them to roll */
+#dice{position:relative;display:flex;gap:6px;padding:6px;background:none;border:2px solid transparent;border-radius:12px;cursor:default;--d:44px}
+#dice:hover:not(:disabled){background:none}
+#dice:disabled{opacity:1}
+#dice:empty{display:none}
+#dice.ready{cursor:pointer;border-color:var(--accent);background:rgba(255,207,90,.14);animation:glow 1s ease-in-out infinite alternate}
+#dice.ready::after{content:"Tap to roll";position:absolute;left:50%;bottom:100%;transform:translateX(-50%);margin-bottom:4px;white-space:nowrap;font-size:.72rem;font-weight:700;color:#1a1405;background:var(--accent);border-radius:99px;padding:2px 9px}
+@keyframes glow{from{box-shadow:0 0 0 rgba(255,207,90,0)}to{box-shadow:0 0 18px rgba(255,207,90,.8)}}
+.die{width:var(--d);height:var(--d);padding:calc(var(--d)*.14);border-radius:calc(var(--d)*.2);display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);background:linear-gradient(145deg,#fffdf6,#d8d0bd);box-shadow:inset 0 -3px 0 rgba(0,0,0,.18),inset 0 2px 0 #fff,0 3px 0 #8f8771,0 6px 8px rgba(0,0,0,.5)}
+.die i{margin:1.5px;border-radius:50%}
+.die i.on{background:radial-gradient(circle at 35% 30%,#555,#111)}
+.die.red i.on{background:radial-gradient(circle at 35% 30%,#e0524a,#8f1410)}
+.die.roll{animation:tumble .28s linear infinite}
+.die.roll:nth-child(2){animation-duration:.22s;animation-direction:reverse}
+@keyframes tumble{0%{transform:translateY(0) rotate(0)}25%{transform:translateY(-9px) rotate(90deg)}50%{transform:translateY(0) rotate(180deg)}75%{transform:translateY(-5px) rotate(270deg)}100%{transform:translateY(0) rotate(360deg)}}
+/* the hand: one real-looking card per resource you hold, fanned out */
+#hand{position:relative;flex:1 1 100%;min-width:0;height:104px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#hand .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:.85rem}
+.rc{position:absolute;bottom:12px;width:46px;height:66px;border-radius:7px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));box-shadow:-2px 2px 5px rgba(0,0,0,.5);transform-origin:50% 140%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:.58rem;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;transition:transform .15s}
+.rc .ico{width:26px;height:26px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5))}
+.ico{width:26px;height:26px;display:block;margin:0 auto}
+/* the action buttons: one continuous row, picture on top, name, then the cards it costs as little coloured chips */
+#actions{flex:1 1 100%;display:flex;gap:5px;min-width:0}
+#actions>*{flex:1 1 0;min-width:0}
+#b-trade{font-weight:700}
+#b-trade,.bw button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 2px;min-width:0;font-size:.78rem;line-height:1.15}
+#actions small{display:block;font-size:.64rem;opacity:.75;font-weight:400}
+#actions small.cost{display:flex;justify-content:center;gap:2px;margin-top:3px;opacity:1}
+small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:1px solid #f7f1df}
+/* the trade offer on the table: top right of the map */
+#offers{position:absolute;right:8px;top:8px;z-index:2;width:min(48%,250px);padding:8px;background:rgba(8,18,28,.9);border:1px solid var(--accent);border-radius:10px;font-size:.78rem;box-shadow:0 6px 18px rgba(0,0,0,.5);animation:opop .25s ease-out}
+@keyframes opop{from{opacity:0;transform:translateY(-8px)}}
+#offers i{flex:none;width:10px;height:10px;border-radius:50%;border:1px solid #000}
+.oh{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.ot{display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:2px 0 8px;border-bottom:1px solid var(--line)}
+.ot div{display:flex;flex-wrap:wrap;gap:6px}
+.ot>span{color:var(--dim)}
+.oc{position:relative;width:24px;height:32px;border-radius:4px;border:1.5px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));display:grid;place-items:center}
+.oc .ico{width:17px;height:17px}
+.oc b{position:absolute;right:-6px;top:-6px;padding:0 4px;border-radius:99px;background:#111;border:1px solid #f7f1df;font-size:.62rem;color:#fff}
+.or{display:flex;align-items:center;gap:5px;min-height:30px}
+.or span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.or em{font-style:normal;font-size:.72rem;white-space:nowrap}
+.s-yes{color:#6fdc8c}.s-no,.s-x{color:#ff8a8a}.s-wait{color:var(--dim)}
+.or button{padding:2px 10px;font-weight:800;font-size:.95rem;line-height:1.3}
+.or button.ok,.or button.ok:hover:not(:disabled){background:#1f6b3a;border-color:#3fb067}
+.or button.no,.or button.no:hover:not(:disabled){background:#7a2323;border-color:#c04848}
+.ocancel{width:100%;margin-top:6px;padding:5px;font-size:.75rem}
+@media(max-width:520px){.or em.q{display:none}}
+/* the message log: a small see-through box in the top-left corner of the map; click it to open it up */
+#log{position:absolute;left:8px;top:8px;width:min(46%,300px);max-height:5.2em;padding:4px 8px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;background:rgba(8,18,28,.72);border:1px solid var(--line);border-radius:8px;font-size:.72rem;line-height:1.25;color:var(--dim);cursor:pointer}
+#log div{flex:none}
+#log.open{max-height:70%;display:block;overflow-y:auto;background:rgba(8,18,28,.94)}
+#log div:nth-last-child(2){color:var(--ink)}
+#log .now{color:var(--accent)}
+
+.modal{position:fixed;inset:0;background:rgba(4,10,16,.78);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;width:min(420px,100%);max-height:100%;overflow:auto}
+.box h2{margin:0 0 6px;font-size:1.2rem}
+.box p{margin:0 0 12px;color:var(--dim);font-size:.9rem}
+.row{display:flex;gap:6px;margin-bottom:8px;align-items:center}
+.row input{flex:1;min-width:0;font:inherit;color:var(--ink);background:#0b1620;border:1px solid #2f4c61;border-radius:8px;padding:8px}
+.row i{flex:none;width:14px;height:14px;border-radius:50%;border:1px solid #000}
+.row.end{justify-content:flex-end;margin:14px 0 0}
+.row.wifi{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:.9rem;color:var(--dim)}
+#mycards{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px;align-content:center;align-items:center;font-size:.78rem;color:var(--dim)}
+#mycards button{padding:5px 8px;font-size:.76rem}
+#mycards button.pt{border-color:var(--accent);color:var(--accent);opacity:1}
+/* build buttons with a picture, and the pop-up showing the cards they cost */
+.bw{display:grid;min-width:0}
+.bw button:disabled{pointer-events:none}
+.bi{width:24px;height:24px;flex:none}
+#tip{position:fixed;z-index:20;pointer-events:none;background:#0b1620;border:1px solid var(--accent);border-radius:10px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.6);font-size:.78rem;white-space:nowrap}
+#tip div{display:flex;gap:5px;margin-top:6px}
+.tc{width:40px;height:56px;border-radius:6px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;text-shadow:0 1px 2px #000}
+.tc .ico{width:22px;height:22px}
+.tc.have{border-color:var(--accent);box-shadow:0 0 10px rgba(255,207,90,.9)}
+.tc.miss{filter:grayscale(1);opacity:.4}
+.rc.need{border-color:var(--accent);box-shadow:0 0 12px rgba(255,207,90,.95);translate:0 -8px}
+.modehint{font-size:.82rem!important;margin:0!important;min-height:2.6em}
+#rumble{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:.85rem;color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:8px}
+#rumble i{width:13px;height:13px;border-radius:50%;border:2px solid #ff5a2f}
+#rumble i.on{background:#ff5a2f;box-shadow:0 0 8px #ff5a2f}
+#l-code{font:700 2.6rem "Courier New",monospace;letter-spacing:.25em;color:var(--accent);margin:2px 0 8px}
+#netinfo{font-size:.8rem;color:var(--accent);white-space:nowrap}
+.pick{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+.pick button{padding:6px 2px;font-size:.72rem}
+
+@media(min-width:1100px){
+  /* wide screens: the whole page fits the window; the play window takes everything left of a slim column,
+     and the bar lies over its bottom edge (the board's viewBox leaves empty sea there: see fitBoard) */
+  #app{max-width:none;height:100vh;grid-template-columns:minmax(0,1fr) 270px;grid-template-areas:"top top" "board side" "board players";grid-template-rows:auto minmax(0,1fr) auto}
+  #boardwrap{min-height:0;height:100%}
+  #view{height:100%}
+  #zoom{height:100%}
+  #board{height:100%;max-height:none}
+  #side{min-height:0;overflow-y:auto}
+  #players{align-self:end;grid-template-columns:1fr}
+  #bar{position:absolute;left:0;right:0;bottom:0;margin:0;flex-wrap:nowrap;align-items:center;padding:8px 10px;background:linear-gradient(rgba(6,14,22,0),rgba(6,14,22,.82) 30%);border-radius:0 0 14px 14px}
+  #hand{flex:0 1 300px;background:rgba(8,18,28,.55)}
+  #actions{flex:1 1 auto}
+  #barend{flex:none}
+  #dice{--d:50px}
+  #b-end{align-self:center;padding:16px 18px;font-size:1.05rem}
+}
 </style>
 </head>
 <body>
-<main>
-  <svg viewBox="0 0 160 140" aria-hidden="true">
-    <g stroke="#0b1620" stroke-width="3">
-      <polygon points="80,10 104,24 104,52 80,66 56,52 56,24" fill="#3f8f3a"/>
-      <polygon points="52,52 76,66 76,94 52,108 28,94 28,66" fill="#d9b44a"/>
-      <polygon points="108,52 132,66 132,94 108,108 84,94 84,66" fill="#8a8f96"/>
-      <polygon points="80,94 104,108 104,136 80,150 56,136 56,108" fill="#b5532f" transform="translate(0,-12)"/>
-    </g>
-  </svg>
-  <h1>Hex Isles</h1>
-  <div class="tag">COMING SOON</div>
-  <p>Build roads and towns on a hex island, trade with friends, race to 10 points.</p>
-  <p>Multiplayer over wifi: one player hosts, everyone else joins with a room code.</p>
-  <a class="back" href="/games/">&larr; Back to the games</a>
-</main>
+<div id="app">
+  <header>
+    <a href="/games/">&larr; Games</a>
+    <h1>Hex Isles</h1>
+    <span id="netinfo" hidden></span>
+    <button id="newbtn">New game</button>
+  </header>
+  <div id="players"></div>
+  <div id="boardwrap">
+    <div id="view"><div id="zoom"><svg id="board" viewBox="-312 -280 624 540" role="img" aria-label="The island board"></svg><svg id="ships" viewBox="-312 -280 624 540" aria-hidden="true"></svg></div><div id="roll" aria-hidden="true"></div>
+      <div id="zbtns"><button id="z-in" title="Zoom in (or scroll up on the map)">+</button><button id="z-out" title="Zoom out (or scroll down on the map)">&minus;</button><button id="z-reset" title="Back to the whole island">&#10226;</button><button id="z-3d" title="Switch between the 3D island and the flat map">3D</button></div></div>
+    <div id="log" title="Click to open or close the log"></div>
+    <!-- the trade offer on the table, top right of the map: what's offered and each player's answer -->
+    <div id="offers" hidden></div>
+    <!-- the bar along the bottom of the play window: hand | trade and build buttons | dice | End turn -->
+    <div id="bar">
+      <div id="hand"></div>
+      <div id="actions">
+        <button id="b-trade">Trade</button>
+        <!-- build buttons: the .bw wrapper carries the hover pop-up (a disabled button gets no mouse events) -->
+        <span class="bw" data-cost="road"><button id="b-road"></button></span>
+        <span class="bw" data-cost="town"><button id="b-town"></button></span>
+        <span class="bw" data-cost="fort"><button id="b-fort"></button></span>
+        <span class="bw" data-cost="card" hidden><button id="b-buy"></button></span>
+        <span class="bw" data-cost="wall" hidden><button id="b-wall"></button></span>
+      </div>
+      <div id="barend">
+        <button id="dice" aria-label="Roll the dice"></button>
+        <button id="b-end" class="big">End turn</button>
+      </div>
+    </div>
+  </div>
+  <div id="side">
+    <div id="mycards" hidden></div>
+    <div id="rumble" hidden></div>
+    <div id="tip" hidden></div>
+  </div>
+</div>
+
+<div id="m-setup" class="modal" hidden>
+  <div class="box">
+    <h2>Hex Isles</h2>
+    <p>Settle the island. Build roads, towns and forts. First to 10 points wins.</p>
+    <div class="row" id="s-count"></div>
+    <div id="s-rows"></div>
+    <div class="row modepick" id="s-mode"></div>
+    <p class="modehint"></p>
+    <div class="row end"><button id="s-cancel">Cancel</button><button id="s-go" class="big">Start game</button></div>
+    <div class="row wifi"><span style="flex:1">Friends on their own phones?</span><button id="s-net">Play over wifi</button></div>
+  </div>
+</div>
+
+<div id="m-net" class="modal" hidden>
+  <div class="box">
+    <h2>Play over wifi</h2>
+    <p>One player hosts and gets a room code. Everyone else joins with that code.</p>
+    <div class="row"><input id="n-name" maxlength="12" placeholder="Your name" aria-label="Your name"></div>
+    <div class="row"><button id="n-host" class="big" style="flex:1">Host a new game</button></div>
+    <div class="row"><input id="n-code" maxlength="4" placeholder="Room code" aria-label="Room code" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em"><button id="n-join">Join</button></div>
+    <p id="n-msg" style="color:var(--accent);min-height:1.3em;margin:0"></p>
+    <div class="row end"><button id="n-back">Back</button></div>
+  </div>
+</div>
+
+<div id="m-lobby" class="modal" hidden>
+  <div class="box">
+    <h2>Wifi game</h2>
+    <div id="l-codebox"><p style="margin:0">Room code</p><div id="l-code"></div><p>The others open Hex Isles, tap <b>Play over wifi</b> and type this code.</p></div>
+    <p id="l-msg" style="color:var(--accent)"></p>
+    <div id="l-names"></div>
+    <div class="row" id="l-bots"></div>
+    <div class="row modepick" id="l-mode"></div>
+    <p class="modehint"></p>
+    <div class="row end"><button id="l-leave">Leave</button><button id="l-cancel">Back to game</button><button id="l-rejoin" class="big">Rejoin</button><button id="l-start" class="big">Start game</button></div>
+  </div>
+</div>
+
+<div id="m-pick" class="modal" hidden>
+  <div class="box">
+    <h2 id="p-title"></h2>
+    <p id="p-text"></p>
+    <div class="pick" id="p-res"></div>
+    <div class="row end"><button id="p-cancel">Cancel</button></div>
+  </div>
+</div>
+
+<div id="m-disc" class="modal" hidden>
+  <div class="box">
+    <h2 id="d-title"></h2>
+    <p id="d-text"></p>
+    <div class="pick" id="d-res"></div>
+    <div class="row end"><button id="d-reset">Start over</button><button id="d-ok" class="big">Discard</button></div>
+  </div>
+</div>
+
+<div id="m-trade" class="modal" hidden>
+  <div class="box">
+    <h2>Trade boat</h2>
+    <p>The bank takes 4 of one resource for 1 of another. A town or fort on a port gets a better rate: 3 for 1, or 2 for 1 for that port's resource.</p>
+    <p style="margin-bottom:4px">You give:</p>
+    <div class="pick" id="t-give"></div>
+    <p style="margin-bottom:4px">You get 1:</p>
+    <div class="pick" id="t-get"></div>
+    <h2 style="font-size:1rem;margin-top:6px;padding-top:12px;border-top:1px solid var(--line)">Offer to the other players</h2>
+    <p style="margin-bottom:4px">You give (tap to add):</p>
+    <div class="pick" id="o-give"></div>
+    <p style="margin-bottom:4px">You want (tap to add):</p>
+    <div class="pick" id="o-want"></div>
+    <div class="row end"><button id="t-close">Close</button><button id="o-clear">Clear offer</button><button id="o-send" class="big">Make offer</button></div>
+  </div>
+</div>
+
+<div id="m-win" class="modal" hidden>
+  <div class="box">
+    <h2 id="w-title"></h2>
+    <p id="w-text"></p>
+    <div class="row end"><button id="w-look">Look at the board</button><button id="w-new" class="big">New game</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= Hex Isles =================
+   Everything is in this one file. The game state lives in G.
+   Every move goes through act(action), so multiplayer can later
+   send the same actions over the network. */
+
+// ---------- Rules data ----------
+const S = 50;                         // hex size (centre to corner) in board units
+const HW = Math.sqrt(3) * S;          // hex width
+const ROWS = [4, 5, 6, 5, 4];         // hexes in each row of the island
+const RES = ['wood', 'clay', 'wool', 'grain', 'stone'];
+const RN = {wood: 'Wood', clay: 'Clay', wool: 'Wool', grain: 'Grain', stone: 'Stone'};
+const LAND = {wood: 'Jungle', clay: 'Mudflat', wool: 'Pasture', grain: 'Fields', stone: 'Cliffs', volcano: 'Volcano'};
+// Each land's colours: [top (light), top (dark), side of the tile]
+const COL = {wood: ['#46a565', '#27703f', '#16442a'], clay: ['#d98458', '#a5532d', '#6a3117'], wool: ['#a6d86f', '#6aa83f', '#3e6b22'], grain: ['#f5db72', '#d9ab33', '#8f6c1a'], stone: ['#b3bac6', '#7b8392', '#4a515e'], volcano: ['#66504a', '#392823', '#1d1310']};
+const TILES = {wood: 5, clay: 4, wool: 5, grain: 5, stone: 4, volcano: 1};
+const NUMS = [2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 12];
+const COST = {road: {wood: 1, clay: 1}, town: {wood: 1, clay: 1, wool: 1, grain: 1}, fort: {stone: 3, grain: 2}, wall: {clay: 1, stone: 1}, card: {wool: 1, grain: 1, stone: 1}};
+// Progress cards (Classic mode): how many of each are in the deck, and what they do.
+// (In the code the bandit is still called "storm": G.storm, phase 'storm', {t:'storm'}.)
+const CARDS = {
+  k: {n: 'Guard', q: 14, d: 'Chase the bandit to any other land.'},
+  p: {n: 'Landmark', q: 5, d: 'Worth 1 point. Kept secret; never played.'},
+  r: {n: 'Trailblazer', q: 2, d: 'Build 2 roads for free.'},
+  h: {n: 'Bounty', q: 2, d: 'Take any 2 resources.'},
+  m: {n: 'Tribute', q: 2, d: 'Name a resource: every other player gives you all of theirs.'}
+};
+const HANDMAX = 7;    // on a 7, players holding more than this discard half (rounded down)
+const WIN = 10, BANK = 4, MAXROADS = 15;     // BANK: resources the bank wants for 1 (ports are cheaper)
+const PCOL = ['#ff5d5d', '#4da3ff', '#f2f2f2', '#c58cff'];
+const DEFNAMES = ['You', 'Coral', 'Drift', 'Marlo'];
+const SAVEKEY = 'hexisles-auto';
+
+// ---------- Board geometry (built once) ----------
+const HEX = [], VERT = [], EDGE = [];   // HEX {x,y,v[6]}  VERT {x,y,h[],n[],e[]}  EDGE {a,b}
+(function buildGeo() {
+  const vk = {}, ek = {};
+  ROWS.forEach((n, r) => {
+    for (let i = 0; i < n; i++) {
+      const x = (i - (n - 1) / 2) * HW, y = (r - 2) * 1.5 * S, h = {x, y, v: []}, hi = HEX.length;
+      for (let k = 0; k < 6; k++) {
+        const a = Math.PI / 180 * (60 * k - 90), vx = x + S * Math.cos(a), vy = y + S * Math.sin(a);
+        const key = Math.round(vx) + ',' + Math.round(vy);
+        if (!(key in vk)) { vk[key] = VERT.length; VERT.push({x: vx, y: vy, h: [], n: [], e: []}); }
+        h.v.push(vk[key]); VERT[vk[key]].h.push(hi);
+      }
+      for (let k = 0; k < 6; k++) {
+        const a = h.v[k], b = h.v[(k + 1) % 6], key = Math.min(a, b) + '-' + Math.max(a, b);
+        if (!(key in ek)) {
+          ek[key] = EDGE.length; EDGE.push({a, b});
+          VERT[a].n.push(b); VERT[b].n.push(a); VERT[a].e.push(ek[key]); VERT[b].e.push(ek[key]);
+        }
+      }
+      HEX.push(h);
+    }
+  });
+})();
+
+// HEXN[i][k] = the hex next to hex i in direction k (0 east, then clockwise), or -1 for sea
+const HEXN = HEX.map(h => [0, 1, 2, 3, 4, 5].map(k => {
+  const a = Math.PI / 3 * k, x = h.x + HW * Math.cos(a), y = h.y + HW * Math.sin(a);
+  return HEX.findIndex(o => Math.abs(o.x - x) < 2 && Math.abs(o.y - y) < 2);
+}));
+const DIRN = ['east', 'south-east', 'south-west', 'west', 'north-west', 'north-east'];
+
+// ---------- Ports ----------
+// COAST = the edges on the outside of the island, in order around it (each with its one hex)
+const COAST = [];
+EDGE.forEach((e, i) => {
+  const hs = HEX.map((h, k) => k).filter(k => HEX[k].v.includes(e.a) && HEX[k].v.includes(e.b));
+  if (hs.length === 1) COAST.push({e: i, h: hs[0], ang: Math.atan2(VERT[e.a].y + VERT[e.b].y, VERT[e.a].x + VERT[e.b].x)});
+});
+COAST.sort((a, b) => a.ang - b.ang);
+// G.ports = [{e: coast edge, r: a resource (2 for 1) or 'any' (3 for 1)}]: one per resource plus four 'any',
+// spread evenly round the coast. A town or fort on either end of the edge uses the port.
+function makePorts() {
+  const kinds = shuffle(RES.concat(['any', 'any', 'any', 'any']));
+  for (let tries = 0; ; tries++) {
+    const off = rnd(COAST.length), ports = kinds.map((r, k) => ({e: COAST[(off + Math.round(k * COAST.length / kinds.length)) % COAST.length].e, r}));
+    const ends = ports.flatMap(o => [EDGE[o.e].a, EDGE[o.e].b]);
+    if (new Set(ends).size === ends.length || tries > 60) return ports;       // no two ports share a corner
+  }
+}
+function portAt(v) { return (G.ports || []).find(o => EDGE[o.e].a === +v || EDGE[o.e].b === +v); }
+// How many of resource r player p must give for 1 of anything: 4 at the bank, 3 with an 'any' port, 2 with that resource's port
+function rate(p, r) {
+  let n = BANK;
+  for (const v in G.b) {
+    const o = G.b[v].p === p && portAt(v);
+    if (o) n = Math.min(n, o.r === r ? 2 : o.r === 'any' ? 3 : BANK);
+  }
+  return n;
+}
+// The port player p trades r through at rate n (2 = that resource's port, 3 = an 'any' port)
+function usedPort(p, r, n) {
+  for (const v in G.b) {
+    const o = G.b[v].p === p && portAt(v);
+    if (o && (n === 2 ? o.r === r : o.r === 'any')) return o;
+  }
+  return null;
+}
+
+// ---------- Fire Mountain mode (G.fire) ----------
+// Doubles make the volcano rumble (G.rum). At RUMMAX it erupts: lava runs in a straight line
+// of hexes (G.lava) to the sea. Lava lands give nothing, and forts touching them fall back to
+// towns unless walled (G.b[v].w). Lands beside the volcano are fertile: +1 per building.
+const RUMMAX = 3;
+function volcano() { return G.hex.findIndex(h => h.t === 'volcano'); }
+function lavaLine(k) { const out = []; for (let i = HEXN[volcano()][k]; i >= 0; i = HEXN[i][k]) out.push(i); return out; }
+function fertile(i) { return !!G.fire && HEXN[volcano()].includes(i); }
+function scorched(i) { return !!G.fire && (G.lava || []).includes(i); }
+function danger(v) { return [0, 1, 2, 3, 4, 5].some(k => lavaLine(k).some(i => HEX[i].v.includes(+v))); }
+function okWall(p, v) { return !!G.fire && !!G.b[v] && G.b[v].p === p && !G.b[v].w; }
+function erupt() {
+  const k = rnd(6), line = lavaLine(k);
+  G.rum = 0; G.lava = line;
+  if (!line.length) { say('The volcano erupted! The lava poured ' + DIRN[k] + ', straight into the sea.'); return; }
+  say('The volcano erupted! Lava ran ' + DIRN[k] + ' across ' + line.length + (line.length > 1 ? ' lands.' : ' land.'));
+  for (const v in G.b) {
+    const b = G.b[v];
+    if (!line.some(i => HEX[i].v.includes(+v))) continue;
+    if (b.w) say('A wall held back the lava (' + G.pl[b.p].name + ').');
+    else if (b.l === 2) { b.l = 1; say('Lava knocked a fort down to a town (' + G.pl[b.p].name + ').'); }
+  }
+}
+
+// ---------- Game state ----------
+let G = null;        // the whole game (saved as JSON)
+let MODE = null;     // what the player is placing: 'road' | 'town' | 'fort' | null
+let VIEW = 0;        // whose hand is shown (last human to play)
+let BOTT = null;     // timer for computer players
+let TGIVE = null;    // trade window: resource being given
+const D3 = {on: false};   // the 3D board (see "3D board" near the end): on = it is showing instead of the flat map
+let NET = {role: null};   // wifi game: role 'host' | 'guest', seat = which player this screen is
+
+const rnd = n => Math.floor(Math.random() * n);
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const pips = n => n ? 6 - Math.abs(7 - n) : 0;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+function newGame(cfg, fire) {
+  let hex;
+  for (let tries = 0; tries < 200; tries++) {
+    const tiles = [], nums = shuffle(NUMS.slice());
+    for (const t in TILES) for (let i = 0; i < TILES[t]; i++) tiles.push(t);
+    shuffle(tiles);
+    hex = tiles.map(t => ({t, n: t === 'volcano' ? 0 : nums.pop()}));
+    // keep the best numbers (6 and 8) from sitting side by side
+    const hot = i => hex[i].n === 6 || hex[i].n === 8;
+    // Fire Mountain: the volcano sits inland, so lava can run in all six directions
+    const inland = !fire || HEXN[hex.findIndex(h => h.t === 'volcano')].every(n => n >= 0);
+    if (inland && !VERT.some(v => v.h.filter(hot).length > 1)) break;
+  }
+  G = {
+    ver: 1, id: Date.now() + '-' + rnd(1e6), hex, fire: !!fire, rum: 0, lava: [],
+    pl: cfg.map(c => ({name: c.name, bot: !!c.bot, res: {wood: 0, clay: 0, wool: 0, grain: 0, stone: 0}})),
+    ports: makePorts(),
+    b: {},            // buildings by corner: {p: player, l: 1 town | 2 fort}
+    r: {},            // roads by edge: player
+    turn: 0, phase: 'setup', su: {k: 0, step: 'town', v: -1},
+    dice: null, win: -1, log: []
+  };
+  if (!fire) {        // Classic: the storm and the island card deck
+    const deck = [];
+    for (const c in CARDS) for (let i = 0; i < CARDS[c].q; i++) deck.push(c);
+    G.deck = shuffle(deck); G.storm = hex.findIndex(h => h.t === 'volcano');
+    G.tn = 0; G.played = false; G.free = 0; G.disc = {};
+    G.pl.forEach(P => { P.cards = []; });
+  }
+  MODE = null; VIEW = Math.max(0, G.pl.findIndex(p => !p.bot));
+  say('A new island appears. Everyone places two towns, each with a road.');
+  if (fire) say('Fire Mountain: the volcano is awake. Lands beside it are rich, but watch for lava.');
+}
+
+function say(t) { G.log.push(t); if (G.log.length > 40) G.log.shift(); }
+function setupOrder() { const a = G.pl.map((_, i) => i); return a.concat(a.slice().reverse()); }
+// --- Awards: longest route and most Storm Callers played, 2 points each ---
+const ROUTEMIN = 5, CALLMIN = 3, AWARD = 2;
+// Longest unbroken chain of p's roads (no road used twice; another player's town or fort cuts it)
+function roadLen(p) {
+  let best = 0; const used = new Set();
+  const walk = (v, len) => {
+    best = Math.max(best, len);
+    if (len && G.b[v] && G.b[v].p !== p) return;
+    for (const e of VERT[v].e) {
+      if (G.r[e] !== p || used.has(e)) continue;
+      used.add(e); walk(EDGE[e].a === v ? EDGE[e].b : EDGE[e].a, len + 1); used.delete(e);
+    }
+  };
+  for (const e in G.r) if (G.r[e] === p) { walk(EDGE[e].a, 0); walk(EDGE[e].b, 0); }
+  return best;
+}
+function callers(p) { return G.pl[p].kn || 0; }      // Storm Callers played
+// Who should hold an award: the holder keeps it until someone has strictly more; nobody below the minimum
+function holder(cur, val, min) {
+  const n = G.pl.map((_, i) => val(i));
+  if (cur != null && cur >= 0 && n[cur] < min) cur = -1;
+  const top = Math.max(...n);
+  if (top < min) return -1;
+  if (cur >= 0 && n[cur] === top) return cur;
+  const lead = n.map((x, i) => x === top ? i : -1).filter(i => i >= 0);
+  return lead.length === 1 ? lead[0] : (cur >= 0 ? cur : -1);       // a tie for the lead changes nothing
+}
+function awards() {
+  const lr = holder(G.lr, roadLen, ROUTEMIN), la = G.deck ? holder(G.la, callers, CALLMIN) : -1;
+  if (lr !== (G.lr == null ? -1 : G.lr)) say(lr < 0 ? 'Nobody has the longest route now.' : 'Longest route goes to ' + G.pl[lr].name + ' (' + roadLen(lr) + ' roads): +' + AWARD + ' points.');
+  if (la >= 0 && la !== G.la) say('Most Guards goes to ' + G.pl[la].name + ' (' + callers(la) + ' played): +' + AWARD + ' points.');
+  G.lr = lr; G.la = la;
+}
+function pubScore(p) { let s = (G.lr === p ? AWARD : 0) + (G.la === p ? AWARD : 0); for (const v in G.b) if (G.b[v].p === p) s += G.b[v].l; return s; }    // what everyone can see
+function score(p) { return pubScore(p) + (G.pl[p].cards || []).filter(x => x.c === 'p').length; }      // plus secret Landmark cards
+function autoDiscard(p, n) {
+  const R = G.pl[p].res;
+  for (let i = 0; i < n; i++) R[RES.slice().sort((a, b) => R[b] - R[a])[0]]--;
+  say(G.pl[p].name + ' discarded ' + n + ' cards.');
+}
+function discard(p, res) {
+  if (G.phase !== 'discard' || !G.disc || !G.disc[p] || !res) return false;
+  const R = G.pl[p].res; let sum = 0;
+  for (const r of RES) { const k = res[r] || 0; if (!Number.isInteger(k) || k < 0 || k > R[r]) return false; sum += k; }
+  if (sum !== G.disc[p]) return false;
+  RES.forEach(r => { R[r] -= res[r] || 0; });
+  say(G.pl[p].name + ' discarded ' + sum + ' cards.');
+  delete G.disc[p];
+  if (!Object.keys(G.disc).length) G.phase = 'storm';
+  return true;
+}
+function cards(p) { return RES.reduce((s, r) => s + G.pl[p].res[r], 0); }
+function roadCount(p) { let n = 0; for (const e in G.r) if (G.r[e] === p) n++; return n; }
+function canPay(p, what) { const c = COST[what]; return Object.keys(c).every(r => G.pl[p].res[r] >= c[r]); }
+function pay(p, what) { const c = COST[what]; for (const r in c) G.pl[p].res[r] -= c[r]; }
+
+// ---------- Where can things go? ----------
+function okTown(p, v, setup) {
+  if (G.b[v] || VERT[v].n.some(n => G.b[n])) return false;
+  return setup || VERT[v].e.some(e => G.r[e] === p);
+}
+function okRoad(p, e, setup) {
+  if (e in G.r) return false;
+  const ends = [EDGE[e].a, EDGE[e].b];
+  if (setup) return ends.includes(G.su.v);
+  return ends.some(v => G.b[v] ? G.b[v].p === p : VERT[v].e.some(x => G.r[x] === p));
+}
+function okFort(p, v) { return !!G.b[v] && G.b[v].p === p && G.b[v].l === 1; }
+function spots(p, what) {
+  const setup = G.phase === 'setup';
+  if (what === 'road') return roadCount(p) >= MAXROADS && !setup ? [] : EDGE.map((_, e) => e).filter(e => okRoad(p, e, setup));
+  if (what === 'town') return VERT.map((_, v) => v).filter(v => okTown(p, v, setup));
+  if (what === 'wall') return VERT.map((_, v) => v).filter(v => okWall(p, v));
+  return VERT.map((_, v) => v).filter(v => okFort(p, v));
+}
+
+// ---------- The one place the game changes ----------
+// who = the player doing it (wifi: the sender's seat). Left out = whoever's turn it is.
+function act(a, who) {
+  if (!act1(a, who)) return false;
+  if (G.phase !== 'over' && G.phase !== 'setup') { awards(); if (G.phase === 'main') checkWin(G.turn); }
+  return true;
+}
+// --- Trading between players ---
+// G.offer = {from, give, get, yes: [seats that accepted], no: [seats that said no], x: [seats the offerer turned down]}.
+// The player whose turn it is offers; the others accept or decline (computer players at once). Nothing is
+// swapped until the offerer picks one who accepted ({t:'confirm',p}, the tick) or turns them down ({t:'reject',p}, the cross).
+// The offer closes when the trade is done, taken back, or nobody is left who might still trade.
+function fmt(res) { return RES.filter(r => res[r]).map(r => res[r] + ' ' + RN[r]).join(' + '); }
+function has(p, res) { return RES.every(r => G.pl[p].res[r] >= (res[r] || 0)); }
+function cleanRes(o) {
+  if (!o || typeof o !== 'object') return null;
+  const out = {}; let n = 0;
+  for (const r of RES) { const k = o[r] || 0; if (!Number.isInteger(k) || k < 0 || k > 30) return null; if (k) { out[r] = k; n += k; } }
+  return n ? out : null;
+}
+function botLikes(i, o) {       // they must have spare cards, not lose out on count, and not help a near-winner
+  const n = res => RES.reduce((s, r) => s + (res[r] || 0), 0);
+  return RES.every(r => !o.get[r] || G.pl[i].res[r] > o.get[r]) && n(o.give) >= n(o.get) && pubScore(o.from) < WIN - 2;
+}
+function offerFix(o) { o.yes = o.yes || []; o.x = o.x || []; return o; }       // older saves had no yes/x lists
+// a player's answer so far: 'yes', 'no', 'x' (turned down by the offerer) or null (still thinking)
+function offerState(o, p) { return o.yes.includes(p) ? 'yes' : o.no.includes(p) ? 'no' : o.x.includes(p) ? 'x' : null; }
+function offerDone() {          // close the offer once nobody is left who could still trade
+  const o = G.offer;
+  if (!o.yes.length && G.pl.every((P, i) => i === o.from || offerState(o, i))) { G.offer = null; say('Nobody wanted that trade.'); }
+}
+function answer(p, t) {
+  const o = G.offer && offerFix(G.offer);
+  if (!o || G.phase !== 'main' || p === o.from || !G.pl[p] || offerState(o, p)) return false;
+  if (t === 'accept') {
+    if (!has(p, o.get)) return false;
+    o.yes.push(p); say(G.pl[p].name + ' accepted the trade.');
+  } else { o.no.push(p); say(G.pl[p].name + ' said no to the trade.'); }
+  offerDone();
+  return true;
+}
+// the offerer's tick (swap with p) or cross (turn p down)
+function settle(p, ok) {
+  const o = G.offer && offerFix(G.offer);
+  if (!o || !Number.isInteger(p) || !o.yes.includes(p)) return false;
+  if (ok) {
+    if (!has(p, o.get) || !has(o.from, o.give)) return false;
+    RES.forEach(r => { const a = o.give[r] || 0, b = o.get[r] || 0; G.pl[o.from].res[r] += b - a; G.pl[p].res[r] += a - b; });
+    say(G.pl[o.from].name + ' gave ' + fmt(o.give) + ' to ' + G.pl[p].name + ' for ' + fmt(o.get) + '.');
+    G.offer = null; return true;
+  }
+  o.yes.splice(o.yes.indexOf(p), 1); o.x.push(p);
+  say(G.pl[o.from].name + ' turned down ' + G.pl[p].name + '.');
+  offerDone();
+  return true;
+}
+function act1(a, who) {
+  if (!G || G.phase === 'over' || !a) return false;
+  if (a.t === 'discard') return discard(who == null ? a.p : who, a.res);
+  if (a.t === 'accept' || a.t === 'decline') return answer(who == null ? a.p : who, a.t);
+  const p = G.turn, P = G.pl[p];
+  if (who != null && who !== p) return false;
+  if (G.phase === 'setup') {
+    if (a.t === 'town' && G.su.step === 'town' && okTown(p, a.v, true)) {
+      G.b[a.v] = {p, l: 1}; G.su.v = a.v; G.su.step = 'road';
+      VERT[a.v].h.forEach(h => { const t = G.hex[h].t; if (t !== 'volcano') P.res[t]++; });
+      say(P.name + ' founded a town.');
+      return true;
+    }
+    if (a.t === 'road' && G.su.step === 'road' && okRoad(p, a.e, true)) {
+      G.r[a.e] = p; G.su.k++; G.su.step = 'town'; G.su.v = -1;
+      const ord = setupOrder();
+      if (G.su.k >= ord.length) { G.phase = 'roll'; G.turn = 0; say('The island is settled. First turn: ' + G.pl[0].name + '.'); }
+      else G.turn = ord[G.su.k];
+      return true;
+    }
+    return false;
+  }
+  if (a.t === 'roll' && G.phase === 'roll') {
+    const d = [1 + rnd(6), 1 + rnd(6)], sum = d[0] + d[1];
+    G.dice = d; G.rolls = (G.rolls || 0) + 1;
+    if (sum === 7 && G.deck) {      // Classic: big hands discard half, then the roller moves the storm
+      say(P.name + ' rolled 7. The bandit is on the move!');
+      G.disc = {};
+      G.pl.forEach((Q, i) => {
+        const n = cards(i);
+        if (n > HANDMAX) { if (Q.bot) autoDiscard(i, Math.floor(n / 2)); else G.disc[i] = Math.floor(n / 2); }
+      });
+      G.phase = Object.keys(G.disc).length ? 'discard' : 'storm';
+      return true;
+    }
+    if (sum === 7) { G.phase = 'tide'; say(P.name + ' rolled 7. Low tide: no harvest, but one free pick.'); return true; }
+    const got = G.pl.map(() => ({}));
+    G.hex.forEach((h, i) => {
+      if (h.n !== sum || scorched(i) || (G.deck && i === G.storm)) return;
+      const extra = fertile(i) ? 1 : 0;
+      HEX[i].v.forEach(v => { const b = G.b[v]; if (b) { G.pl[b.p].res[h.t] += b.l + extra; got[b.p][h.t] = (got[b.p][h.t] || 0) + b.l + extra; } });
+    });
+    const parts = got.map((g, i) => Object.keys(g).length ? G.pl[i].name + ' ' + Object.keys(g).map(r => '+' + g[r] + ' ' + RN[r]).join(' ') : '').filter(Boolean);
+    say(P.name + ' rolled ' + sum + '. ' + (parts.length ? parts.join(', ') + '.' : 'Nobody got anything.'));
+    G.phase = 'main';
+    if (G.fire && d[0] === d[1]) {
+      G.rum = (G.rum || 0) + 1;
+      if (G.rum >= RUMMAX) erupt(); else say('Doubles! The volcano rumbles (' + G.rum + ' of ' + RUMMAX + ').');
+    }
+    return true;
+  }
+  if (a.t === 'pick' && G.phase === 'tide' && RES.includes(a.r)) {
+    P.res[a.r]++; G.phase = 'main'; say(P.name + ' found 1 ' + RN[a.r] + ' on the beach.');
+    return true;
+  }
+  if (a.t === 'storm' && G.phase === 'storm' && Number.isInteger(a.h) && G.hex[a.h] && a.h !== G.storm) {
+    G.storm = a.h; G.phase = 'main';
+    say(P.name + ' sent the bandit to the ' + LAND[G.hex[a.h].t] + (G.hex[a.h].n ? ' (' + G.hex[a.h].n + ').' : '.'));
+    return true;
+  }
+  if (G.phase !== 'main') return false;
+  if (a.t === 'offer' && !G.offer) {
+    const give = cleanRes(a.give), get = cleanRes(a.get);
+    if (!give || !get || !has(p, give) || RES.some(r => give[r] && get[r])) return false;
+    G.offer = {from: p, give, get, yes: [], no: [], x: []};
+    say(P.name + ' offers ' + fmt(give) + ' for ' + fmt(get) + '.');
+    // computer players answer straight away
+    G.pl.forEach((Q, i) => { if (i !== p && Q.bot && G.offer) answer(i, has(i, get) && botLikes(i, G.offer) ? 'accept' : 'decline'); });
+    return true;
+  }
+  if ((a.t === 'confirm' || a.t === 'reject') && G.offer) return settle(a.p, a.t === 'confirm');
+  if (a.t === 'cancel' && G.offer) { G.offer = null; say(P.name + ' took the offer back.'); return true; }
+  if (G.offer) return false;        /* nothing else until the offer is answered or taken back */
+  if (a.t === 'road' && (G.free > 0 || canPay(p, 'road')) && roadCount(p) < MAXROADS && okRoad(p, a.e, false)) {
+    if (G.free > 0) G.free--; else pay(p, 'road');
+    G.r[a.e] = p; say(P.name + ' built a road.'); return true;
+  }
+  if (a.t === 'buy' && G.deck && G.deck.length && canPay(p, 'card')) {
+    pay(p, 'card'); P.cards.push({c: G.deck.pop(), n: G.tn}); say(P.name + ' bought a progress card.'); return checkWin(p);
+  }
+  if (a.t === 'card' && G.deck && !G.played && CARDS[a.c] && a.c !== 'p') {
+    const k = P.cards.findIndex(x => x.c === a.c && x.n < G.tn);       // not one bought this turn
+    if (k < 0) return false;
+    if (a.c === 'h' && !(RES.includes(a.r1) && RES.includes(a.r2))) return false;
+    if (a.c === 'm' && !RES.includes(a.r)) return false;
+    P.cards.splice(k, 1); G.played = true;
+    if (a.c === 'k') { G.phase = 'storm'; P.kn = (P.kn || 0) + 1; say(P.name + ' played a Guard.'); }
+    if (a.c === 'r') { G.free = 2; say(P.name + ' played a Trailblazer: 2 free roads.'); }
+    if (a.c === 'h') { P.res[a.r1]++; P.res[a.r2]++; say(P.name + ' played a Bounty: ' + RN[a.r1] + ' and ' + RN[a.r2] + '.'); }
+    if (a.c === 'm') {
+      let n = 0;
+      G.pl.forEach((Q, i) => { if (i !== p) { n += Q.res[a.r]; Q.res[a.r] = 0; } });
+      P.res[a.r] += n; say(P.name + ' played a Tribute and took ' + n + ' ' + RN[a.r] + ' from the others.');
+    }
+    return true;
+  }
+  if (a.t === 'town' && canPay(p, 'town') && okTown(p, a.v, false)) {
+    pay(p, 'town'); G.b[a.v] = {p, l: 1}; say(P.name + ' built a town.'); return checkWin(p);
+  }
+  if (a.t === 'fort' && canPay(p, 'fort') && okFort(p, a.v)) {
+    pay(p, 'fort'); G.b[a.v].l = 2; say(P.name + ' raised a fort.'); return checkWin(p);
+  }
+  if (a.t === 'wall' && canPay(p, 'wall') && okWall(p, a.v)) {
+    pay(p, 'wall'); G.b[a.v].w = 1; say(P.name + ' built a wall.'); return true;
+  }
+  if (a.t === 'trade' && RES.includes(a.give) && RES.includes(a.get) && a.give !== a.get && P.res[a.give] >= rate(p, a.give)) {
+    const n = rate(p, a.give), o = n < BANK && usedPort(p, a.give, n);
+    P.res[a.give] -= n; P.res[a.get]++; say(P.name + ' traded ' + n + ' ' + RN[a.give] + ' for 1 ' + RN[a.get] + (o ? ' at the port.' : '.'));
+    // a port trade sends a boat (every screen sees G.ship.n go up and plays it: see shipFx)
+    if (o) G.ship = {n: (G.ship ? G.ship.n : 0) + 1, e: o.e, p, give: a.give, get: a.get, k: n};
+    return true;
+  }
+  if (a.t === 'end') {
+    G.turn = (G.turn + 1) % G.pl.length; G.phase = 'roll';
+    if (G.deck) { G.tn++; G.played = false; G.free = 0; }
+    return true;
+  }
+  return false;
+}
+function checkWin(p) {
+  if (score(p) >= WIN) { G.phase = 'over'; G.win = p; say(G.pl[p].name + ' reached ' + WIN + ' points and won the game!'); }
+  return true;
+}
+
+// Is it this screen's turn? (wifi game: my seat; same-screen game: any human)
+function myTurn() { return !!G && G.phase !== 'over' && (NET.role ? G.turn === NET.seat : !G.pl[G.turn].bot); }
+
+const OUTOFTURN = ['discard', 'accept', 'decline'];     // moves a player can make when it isn't their turn
+// Do a move, then save and redraw. A wifi guest sends the move to the host instead.
+function go(a) {
+  if (NET.role === 'guest') {
+    if (!(myTurn() || OUTOFTURN.includes(a.t)) || !NET.conn || !NET.conn.open) return false;
+    NET.conn.send({t: 'act', a});
+    if (a.t !== 'trade') MODE = a.t === 'road' && G.free > 1 ? 'road' : null;
+    return true;
+  }
+  if (!act(a, NET.role && OUTOFTURN.includes(a.t) ? NET.seat : undefined)) return false;
+  if (a.t !== 'trade') MODE = a.t === 'road' && G.free > 0 ? 'road' : null;     /* free roads: keep placing */
+  save(); render();
+  return true;
+}
+
+// ---------- Computer players ----------
+function vScore(v, p) {
+  let s = 0; const kinds = new Set();
+  VERT[v].h.forEach(h => { const x = G.hex[h]; s += pips(x.n); if (x.n) kinds.add(x.t); });
+  kinds.forEach(k => { s += p != null && !ownsLand(p, k) ? 1.5 : .5; });
+  if (portAt(v)) s += 1.5;
+  return s;
+}
+function ownsLand(p, t) { for (const v in G.b) if (G.b[v].p === p && VERT[v].h.some(h => G.hex[h].t === t)) return true; return false; }
+function openSpot(v) { return !G.b[v] && !VERT[v].n.some(n => G.b[n]); }
+// How good is the corner v as a place to head for? (best open spot nearby, less for each step away)
+function reach(v, p) {
+  const dist = {[v]: 0}, q = [v]; let best = -99;
+  while (q.length) {
+    const c = q.shift();
+    if (openSpot(c)) best = Math.max(best, vScore(c, p) - 3 * dist[c]);
+    if (dist[c] < 4) VERT[c].n.forEach(n => { if (!(n in dist) && !(G.b[n] && G.b[n].p !== p)) { dist[n] = dist[c] + 1; q.push(n); } });
+  }
+  return best;
+}
+function mine(v, p) { return (G.b[v] && G.b[v].p === p) || VERT[v].e.some(e => G.r[e] === p); }
+function bestRoad(p, list, setup) {
+  let best = null, bs = -1e9;
+  list.forEach(e => {
+    [EDGE[e].a, EDGE[e].b].forEach(v => {
+      if (setup ? v === G.su.v : mine(v, p)) return;
+      const s = reach(v, p) + Math.random();
+      if (s > bs) { bs = s; best = e; }
+    });
+  });
+  return best == null ? list[0] : best;
+}
+function bestOf(list, p) { return list.slice().sort((a, b) => vScore(b, p) - vScore(a, p))[0]; }
+function botMain(p) {
+  const P = G.pl[p], forts = spots(p, 'fort'), towns = spots(p, 'town'), roads = spots(p, 'road');
+  if (G.deck && !G.played) {               // play an island card if one is ready
+    const can = c => P.cards.some(x => x.c === c && x.n < G.tn);
+    const others = r => G.pl.reduce((s, Q, i) => s + (i === p ? 0 : Q.res[r]), 0);
+    const low = RES.slice().sort((x, y) => P.res[x] - P.res[y]), rich = RES.slice().sort((x, y) => others(y) - others(x))[0];
+    if (can('k')) return {t: 'card', c: 'k'};
+    if (can('r') && roads.length && roadCount(p) <= MAXROADS - 2) return {t: 'card', c: 'r'};
+    if (can('h')) return {t: 'card', c: 'h', r1: low[0], r2: low[1]};
+    if (can('m') && others(rich) >= 3) return {t: 'card', c: 'm', r: rich};
+  }
+  if (G.free > 0 && roads.length) return {t: 'road', e: bestRoad(p, roads, false)};
+  if (G.fire && canPay(p, 'wall')) {       // wall in forts that lava could reach
+    const w = spots(p, 'wall').find(v => G.b[v].l === 2 && danger(v));
+    if (w != null) return {t: 'wall', v: w};
+  }
+  if (forts.length && canPay(p, 'fort')) return {t: 'fort', v: bestOf(forts)};
+  if (towns.length && canPay(p, 'town')) return {t: 'town', v: bestOf(towns, p)};
+  const room = VERT.some((_, v) => openSpot(v));
+  const goal = towns.length ? 'town' : roads.length && room ? 'road' : forts.length ? 'fort' : null;
+  if (goal) {
+    if (goal === 'road' && canPay(p, 'road')) return {t: 'road', e: bestRoad(p, roads, false)};
+    const need = COST[goal], miss = RES.filter(r => P.res[r] < (need[r] || 0));
+    const give = RES.find(r => P.res[r] - (need[r] || 0) >= rate(p, r));
+    if (miss.length && give) return {t: 'trade', give, get: miss[0]};
+  }
+  // nothing better to do (or the hand is getting big): buy an island card
+  if (G.deck && G.deck.length && canPay(p, 'card') && (!goal || cards(p) > 5)) return {t: 'buy'};
+  return null;
+}
+// Where a computer player puts the storm: the land that hurts the others most and itself least
+function botStorm(p) {
+  let best = -1, bs = -1e9;
+  G.hex.forEach((h, i) => {
+    if (i === G.storm) return;
+    let s = Math.random();
+    HEX[i].v.forEach(v => { const b = G.b[v]; if (b) s += (b.p === p ? -2 : 1) * b.l * pips(h.n); });
+    if (s > bs) { bs = s; best = i; }
+  });
+  return best;
+}
+function botStep() {
+  BOTT = null;
+  if (!G || G.phase === 'over' || !G.pl[G.turn].bot) return;
+  const p = G.turn, P = G.pl[p];
+  let a;
+  if (G.phase === 'setup') a = G.su.step === 'town' ? {t: 'town', v: bestOf(spots(p, 'town'), p)} : {t: 'road', e: bestRoad(p, spots(p, 'road'), true)};
+  else if (G.phase === 'discard') return;            /* waiting for humans to discard */
+  else if (G.phase === 'storm') a = {t: 'storm', h: botStorm(p)};
+  else if (G.phase === 'roll') a = {t: 'roll'};
+  else if (G.phase === 'tide') a = {t: 'pick', r: RES.slice().sort((x, y) => P.res[x] - P.res[y])[0]};
+  else a = botMain(p) || {t: 'end'};
+  if (!go(a)) go({t: 'end'});
+}
+
+// ---------- Drawing ----------
+const $ = id => document.getElementById(id);
+function corners(h, k) { return h.v.map(v => (h.x + (VERT[v].x - h.x) * k).toFixed(1) + ',' + (h.y + (VERT[v].y - h.y) * k).toFixed(1)).join(' '); }
+// A sheep standing on 0,0 facing right, about 20 units wide: legs, a fleece of overlapping puffs (outlined,
+// shaded underneath), a dark face with ears and an eye. Used as the Wool picture and (smaller) in pastures.
+const FLEECE = [[-4, -7, 3.6], [0, -8.4, 4], [4, -7, 3.6], [-5.6, -3.8, 3.2], [-1.6, -4, 3.6], [2.6, -4, 3.4]];
+const SHEEP = '<g fill="#3a3030"><rect x="-5" y="-2" width="2" height="6" rx=".8"/><rect x="-1.5" y="-2" width="2" height="6.4" rx=".8"/><rect x="2" y="-2" width="2" height="6" rx=".8"/><rect x="4.6" y="-2" width="2" height="6.2" rx=".8"/></g>' +
+  '<g fill="#5b524c">' + FLEECE.map(([x, y, r]) => '<circle cx="' + x + '" cy="' + y + '" r="' + (r + .9) + '"/>').join('') + '</g>' +
+  '<g fill="#f7f4ec">' + FLEECE.map(([x, y, r]) => '<circle cx="' + x + '" cy="' + y + '" r="' + r + '"/>').join('') + '</g>' +
+  '<path d="M-8.4-3.4q8.4 4.6 15 0" fill="none" stroke="#d6cfc1" stroke-width="2.2" stroke-linecap="round"/>' +
+  '<circle cx="-2" cy="-9.6" r="1.6" fill="#fff"/>' +
+  '<ellipse cx="8.4" cy="-6.6" rx="2.9" ry="3.6" fill="#3a3030"/><ellipse cx="6.4" cy="-9" rx="2.2" ry="1" fill="#3a3030" transform="rotate(-25 6.4 -9)"/><circle cx="9.3" cy="-7.4" r=".75" fill="#fff"/>';
+// Small picture for each resource, drawn around 0,0 (about 20 units wide)
+function glyph(t) {
+  switch (t) {
+    case 'wood': return '<rect x="-1.5" y="2" width="3" height="8" fill="#5a3819"/><circle cx="-4.5" cy="1" r="4.8" fill="#14502a"/><circle cx="4.5" cy="1" r="4.8" fill="#0f3f21"/><circle cx="0" cy="-4" r="6" fill="#1c6a37"/><circle cx="-2" cy="-6" r="3" fill="#3f9a5a"/>';
+    case 'clay': return '<g stroke="#4e230f" stroke-width="1"><rect x="-9" y="1" width="8.5" height="5.5" fill="#d27d50"/><rect x=".5" y="1" width="8.5" height="5.5" fill="#b9633a"/><rect x="-4.2" y="-5.5" width="8.5" height="5.5" fill="#ec9c6f"/></g><path d="M-3.5-4.5h7" stroke="#ffd0b0" stroke-width="1" opacity=".8"/>';
+    case 'wool': return '<g transform="translate(-.6 4)">' + SHEEP + '</g>';      // a fluffy sheep, centred
+    case 'grain': return '<g stroke="#8a6412" stroke-width="1.2" fill="none"><path d="M0 10V-2M0 10L-5 0M0 10L5 0"/></g><g fill="#ffe27a" stroke="#8a6412" stroke-width=".8"><ellipse cx="0" cy="-6" rx="2.4" ry="5"/><ellipse cx="-6" cy="-3" rx="2.2" ry="4.5" transform="rotate(-25 -6 -3)"/><ellipse cx="6" cy="-3" rx="2.2" ry="4.5" transform="rotate(25 6 -3)"/></g><path d="M-3 7h6" stroke="#c0392b" stroke-width="1.6"/>';
+    case 'stone': return '<polygon points="-10,8 -1,-9 3,8" fill="#e6e9ef"/><polygon points="-1,-9 10,8 3,8" fill="#8891a1"/><polygon points="-10,8 -1,-9 10,8" fill="none" stroke="#3d4350" stroke-width="1" stroke-linejoin="round"/><polygon points="-3.6,-4 -1,-9 2,-4.4 -.5,-2.6" fill="#fff"/>';
+    default: return '<polygon points="-15,11 -5,-8 0,-8 2,11" fill="#4a3530"/><polygon points="0,-8 5,-8 15,11 2,11" fill="#231614"/><polygon points="-15,11 -5,-8 5,-8 15,11" fill="none" stroke="#120b09" stroke-width="1" stroke-linejoin="round"/><polygon points="-5,-8 5,-8 3,-1 0,-4 -3,0" fill="#ff5a2f"/><path d="M-1-4l-2 9M2-2l3 8" stroke="#ff8a3d" stroke-width="1.2" fill="none"/><circle cx="3" cy="-13" r="3" fill="#9aa3ab" opacity=".7"/><circle cx="7" cy="-18" r="2" fill="#9aa3ab" opacity=".5"/>';
+  }
+}
+// Picture of a resource as a thing you hold (cards, trade buttons, port signs). The board keeps glyph():
+// trees on Jungle, peaks on Cliffs. Here wood is a pile of cut logs and stone a chunk of rock.
+function cardGlyph(t) {
+  if (t === 'wood') {
+    // one log on its side: bark body, a light streak, and the cut end with rings on the left
+    const log = (x1, x2, y, r) => '<rect x="' + x1 + '" y="' + (y - r) + '" width="' + (x2 - x1) + '" height="' + 2 * r + '" rx="' + r + '" fill="#8a5524" stroke="#4a2c10" stroke-width=".8"/>' +
+      '<path d="M' + (x1 + 3) + ' ' + (y - r * .35) + 'H' + (x2 - 2) + '" stroke="#b07636" stroke-width=".9" stroke-linecap="round"/>' +
+      '<ellipse cx="' + x1 + '" cy="' + y + '" rx="' + r * .75 + '" ry="' + r + '" fill="#f0cf95" stroke="#4a2c10" stroke-width=".8"/>' +
+      '<ellipse cx="' + x1 + '" cy="' + y + '" rx="' + r * .4 + '" ry="' + r * .55 + '" fill="none" stroke="#b88a4f" stroke-width=".7"/>' +
+      '<circle cx="' + x1 + '" cy="' + y + '" r=".5" fill="#8a5524"/>';
+    return log(-8, 9, 6.5, 2.8) + log(-6, 10, 1.2, 2.8) + log(-9, 6, -4.1, 2.8);
+  }
+  if (t === 'stone') {
+    // a chunky boulder: lit top, mid front, shaded right side, a crack and a shine
+    return '<polygon points="-8,-1 -3,-7 4,-8 2,-1 -3,1" fill="#d3d8e0"/>' +
+      '<polygon points="4,-8 9,-2 10,6 4,9 2,-1" fill="#7a8292"/>' +
+      '<polygon points="-10,7 -8,-1 -3,1 2,-1 4,9 -5,9" fill="#a3aab6"/>' +
+      '<polygon points="-10,7 -8,-1 -3,-7 4,-8 9,-2 10,6 4,9 -5,9" fill="none" stroke="#3d4350" stroke-width="1" stroke-linejoin="round"/>' +
+      '<path d="M-4 3l2 2-1 2.5M6 0l1.5 3" stroke="#5d6472" stroke-width=".9" fill="none" stroke-linecap="round"/>' +
+      '<polygon points="-5,-3.5 -2.5,-6.3 1,-6.6 -2,-2.8" fill="#fff" opacity=".6"/>';
+  }
+  return glyph(t);
+}
+// Scenery scattered on a land tile (around the number disc), back row first: [x, y, size]
+const SCENE = [[0, -34, .8], [-29, -19, .85], [29, -19, .85], [-30, 13, .85], [30, 13, .85], [-13, 31, .7], [13, 31, .7]];
+// A Fields tile is one continuous wheat field: rows of stalks from back to front (front rows bigger and
+// drawn over the ones behind, like looking across a real field), clipped to the tile, swaying in the wind.
+function wheat(i) {
+  const h = HEX[i], k = TILE - .02;
+  const pts = h.v.map(v => ((VERT[v].x - h.x) * k).toFixed(1) + ',' + ((VERT[v].y - h.y) * k).toFixed(1)).join(' ');
+  let s = i * 97 + 13;
+  const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;      // same field every time for this tile
+  const f = n => n.toFixed(1);
+  let out = '<clipPath id="wc' + i + '"><polygon points="' + pts + '"/></clipPath><g clip-path="url(#wc' + i + ')">';
+  out += '<polygon points="' + pts + '" fill="#8a6219"/>';      /* the soil between the rows */
+  let row = 0;
+  // Each stalk: a thin stem, then a crisp ear (a pointed seed head with a dark outline, a lit centre line
+  // and two fine whiskers). Clear shapes with outlines read sharply even when the board is small.
+  for (let y = -S + 4; y <= S + 14; y += 7, row++) {
+    const d = (y + S) / (2 * S), sc = .85 + .4 * d;      /* d: 0 at the back, 1 at the front */
+    let stem = '', ear = '', lit = '', awn = '';
+    for (let x = -S - 6 + r() * 4; x < S + 6; x += 4.9 * sc) {
+      const bx = x + (r() - .5) * 1.6, tall = (9.5 + r() * 3) * sc, lean = (r() - .5) * 2.2, tx = bx + lean, ty = y - tall;
+      if (nearDisc(Math.min(bx, tx) - 2, ty - 3, Math.max(bx, tx) + 2, y)) continue;      /* a clear patch round the number */
+      const x0 = bx + lean * .62, y0 = y - tall * .62, w = 1.75 * sc, xm = (x0 + tx) / 2, ym = (y0 + ty) / 2;
+      stem += 'M' + f(bx) + ' ' + f(y) + 'L' + f(x0) + ' ' + f(y0);
+      ear += 'M' + f(x0) + ' ' + f(y0) + 'Q' + f(xm - 2 * w) + ' ' + f(ym) + ' ' + f(tx) + ' ' + f(ty) + 'Q' + f(xm + 2 * w) + ' ' + f(ym) + ' ' + f(x0) + ' ' + f(y0) + 'Z';
+      lit += 'M' + f(x0 - .3 * w) + ' ' + f(y0 - 1) + 'L' + f(tx - .3 * w) + ' ' + f(ty + 1.2);
+      awn += 'M' + f(tx) + ' ' + f(ty + .6) + 'l' + f(-1.4 * sc + lean * .3) + ' ' + f(-3 * sc) + 'M' + f(tx) + ' ' + f(ty + .6) + 'l' + f(1.2 * sc + lean * .3) + ' ' + f(-3.2 * sc);
+    }
+    const ec = d < .35 ? '#d4a63a' : d < .7 ? '#e6bb4b' : '#f2cb5a';     /* rows further back look a little darker */
+    out += '<rect x="' + (-S - 8) + '" y="' + f(y - 2.2) + '" width="' + (2 * S + 16) + '" height="3.4" fill="rgba(60,35,5,.45)"/>';
+    if (stem) out += '<g class="sway" style="' + sync(3400, row * 190) + '"><path d="' + stem + '" stroke="#8f6418" stroke-width="' + f(.7 * sc) + '" fill="none"/>' +
+      '<path d="' + awn + '" stroke="#c99a32" stroke-width="' + f(.35 * sc) + '" fill="none"/>' +
+      '<path d="' + ear + '" fill="' + ec + '" stroke="#7a5310" stroke-width="' + f(.45 * sc) + '" stroke-linejoin="round"/>' +
+      '<path d="' + lit + '" stroke="#fff6c4" stroke-width="' + f(.55 * sc) + '" stroke-linecap="round" fill="none" opacity=".9"/></g>';
+  }
+  // soft light from the top left and shade towards the front edge, so the field reads as a raised block
+  return out + '<polygon points="' + pts + '" fill="url(#g-fieldlight)"/></g>';
+}
+// Does the box x0..x1, y0..y1 (tile units, 0,0 = tile centre) come within DISCGAP of the number disc?
+// Scenery inside that ring is left out so the number always stands in a clear patch.
+const DISCGAP = 22;
+const nearDisc = (x0, y0, x1, y1, gap) => Math.hypot(Math.max(x0 - 1, 1 - x1, 0), Math.max(y0 - 2, 2 - y1, 0)) < (gap || DISCGAP);      // disc (with shadow) centred near 1,2
+// A Jungle tile is one thick forest, built like the wheat field: rows of trees from back to front, front rows
+// bigger, back rows darker. Leafy trees and pines mixed. Only the trunks have to stand on the tile, so the
+// crowns of the back row rise over the tile behind (it's drawn earlier), which makes the forest look tall.
+// Each row is a few paths (one per colour), so a tile of ~80 trees stays cheap to redraw.
+function forest(i) {
+  const h = HEX[i], k = TILE - .02, R = S * TILE - 5, r3 = Math.sqrt(3);
+  const pts = h.v.map(v => ((VERT[v].x - h.x) * k).toFixed(1) + ',' + ((VERT[v].y - h.y) * k).toFixed(1)).join(' ');
+  let s = i * 131 + 7;
+  const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;      // same forest every time for this tile
+  const f = n => n.toFixed(1);
+  const oval = (x, y, rx, ry) => 'M' + f(x - rx) + ' ' + f(y) + 'a' + f(rx) + ' ' + f(ry) + ' 0 1 0 ' + f(2 * rx) + ' 0a' + f(rx) + ' ' + f(ry) + ' 0 1 0 ' + f(-2 * rx) + ' 0';
+  const tri = p => 'M' + p.map(([x, y]) => f(x) + ' ' + f(y)).join('L') + 'Z';
+  let ground = '<clipPath id="fc' + i + '"><polygon points="' + pts + '"/></clipPath><g clip-path="url(#fc' + i + ')">' +
+    '<polygon points="' + pts + '" fill="#123d22" opacity=".45"/>';      /* the shady forest floor, with ferns and moss in the clearing */
+  for (let n = 0; n < 14; n++) ground += '<ellipse cx="' + f((r() - .5) * 70) + '" cy="' + f((r() - .5) * 70) + '" rx="' + f(5 + r() * 7) + '" ry="' + f(2.5 + r() * 3) + '" fill="#2f7a45" opacity=".35"/>';
+  let trees = '', row = 0;
+  for (let y = -S * .82; y <= S * .92; y += 7.5, row++) {
+    const d = (y + S) / (2 * S), sc = .75 + .4 * d;      /* d: 0 at the back, 1 at the front */
+    const pal = d < .33 ? ['#0e3a1f', '#16502b', '#2a7342'] : d < .66 ? ['#12472a', '#1d6436', '#3a9152'] : ['#155231', '#227440', '#4ea866'];
+    let sh = '', tr = '', dk = '', md = '', lt = '';
+    for (let x = -S + r() * 4; x < S; x += (6.2 + r() * 2) * sc) {
+      const bx = x + (r() - .5) * 2, by = y + (r() - .5) * 2, z = sc * (.85 + r() * .3), pine = r() < .35;
+      if (Math.abs(bx) > R * r3 / 2 || Math.abs(by) > R - Math.abs(bx) / r3) continue;      /* trunk must be on the tile */
+      if (nearDisc(bx - 5.5 * z, by - 19 * z, bx + 6 * z, by, 18.5)) continue;      /* no part of the tree touches the number disc */
+      sh += oval(bx + 2 * z, by + .5 * z, 5 * z, 1.6 * z);
+      tr += 'M' + f(bx - .8 * z) + ' ' + f(by) + 'h' + f(1.6 * z) + 'v' + f(-5 * z) + 'h' + f(-1.6 * z) + 'Z';
+      if (pine) {
+        for (let j = 0; j < 3; j++) {      /* three tiers, the left part lit */
+          const yb = by - (2.5 + j * 4.5) * z, w = (5.5 - j * 1.3) * z, top = yb - (8 - j * .8) * z;
+          dk += tri([[bx - w, yb], [bx, top], [bx + w, yb]]);
+          md += tri([[bx - w, yb], [bx, top], [bx + w * .15, yb]]);
+        }
+        lt += tri([[bx - 1.2 * z, by - 15 * z], [bx, by - 19.2 * z], [bx + .3 * z, by - 15 * z]]);
+      } else {      /* a round leafy crown: shaded back, mid front, a lit spot top left */
+        dk += oval(bx + 1.8 * z, by - 8 * z, 4.6 * z, 4.6 * z) + oval(bx - 2.6 * z, by - 6.5 * z, 3.6 * z, 3.6 * z);
+        md += oval(bx - .8 * z, by - 9.5 * z, 4.4 * z, 4.4 * z);
+        lt += oval(bx - 2.2 * z, by - 11.3 * z, 2.2 * z, 2.2 * z);
+      }
+    }
+    if (dk) trees += '<g class="sway tree" style="' + sync(5200, row * 260) + '"><path d="' + sh + '" fill="rgba(0,0,0,.28)"/><path d="' + tr + '" fill="#4a2e14"/>' +
+      '<path d="' + dk + '" fill="' + pal[0] + '"/><path d="' + md + '" fill="' + pal[1] + '"/><path d="' + lt + '" fill="' + pal[2] + '"/></g>';
+  }
+  return ground + '</g>' + trees;
+}
+// A Pasture tile: grass (lighter patches and tufts), a post-and-rail fence round a paddock with a gate in
+// the front, and sheep inside, some dipping their heads to graze now and then. Back fence first, then the
+// sheep from back to front, then the front fence, so everything overlaps the right way.
+function pasture(i) {
+  const h = HEX[i], k = TILE - .02, F = .86;
+  const C = h.v.map(v => [(VERT[v].x - h.x), (VERT[v].y - h.y)]);
+  const pts = C.map(([x, y]) => (x * k).toFixed(1) + ',' + (y * k).toFixed(1)).join(' ');
+  let s = i * 173 + 29;
+  const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;      // same pasture every time for this tile
+  const f = n => n.toFixed(1);
+  let out = '<clipPath id="pc' + i + '"><polygon points="' + pts + '"/></clipPath><g clip-path="url(#pc' + i + ')">';
+  for (let n = 0; n < 9; n++) out += '<ellipse cx="' + f((r() - .5) * 80) + '" cy="' + f((r() - .5) * 80) + '" rx="' + f(8 + r() * 10) + '" ry="' + f(4 + r() * 5) + '" fill="#c4ea8c" opacity=".35"/>';
+  let tuft = '';
+  for (let n = 0; n < 70; n++) { const x = (r() - .5) * 92, y = (r() - .5) * 92; tuft += 'M' + f(x) + ' ' + f(y) + 'l-1.2-2.6M' + f(x) + ' ' + f(y) + 'l.2-3M' + f(x) + ' ' + f(y) + 'l1.4-2.4'; }
+  out += '<path d="' + tuft + '" stroke="#4f8a2c" stroke-width=".7" stroke-linecap="round" fill="none"/></g>';
+  // the fence: one stretch per side of the paddock (a hexagon F of the tile), the front-most side has a gate
+  const P = C.map(([x, y]) => [x * F, y * F]);
+  const sides = P.map((a, j) => [a, P[(j + 1) % 6]]);
+  const gate = sides.reduce((g, sd, j) => (sd[0][1] + sd[1][1] > sides[g][0][1] + sides[g][1][1] ? j : g), 0);
+  const stretch = (a, b) => {      // rails from a to b with posts along them
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(len / 8));
+    let g = '<path d="M' + f(a[0]) + ' ' + f(a[1] + .5) + 'L' + f(b[0]) + ' ' + f(b[1] + .5) + '" stroke="rgba(0,0,0,.2)" stroke-width="2.2"/>';
+    for (const dy of [5.6, 2.8]) g += '<path d="M' + f(a[0]) + ' ' + f(a[1] - dy) + 'L' + f(b[0]) + ' ' + f(b[1] - dy) + '" stroke="#5a3a18" stroke-width="1.7" stroke-linecap="round"/><path d="M' + f(a[0]) + ' ' + f(a[1] - dy - .3) + 'L' + f(b[0]) + ' ' + f(b[1] - dy - .3) + '" stroke="#c49058" stroke-width=".8" stroke-linecap="round"/>';
+    for (let q = 0; q <= n; q++) {
+      const x = a[0] + (b[0] - a[0]) * q / n, y = a[1] + (b[1] - a[1]) * q / n;
+      g += '<rect x="' + f(x - .9) + '" y="' + f(y - 7.5) + '" width="1.8" height="7.8" rx=".4" fill="#8a5a2b" stroke="#4a2e14" stroke-width=".5"/><rect x="' + f(x - .9) + '" y="' + f(y - 7.5) + '" width=".7" height="7.8" fill="#b98250"/>';
+    }
+    return g;
+  };
+  const side = j => {
+    const [a, b] = sides[j];
+    if (j !== gate) return stretch(a, b);
+    const m = t => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];      // an open gap in the middle
+    return stretch(a, m(.36)) + stretch(m(.64), b);
+  };
+  const back = [], front = [];
+  sides.forEach((sd, j) => (sd[0][1] + sd[1][1] < 0 ? back : front).push(j));
+  out += back.map(side).join('');
+  // sheep: scattered inside the paddock, never near the number disc or each other
+  const flock = [], R = S * F - 5, r3 = Math.sqrt(3);
+  for (let tries = 0; flock.length < 7 && tries < 600; tries++) {
+    const x = (r() - .5) * 2 * R, y = (r() - .5) * 2 * R, d = (y + S) / (2 * S), z = .5 + .2 * d;
+    if (Math.abs(x) > R * r3 / 2 - 6 || Math.abs(y) > R - Math.abs(x) / r3 - 1) continue;
+    if (nearDisc(x - 10 * z, y - 12 * z, x + 11 * z, y, 18)) continue;
+    if (flock.some(o => Math.abs(o.x - x) < 11 && Math.abs(o.y - y) < 6)) continue;
+    flock.push({x, y, z, flip: r() < .5, graze: r() < .6});
+  }
+  flock.sort((a, b) => a.y - b.y).forEach((o, n) => {
+    out += '<ellipse cx="' + f(o.x + 1) + '" cy="' + f(o.y + .5) + '" rx="' + f(10 * o.z) + '" ry="' + f(2.4 * o.z) + '" fill="rgba(0,0,0,.25)"/>';
+    out += '<g transform="translate(' + f(o.x) + ' ' + f(o.y - 4.4 * o.z) + ') scale(' + (o.flip ? -o.z : o.z).toFixed(2) + ' ' + o.z.toFixed(2) + ')">' +
+      (o.graze ? '<g class="graze" style="' + sync(7000, i * 900 + n * 1300) + '">' + SHEEP + '</g>' : SHEEP) + '</g>';
+  });
+  return out + front.map(side).join('');
+}
+function scene(t, i) {
+  if (t === 'grain') return wheat(i);
+  if (t === 'wood') return forest(i);
+  if (t === 'wool') return pasture(i);
+  const item = k => {
+    if (t === 'clay' && (i + k) % 2) return '<ellipse cx="0" cy="4" rx="9" ry="4" fill="#7c3c1c" opacity=".55"/><path d="M-6 3l4 2 3-3 5 2" stroke="#5a2a14" stroke-width="1" fill="none"/>';
+    return glyph(t);
+  };
+  return SCENE.map(([x, y, sc], k) => '<ellipse cx="' + x + '" cy="' + (y + 8 * sc).toFixed(1) + '" rx="' + (8 * sc).toFixed(1) + '" ry="' + (2.6 * sc).toFixed(1) + '" fill="rgba(0,0,0,.22)"/>' + '<g transform="translate(' + x + ' ' + y + ') scale(' + sc + ')">' + item(k) + '</g>').join('');
+}
+// Shared paint for the board: a gradient per land, the number discs, and a blur for the island's shadow
+const DEFS = '<defs>' + Object.keys(COL).map(t => '<linearGradient id="g-' + t + '" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="' + COL[t][0] + '"/><stop offset="1" stop-color="' + COL[t][1] + '"/></linearGradient>').join('') +
+  '<linearGradient id="g-fieldlight" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#fff6c8" stop-opacity=".22"/><stop offset=".55" stop-color="#fff6c8" stop-opacity="0"/><stop offset="1" stop-color="#3a2405" stop-opacity=".3"/></linearGradient>' +
+  '<radialGradient id="g-tok" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#e3d3a6"/></radialGradient>' +
+  '<filter id="f-soft" x="-20%" y="-20%" width="140%" height="150%"><feGaussianBlur stdDeviation="7"/></filter></defs>';
+const ico = t => '<svg class="ico" viewBox="-12 -12 24 24" aria-hidden="true">' + cardGlyph(t) + '</svg>';
+function piece(v, b) {
+  const x = VERT[v].x, y = VERT[v].y, c = PCOL[b.p];
+  // a little building with a lit front, a shaded side and a shadow on the ground
+  const town = '<polygon points="-8,8 -8,-2 0,-10 8,-2 8,8" fill="' + c + '"/><polygon points="0,-10 8,-2 8,8 0,8" fill="rgba(0,0,0,.28)"/><polygon points="-8,-2 0,-10 8,-2 6,-2 0,-8 -6,-2" fill="rgba(255,255,255,.35)"/><rect x="-5.5" y="2" width="3.5" height="6" fill="rgba(0,0,0,.55)"/><polygon points="-8,8 -8,-2 0,-10 8,-2 8,8" fill="none" stroke="#111" stroke-width="2" stroke-linejoin="round"/>';
+  const fort = '<polygon points="-10,9 -10,-9 -6,-9 -6,-5 -2,-5 -2,-9 2,-9 2,-5 6,-5 6,-9 10,-9 10,9" fill="' + c + '"/><polygon points="2,-9 2,-5 6,-5 6,-9 10,-9 10,9 1,9 1,-5" fill="rgba(0,0,0,.28)"/><path d="M-10-9h4M-2-9h4" stroke="rgba(255,255,255,.6)" stroke-width="1.6"/><path d="M-3 9v-6a3 3 0 0 1 6 0v6z" fill="rgba(0,0,0,.6)"/><polygon points="-10,9 -10,-9 -6,-9 -6,-5 -2,-5 -2,-9 2,-9 2,-5 6,-5 6,-9 10,-9 10,9" fill="none" stroke="#111" stroke-width="2" stroke-linejoin="round"/>';
+  const wall = b.w ? '<circle class="deco" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="15" fill="rgba(0,0,0,.35)" stroke="#111" stroke-width="7"/><circle class="deco" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="15" fill="none" stroke="#d8cfb8" stroke-width="4" stroke-dasharray="6 2"/>' : '';
+  return wall + '<g class="deco" transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(1.1)"><ellipse cx="3" cy="9" rx="12" ry="4" fill="rgba(0,0,0,.35)"/>' + drop('b' + v, b.p + ':' + b.l, b.l === 2 ? fort : town) + '</g>';
+}
+function seg(e, k) {
+  const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b];
+  return 'x1="' + (A.x + (B.x - A.x) * k).toFixed(1) + '" y1="' + (A.y + (B.y - A.y) * k).toFixed(1) + '" x2="' + (B.x + (A.x - B.x) * k).toFixed(1) + '" y2="' + (B.y + (A.y - B.y) * k).toFixed(1) + '"';
+}
+const TILE = .93;      // land tiles are a little smaller than their hex, so sand shows between them
+// --- Pieces dropping onto the map ---
+// SEEN remembers what was on the board last time (key -> value). Anything new or changed gets a
+// start time in FELL, and drop() wraps it in a group that plays the CSS "fall" animation.
+const DROPMS = 650;
+let SEEN = null; const FELL = {};
+function noteDrops() {
+  const now = {};
+  for (const e in G.r) now['r' + e] = G.r[e];
+  for (const v in G.b) now['b' + v] = G.b[v].p + ':' + G.b[v].l;
+  if (G.deck) now.storm = G.storm;
+  if (SEEN && SEEN.id === G.id) for (const k in now) if (SEEN.now[k] !== now[k]) FELL[k] = Date.now();
+  SEEN = {id: G.id, now};
+}
+function drop(key, val, inner) {
+  const age = Date.now() - (FELL[key] || 0);
+  return age < DROPMS ? '<g class="fall" style="animation-delay:-' + age + 'ms">' + inner + '</g>' : inner;
+}
+const BANDIT = '<ellipse cx="2" cy="17" rx="13" ry="4.5" fill="rgba(0,0,0,.45)"/>' +
+  '<path d="M-11 17C-12 4-7-4 0-4S12 4 11 17Z" fill="#2b2f3a" stroke="#0c0e13" stroke-width="1.6"/><path d="M0-4C7-4 12 4 11 17H3Z" fill="rgba(0,0,0,.35)"/>' +
+  '<path d="M-5 8l5 3 5-3" fill="none" stroke="#8a1f1f" stroke-width="2.4" stroke-linecap="round"/>' +
+  '<circle cx="0" cy="-10" r="7.5" fill="#d9a877" stroke="#0c0e13" stroke-width="1.6"/><path d="M-7.500-11h15v4.500h-15z" fill="#15171d"/><circle cx="-3" cy="-8.800" r="1.200" fill="#fff"/><circle cx="3" cy="-8.800" r="1.200" fill="#fff"/>' +
+  '<path d="M-10-13h20l-3-3.500c-2-5-12-5-14 0z" fill="#3a2a1c" stroke="#0c0e13" stroke-width="1.4" stroke-linejoin="round"/><path d="M-6-15h12" stroke="#8a1f1f" stroke-width="2"/>';
+// Where a port sits: the middle of its coast edge (mx, my), the way out to sea (nx, ny), along the coast
+// (tx, ty), and its angle. The jetty runs out from the beach; DOCK = how far out its platform's middle is,
+// BERTH = just past the platform's end (boats start and finish their trips out at sea beyond it).
+const JETTY = 6, DOCK = JETTY + 25, BERTH = JETTY + 44;
+function portGeo(o) {
+  const A = VERT[EDGE[o.e].a], B = VERT[EDGE[o.e].b], h = HEX[COAST.find(c => c.e === o.e).h];
+  const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, d = Math.hypot(mx - h.x, my - h.y), nx = (mx - h.x) / d, ny = (my - h.y) / d;
+  return {mx, my, nx, ny, tx: -ny, ty: nx, ang: Math.atan2(ny, nx) * 180 / Math.PI - 90};
+}
+// A port: a wooden jetty of planks on pilings, from the beach out to a platform, with the port's sign on it
+function port(o) {
+  const g = portGeo(o), any = o.r === 'any', f = n => n.toFixed(1);
+  // drawn with the jetty pointing down (+y = out to sea), then turned to face out from its coast edge
+  let j = '<rect x="-6.5" y="-2" width="13" height="24" rx="2" fill="rgba(0,0,0,.28)" transform="translate(2.5 3)"/><rect x="-13.5" y="16" width="27" height="18" rx="2" fill="rgba(0,0,0,.28)" transform="translate(2.5 3)"/>';
+  for (let y = -2, n = 0; y < 18; y += 2.6, n++) j += '<rect x="-4.6" y="' + f(y) + '" width="9.2" height="2.3" fill="' + (n % 2 ? '#a97a42' : '#bb8c52') + '" stroke="#5a3d1c" stroke-width=".4"/>';
+  for (let x = -12, n = 0; x < 12; x += 2.6, n++) j += '<rect x="' + f(x) + '" y="17" width="2.3" height="15.5" fill="' + (n % 3 ? '#b4864d' : '#c49559') + '" stroke="#5a3d1c" stroke-width=".4"/>';
+  j += '<rect x="-12.2" y="17" width="24.4" height="15.6" rx=".8" fill="none" stroke="#4a2e14" stroke-width="1.1"/>';
+  [[-5.4, 4], [5.4, 4], [-5.4, 12], [5.4, 12], [-12.6, 17.5], [12.6, 17.5], [-12.6, 32.3], [12.6, 32.3]].forEach(([x, y]) => {
+    j += '<circle cx="' + x + '" cy="' + y + '" r="1.9" fill="#4a2e14"/><circle cx="' + (x - .5) + '" cy="' + (y - .5) + '" r=".9" fill="#9a6a38"/>';
+  });
+  let s = '<g transform="translate(' + f(g.mx + g.nx * JETTY) + ' ' + f(g.my + g.ny * JETTY) + ') rotate(' + f(g.ang) + ')">' + j + '</g>';
+  // the sign stands upright on the platform
+  s += '<g transform="translate(' + f(g.mx + g.nx * DOCK) + ' ' + f(g.my + g.ny * DOCK) + ')"><ellipse cx="1.5" cy="3" rx="11" ry="10" fill="rgba(0,0,0,.35)"/><circle r="10" fill="' + (any ? '#f6ecd0' : COL[o.r][0]) + '" stroke="#3a2a14" stroke-width="1.6"/>';
+  s += any ? '<text y="0" style="font:700 8.5px system-ui,sans-serif;text-anchor:middle;fill:#2a2212">3:1</text><text y="6.5" style="font:600 5px system-ui,sans-serif;text-anchor:middle;fill:#5b4a2a">ANY</text>'
+    : '<g transform="translate(0 -3) scale(.48)">' + cardGlyph(o.r) + '</g><text y="7.8" style="font:700 7px system-ui,sans-serif;text-anchor:middle;fill:#111;stroke:#fff;stroke-width:2;paint-order:stroke">2:1</text>';
+  return '<g class="deco">' + s + '</g><title>' + (any ? 'Port: 3 of anything for 1' : 'Port: 2 ' + RN[o.r] + ' for 1') + '</title></g>';
+}
+// --- The moving sea ---
+// The board is rebuilt on every render, which would restart CSS animations. sync(ms) gives each one a
+// negative delay matching the clock, so after a rebuild it carries on from where it was.
+const sync = (ms, off) => 'animation-delay:-' + ((Date.now() + (off || 0)) % ms) + 'ms';
+const ISLE = Math.max(...VERT.map(v => Math.hypot(v.x, v.y)));      // how far the island reaches from the middle
+const SPARKS = [];      // fixed twinkle spots out at sea (same every game)
+for (let k = 0, a = 7; SPARKS.length < 34 && k < 400; k++) {
+  a = (a * 9301 + 49297) % 233280; const x = a / 233280 * 1000 - 500;
+  a = (a * 9301 + 49297) % 233280; const y = a / 233280 * 860 - 400;
+  if (Math.hypot(x, y) > ISLE + 50) SPARKS.push([x, y, (k * 577) % 4000]);
+}
+const SEADEFS = '<pattern id="p-wave" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M4 10q6-5 12 0t12 0M34 27q6-5 12 0t12 0" fill="none" stroke="#bfeaf7" stroke-width="1.6" stroke-linecap="round" opacity=".35"/></pattern>' +
+  '<pattern id="p-wave2" width="60" height="44" patternUnits="userSpaceOnUse"><path d="M18 20q5-4 10 0t10 0" fill="none" stroke="#9fd8ea" stroke-width="1.3" stroke-linecap="round" opacity=".25"/></pattern>';
+function sea(sand) {
+  let s = '<rect class="deco wave" style="' + sync(11000) + '" x="-700" y="-560" width="1400" height="1200" fill="url(#p-wave)"/>';
+  s += '<rect class="deco wave b" style="' + sync(17000) + '" x="-700" y="-560" width="1400" height="1200" fill="url(#p-wave2)"/>';
+  SPARKS.forEach(([x, y, o]) => { s += '<ellipse class="deco spark" style="' + sync(4000, o) + '" cx="' + x.toFixed(0) + '" cy="' + y.toFixed(0) + '" rx="3.5" ry="1.4"/>'; });
+  // shallow water round the coast, then two rings of foam breaking on the beach, half a wave apart
+  s += '<g class="deco" transform="translate(0 9)" fill="none" stroke-linejoin="round"><g stroke="rgba(110,205,225,.18)" stroke-width="64">' + sand + '</g><g stroke="rgba(130,215,232,.22)" stroke-width="40">' + sand + '</g></g>';
+  s += '<g class="deco" transform="translate(0 9)"><g class="foam" style="' + sync(3600) + '">' + sand + '</g><g class="foam" style="' + sync(3600, 1800) + '">' + sand + '</g></g>';
+  return s;
+}
+// --- Harvest effect ---
+// After a roll's dice stop, the lands that paid out glow (HARV, drawn by drawBoard) and one little card per
+// resource flies from each land to whoever got it: your hand, or that player's profile.
+let HARV = null;
+function harvestFx() {
+  const sum = G.dice[0] + G.dice[1];
+  if (sum === 7) return;
+  const hs = [];
+  G.hex.forEach((h, i) => { if (h.n === sum && !scorched(i) && !(G.deck && i === G.storm)) hs.push(i); });
+  if (!hs.length) return;
+  HARV = {h: hs, t: Date.now() + DICEMS};
+  setTimeout(() => {
+    if (!G) return;
+    drawBoard();
+    const lands = document.querySelectorAll('#board .hex');
+    let k = 0;
+    hs.forEach(i => {
+      const r = G.hex[i].t, A = D3.on ? D3.rect(i) : lands[i] && lands[i].getBoundingClientRect(), extra = fertile(i) ? 1 : 0;
+      if (!A) return;
+      HEX[i].v.forEach(v => {
+        const b = G.b[v]; if (!b) return;
+        const hand = $('hand'), mine = b.p === VIEW && hand.offsetParent;
+        const to = (mine ? hand : document.querySelector('#players .pl:nth-child(' + (b.p + 1) + ')'));
+        if (!to) return;
+        const B = to.getBoundingClientRect(), x0 = A.left + A.width / 2, y0 = A.top + A.height / 2, x1 = B.left + B.width / 2, y1 = B.top + B.height / 2;
+        for (let n = 0; n < Math.min(3, b.l + extra); n++) {
+          const c = document.createElement('div');
+          c.className = 'fly'; c.style.cssText = '--a:' + COL[r][0] + ';--b:' + COL[r][1];
+          c.innerHTML = ico(r);
+          document.body.appendChild(c);
+          const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - 80;      // arc up over the board
+          c.animate([
+            {transform: 'translate(' + x0 + 'px,' + y0 + 'px) scale(.2)', opacity: 0},
+            {transform: 'translate(' + x0 + 'px,' + (y0 - 18) + 'px) scale(1.15)', opacity: 1, offset: .2},
+            {transform: 'translate(' + mx + 'px,' + my + 'px) scale(1) rotate(' + (b.p % 2 ? 12 : -12) + 'deg)', offset: .55},
+            {transform: 'translate(' + x1 + 'px,' + y1 + 'px) scale(.55)', opacity: .9}
+          ], {duration: 1000, delay: k * 110, easing: 'ease-in-out', fill: 'both'}).onfinish = () => {
+            c.remove();
+            to.animate([{transform: 'scale(1)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 220});
+          };
+          setTimeout(() => c.remove(), 1300 + k * 110);      /* in case the finish event never comes (hidden tab) */
+          k++;
+        }
+      });
+    });
+  }, DICEMS);
+}
+// --- Port trade boat ---
+// G.ship = {n: counter, e: port edge, p: trader, give, get, k: how many given}. When n changes (on every screen,
+// never on load) a boat sails in from the open sea to the port's jetty, a crate of what was bought goes onto the
+// platform (and a card flies to the trader), a crate of what was paid goes aboard, and the boat turns and sails off.
+const SHIP = '<path d="M-27 1q-4 2-8 0M-26 5q-5 2-10 0" stroke="#e9f7ff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".7"/>' +
+  '<ellipse cx="0" cy="3" rx="21" ry="4.5" fill="rgba(0,20,40,.3)"/>' +
+  '<path d="M2-6V-36" stroke="#4a2e14" stroke-width="1.8"/><path d="M2-36l7 2.2-7 2.2Z" fill="#d94a3a"/>' +
+  '<path d="M3.5-34Q17-22 3.5-9Z" fill="#f4ecd6" stroke="#8a7a5a" stroke-width=".8"/><path d="M.5-31Q-11-21 .5-10Z" fill="#e6d9bc" stroke="#8a7a5a" stroke-width=".8"/>' +
+  '<path d="M-20-6H20L15 3.5H-15.5Z" fill="#7a4a22" stroke="#3a2210" stroke-width="1.2" stroke-linejoin="round"/>' +
+  '<path d="M-18.5-3H18.5" stroke="#c9a46a" stroke-width="1.4"/><circle cx="-11" cy=".3" r="1" fill="#3a2210"/><circle cx="-6" cy=".3" r="1" fill="#3a2210"/>';
+const crate = (r, k) => '<rect x="-6.5" y="-12" width="13" height="12" rx="1.4" fill="#c08a4a" stroke="#5a3a18" stroke-width="1"/><path d="M-6.5-12l13 12M6.5-12l-13 12" stroke="#a87436" stroke-width=".8"/>' +
+  '<circle cy="-6" r="5.2" fill="' + COL[r][0] + '" stroke="#5a3a18" stroke-width=".7"/><g transform="translate(0 -6) scale(.34)">' + cardGlyph(r) + '</g>' +
+  (k > 1 ? '<text x="7.5" y="-10" style="font:800 6px system-ui,sans-serif;fill:#fff;stroke:#111;stroke-width:1.6;paint-order:stroke">×' + k + '</text>' : '');
+const SHIPMS = 4800;
+let SEENSHIP = null;
+function shipFx() {
+  const n = G.ship ? G.ship.n : 0, fresh = SEENSHIP !== null && n !== SEENSHIP && G.ship;
+  SEENSHIP = n;
+  if (fresh) sailShip(G.ship);
+}
+function sailShip(t) {
+  if (D3.on) { D3.sail(t); return; }      // the 3D board has its own boat
+  const o = (G.ports || []).find(q => q.e === t.e), layer = $('ships');
+  if (!o || !layer) return;
+  const g = portGeo(o), NS = 'http://www.w3.org/2000/svg';
+  const at = (d, side) => [g.mx + g.nx * d + g.tx * side, g.my + g.ny * d + g.ty * side];
+  // it ties up beside the platform (not in front, where it would hide the sign), arriving from that side and leaving the other way
+  const B = at(DOCK + 14, 38), D = at(DOCK, 0), S0 = at(BERTH + 230, 190), E = at(BERTH + 240, -140), deck = -6;
+  const sIn = S0[0] <= B[0] ? 1 : -1, sOut = E[0] >= B[0] ? 1 : -1;      // the boat faces the way it's going
+  const tr = (P, s, dy) => 'translate(' + P[0].toFixed(1) + 'px,' + (P[1] + (dy || 0)).toFixed(1) + 'px)' + (s ? ' scaleX(' + s + ')' : '');
+  const arc = (P, Q) => [(P[0] + Q[0]) / 2, Math.min(P[1], Q[1]) - 16];
+  const IN = 'cubic-bezier(.2,.6,.3,1)', OUT = 'cubic-bezier(.6,0,.85,.6)';
+  const make = html => { const e = document.createElementNS(NS, 'g'); e.innerHTML = html; layer.appendChild(e); return e; };
+  const boat = make('<g class="bob">' + SHIP + '</g>'), got = make(crate(t.get, 1)), paid = make(crate(t.give, t.k));
+  const opt = {duration: SHIPMS, fill: 'both'};
+  // sail in (0-35%), wait while unloading and loading, turn round (60-66%), sail away (66-100%)
+  boat.animate([
+    {offset: 0, transform: tr(S0, sIn), easing: IN}, {offset: .35, transform: tr(B, sIn)},
+    {offset: .6, transform: tr(B, sIn), easing: 'ease-in-out'}, {offset: .66, transform: tr(B, sOut), easing: OUT}, {offset: 1, transform: tr(E, sOut)}
+  ], opt);
+  boat.animate([{opacity: 0}, {opacity: 1, offset: .08}, {opacity: 1, offset: .9}, {opacity: 0}], opt);
+  // what was bought rides in on deck, then hops onto the platform
+  got.animate([
+    {offset: 0, transform: tr(S0, 0, deck), easing: IN}, {offset: .35, transform: tr(B, 0, deck)}, {offset: .4, transform: tr(B, 0, deck), easing: 'ease-out'},
+    {offset: .46, transform: tr(arc(B, D))}, {offset: .52, transform: tr(D)}, {offset: 1, transform: tr(D)}
+  ], opt);
+  got.animate([{opacity: 0}, {opacity: 1, offset: .08}, {opacity: 1, offset: .56}, {opacity: 0, offset: .62}, {opacity: 0}], opt);
+  // what was paid appears on the platform, hops aboard and sails away
+  paid.animate([
+    {offset: 0, transform: tr(D)}, {offset: .54, transform: tr(D), easing: 'ease-out'}, {offset: .59, transform: tr(arc(D, B))},
+    {offset: .64, transform: tr(B, 0, deck)}, {offset: .66, transform: tr(B, 0, deck), easing: OUT}, {offset: 1, transform: tr(E, 0, deck)}
+  ], opt);
+  paid.animate([{opacity: 0}, {opacity: 0, offset: .5}, {opacity: 1, offset: .54}, {opacity: 1, offset: .9}, {opacity: 0}], opt);
+  // as the bought crate is opened, its card flies to the trader's hand (or their profile)
+  setTimeout(() => {
+    if (!G || !got.isConnected) return;
+    const A = got.getBoundingClientRect(), hand = $('hand'), mine = t.p === VIEW && hand.offsetParent;
+    const to = mine ? hand : document.querySelector('#players .pl:nth-child(' + (t.p + 1) + ')');
+    if (!to) return;
+    const Z = to.getBoundingClientRect(), x0 = A.left + A.width / 2, y0 = A.top + A.height / 2, x1 = Z.left + Z.width / 2, y1 = Z.top + Z.height / 2;
+    const c = document.createElement('div');
+    c.className = 'fly'; c.style.cssText = '--a:' + COL[t.get][0] + ';--b:' + COL[t.get][1];
+    c.innerHTML = ico(t.get);
+    document.body.appendChild(c);
+    c.animate([
+      {transform: 'translate(' + x0 + 'px,' + y0 + 'px) scale(.3)', opacity: 0},
+      {transform: 'translate(' + x0 + 'px,' + (y0 - 20) + 'px) scale(1.15)', opacity: 1, offset: .2},
+      {transform: 'translate(' + ((x0 + x1) / 2) + 'px,' + (Math.min(y0, y1) - 80) + 'px) scale(1)', offset: .55},
+      {transform: 'translate(' + x1 + 'px,' + y1 + 'px) scale(.55)', opacity: .9}
+    ], {duration: 1000, easing: 'ease-in-out', fill: 'both'}).onfinish = () => { c.remove(); to.animate([{transform: 'scale(1)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 220}); };
+    setTimeout(() => c.remove(), 1200);
+  }, SHIPMS * .56);
+  setTimeout(() => { boat.remove(); got.remove(); paid.remove(); }, SHIPMS + 100);
+}
+function placing() {   // what the current human is placing right now, if anything
+  if (!myTurn()) return null;
+  return G.phase === 'setup' ? G.su.step : G.phase === 'storm' ? 'storm' : G.phase === 'main' ? MODE : null;
+}
+function drawBoard() {
+  noteDrops();
+  let s = DEFS.replace('</defs>', SEADEFS + '</defs>');
+  // the island: a soft shadow on the sea, a sandy cliff, then the beach on top
+  const sand = HEX.map(h => '<polygon points="' + corners(h, 1) + '"/>').join('');
+  s += sea(sand);
+  s += '<g class="deco" transform="translate(0 20)" fill="#03111c" stroke="#03111c" stroke-width="22" stroke-linejoin="round" opacity=".55" filter="url(#f-soft)">' + sand + '</g>';
+  s += '<g class="deco" transform="translate(0 9)" fill="#a98f55" stroke="#a98f55" stroke-width="16" stroke-linejoin="round">' + sand + '</g>';
+  s += '<g class="beach">' + sand + '</g>';
+  (G.ports || []).forEach(o => { s += port(o); });
+  HEX.forEach((h, i) => {
+    const t = G.hex[i];
+    const burnt = scorched(i), rich = fertile(i);
+    // each land is a raised tile: its dark side shows below the lit top
+    s += '<polygon class="deco" transform="translate(0 5)" points="' + corners(h, TILE) + '" fill="' + COL[t.t][2] + '"/>';
+    s += '<polygon class="hex" points="' + corners(h, TILE) + '" fill="url(#g-' + t.t + ')"><title>' + LAND[t.t] + (t.n ? ': gives ' + RN[t.t] + ' on a roll of ' + t.n + (burnt ? ' (covered in lava: nothing for now)' : rich ? ' (rich soil: +1 each)' : '') : ': gives nothing') + '</title></polygon>';
+    s += '<polygon class="deco" points="' + corners(h, TILE - .06) + '" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>';
+    if (!t.n) {
+      s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + (h.y + 4).toFixed(1) + ')"><ellipse cx="0" cy="22" rx="30" ry="7" fill="rgba(0,0,0,.3)"/><g transform="scale(1.9)">' + glyph(t.t) + '</g></g>';
+      if (G.fire) for (let k = 0; k < RUMMAX; k++) s += '<circle class="deco" cx="' + (h.x + (k - (RUMMAX - 1) / 2) * 12).toFixed(1) + '" cy="' + (h.y + 34) + '" r="4" fill="' + (k < G.rum ? '#ff5a2f' : 'none') + '" stroke="#ff5a2f" stroke-width="1.5"/>';
+      return;
+    }
+    s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + h.y.toFixed(1) + ')">' + scene(t.t, i) + '</g>';
+    if (rich) s += '<text class="deco" x="' + h.x.toFixed(1) + '" y="' + (h.y + 28) + '" style="font:700 12px system-ui,sans-serif;fill:#fff;stroke:#111;stroke-width:3;paint-order:stroke;text-anchor:middle">+1</text>';
+    // the number disc sits in the exact middle of the tile
+    s += '<ellipse class="deco" cx="' + (h.x + 2).toFixed(1) + '" cy="' + (h.y + 4) + '" rx="16" ry="15" fill="rgba(0,0,0,.35)"/><circle class="deco" cx="' + h.x.toFixed(1) + '" cy="' + (h.y + 2.5) + '" r="15" fill="#8d7b4d"/>';
+    s += '<circle class="deco tok" cx="' + h.x.toFixed(1) + '" cy="' + h.y + '" r="15"/>';
+    s += '<text class="deco num' + (pips(t.n) === 5 ? ' hot' : '') + '" x="' + h.x.toFixed(1) + '" y="' + (h.y + 4) + '">' + t.n + '</text>';
+    const n = pips(t.n);
+    for (let k = 0; k < n; k++) s += '<circle class="deco" cx="' + (h.x + (k - (n - 1) / 2) * 4).toFixed(1) + '" cy="' + (h.y + 9.5) + '" r="1.2" fill="' + (n === 5 ? '#c62828' : '#5b4a2a') + '"/>';
+  });
+  if (HARV && Date.now() < HARV.t + 1600) HARV.h.forEach(i => {      // lands that just paid out glow
+    s += '<polygon class="deco hglow" style="animation-delay:' + (HARV.t - Date.now()) + 'ms" points="' + corners(HEX[i], TILE) + '"/>';
+  });
+  if (G.fire && G.lava && G.lava.length) {     // lava: darkened lands with a glowing stream from the volcano
+    const V = HEX[volcano()], path = [V].concat(G.lava.map(i => HEX[i])).map(h => h.x.toFixed(1) + ',' + h.y.toFixed(1)).join(' ');
+    G.lava.forEach(i => { s += '<polygon class="deco" points="' + corners(HEX[i], TILE) + '" fill="rgba(25,10,6,.62)"/>'; });
+    s += '<polyline class="deco" points="' + path + '" fill="none" stroke="#7a1d0a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/><polyline class="deco" points="' + path + '" fill="none" stroke="#ff7a2f" stroke-width="4" stroke-linecap="round" stroke-dasharray="14 9" opacity=".95"/>';
+  }
+  if (G.deck && HEX[G.storm]) {       // the bandit: a hooded figure standing on the land he blocks
+    const h = HEX[G.storm];
+    s += '<polygon class="deco" points="' + corners(h, TILE) + '" fill="rgba(12,18,34,.45)"/>';
+    s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + (h.y - 4).toFixed(1) + ')">' + drop('storm', G.storm, BANDIT) + '</g>';
+  }
+  for (const e in G.r) s += '<g class="deco">' + drop('r' + e, G.r[e], '<line transform="translate(1.5 3)" ' + seg(e, .16) + ' stroke="rgba(0,0,0,.4)" stroke-width="10" stroke-linecap="round"/><line ' + seg(e, .16) + ' stroke="#111" stroke-width="10" stroke-linecap="round"/><line ' + seg(e, .16) + ' stroke="' + PCOL[G.r[e]] + '" stroke-width="5.5" stroke-linecap="round"/><line transform="translate(-.8 -1.2)" ' + seg(e, .2) + ' stroke="rgba(255,255,255,.45)" stroke-width="1.4" stroke-linecap="round"/>') + '</g>';
+  for (const v in G.b) s += piece(v, G.b[v]);
+  const what = placing(), c = PCOL[G.turn];
+  if (what === 'road') spots(G.turn, 'road').forEach(e => {
+    s += '<line class="spot deco" ' + seg(e, .2) + ' stroke="#fff" stroke-width="7" stroke-linecap="round"/><line class="hit" data-e="' + e + '" ' + seg(e, .1) + ' stroke-width="24" stroke-linecap="round"/>';
+  });
+  if (what === 'town' || what === 'fort' || what === 'wall') spots(G.turn, what).forEach(v => {
+    const x = VERT[v].x.toFixed(1), y = VERT[v].y.toFixed(1), ring = what !== 'town';
+    s += '<circle class="spot deco" cx="' + x + '" cy="' + y + '" r="' + (ring ? 19 : 9) + '" fill="' + (ring ? 'none' : '#fff') + '" stroke="' + (ring ? '#fff' : c) + '" stroke-width="3"/><circle class="hit" data-v="' + v + '" cx="' + x + '" cy="' + y + '" r="19"/>';
+  });
+  if (what === 'storm') HEX.forEach((h, i) => {
+    if (i !== G.storm) s += '<polygon class="spot hit" data-h="' + i + '" points="' + corners(h, .9) + '" style="fill:rgba(255,255,255,.1);stroke:#fff;stroke-width:2;stroke-dasharray:6 5"/>';
+  });
+  $('board').innerHTML = s;
+  if (D3.on) D3.update();
+}
+// Award badges shown on a player's profile
+const AWICON = {
+  route: '<svg viewBox="-12 -12 24 24"><title>Longest route: +2 points</title><path d="M-8 7L-3-1L3 3L8-7" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8 7L-3-1L3 3L8-7" fill="none" stroke="#ffcf5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-8" cy="7" r="2" fill="#fff"/><circle cx="8" cy="-7" r="2" fill="#fff"/></svg>',
+  army: '<svg viewBox="-12 -12 24 24"><title>Most Guards played: +2 points</title><path d="M0-9l8 3v5c0 5-3.5 8-8 10c-4.500-2-8-5-8-10v-5z" fill="#ffcf5a" stroke="#111" stroke-width="1.2"/><path d="M0-9l8 3v5c0 5-3.500 8-8 10z" fill="rgba(0,0,0,.25)"/><path d="M0-5v10M-4-1h8" stroke="#111" stroke-width="2" stroke-linecap="round"/></svg>'
+};
+// --- Build buttons: a picture of the piece, and a pop-up above the pointer with the cards it costs ---
+const BNAME = {road: 'Road', town: 'Town', fort: 'Fort', wall: 'Wall', card: 'Progress card'};
+const BICON = {
+  road: '<path d="M-8 7L8-7" stroke="#111" stroke-width="8" stroke-linecap="round"/><path d="M-8 7L8-7" stroke="var(--pc)" stroke-width="4.5" stroke-linecap="round"/>',
+  town: '<polygon points="-8,9 -8,-1 0,-9 8,-1 8,9" fill="var(--pc)" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/><polygon points="0,-9 8,-1 8,9 0,9" fill="rgba(0,0,0,.28)"/><rect x="-5" y="3" width="3.5" height="6" fill="rgba(0,0,0,.55)"/>',
+  fort: '<polygon points="-10,9 -10,-9 -6,-9 -6,-5 -2,-5 -2,-9 2,-9 2,-5 6,-5 6,-9 10,-9 10,9" fill="var(--pc)" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/><polygon points="2,-9 2,-5 6,-5 6,-9 10,-9 10,9 1,9 1,-5" fill="rgba(0,0,0,.28)"/><path d="M-3 9v-6a3 3 0 0 1 6 0v6z" fill="rgba(0,0,0,.6)"/>',
+  wall: '<circle r="8" fill="none" stroke="#111" stroke-width="6"/><circle r="8" fill="none" stroke="#d8cfb8" stroke-width="3.5" stroke-dasharray="5 2"/>',
+  card: '<rect x="-7" y="-10" width="14" height="20" rx="2.5" fill="#f7f1df" stroke="#111" stroke-width="1.6" transform="rotate(-8)"/><polygon points="0,-5 1.6,-1.4 5.4,-1.2 2.4,1.2 3.4,5 0,2.8 -3.4,5 -2.4,1.2 -5.4,-1.2 -1.6,-1.4" fill="#d9a21b" transform="rotate(-8)"/>'
+};
+const costText = w => Object.keys(COST[w]).map(r => (COST[w][r] > 1 ? COST[w][r] + ' ' : '') + RN[r]).join(' + ');
+const BSHORT = {card: 'Card'};      // shorter names for the narrow buttons
+// the cost as one little coloured chip per card (the full list shows in the hover pop-up and the tooltip)
+const costChips = w => Object.keys(COST[w]).map(r => ('<i style="--a:' + COL[r][0] + '"></i>').repeat(COST[w][r])).join('');
+function buildLabel(w, extra) {
+  return '<svg class="bi" viewBox="-12 -12 24 24" aria-hidden="true">' + BICON[w] + '</svg><span>' + (BSHORT[w] || BNAME[w]) + '<small class="cost" title="' + costText(w) + '">' + costChips(w) + '</small>' + (extra ? '<small>' + extra + '</small>' : '') + '</span>';
+}
+let TIPW = null;
+function showTip(w, x, y) {
+  const T = $('tip'), R = (G && G.pl[VIEW] || {res: {}}).res;
+  if (TIPW !== w) {
+    let h = '<b>' + BNAME[w] + '</b> needs:<div>';
+    for (const r in COST[w]) for (let k = 1; k <= COST[w][r]; k++) h += '<span class="tc ' + ((R[r] || 0) >= k ? 'have' : 'miss') + '" style="--a:' + COL[r][0] + ';--b:' + COL[r][1] + '">' + ico(r) + RN[r] + '</span>';
+    T.innerHTML = h + '</div>'; T.hidden = false; TIPW = w;
+    // lift the cards in the hand that would pay for it
+    document.querySelectorAll('#hand .rc').forEach(c => c.classList.toggle('need', +c.dataset.k <= (COST[w][c.dataset.r] || 0)));
+  }
+  T.style.left = Math.max(4, Math.min(innerWidth - T.offsetWidth - 4, x - T.offsetWidth / 2)) + 'px';
+  T.style.top = Math.max(4, y - T.offsetHeight - 16) + 'px';
+}
+function hideTip() {
+  if (TIPW === null) return;
+  TIPW = null; $('tip').hidden = true;
+  document.querySelectorAll('#hand .rc.need').forEach(c => c.classList.remove('need'));
+}
+// The hand: every resource is its own card, grouped by kind and fanned like cards held in a hand.
+function handHTML(R) {
+  if (!R) return '';
+  const list = []; RES.forEach(r => { for (let i = 0; i < R[r]; i++) list.push(r); });
+  if (!list.length) return '<div class="none">No resource cards.</div>';
+  const W = $('hand').clientWidth || 320, n = list.length, step = Math.min(34, (W - 62) / Math.max(1, n - 1));
+  const x0 = (W - (46 + step * (n - 1))) / 2, spread = Math.min(30, n * 4);
+  let kth = 0;       /* which card of its kind this is (1 = first) */
+  return list.map((r, i) => {
+    const t = n > 1 ? i / (n - 1) - .5 : 0, first = i === 0 || list[i - 1] !== r;
+    kth = first ? 1 : kth + 1;
+    return '<div class="rc" data-r="' + r + '" data-k="' + kth + '" style="left:' + (x0 + i * step).toFixed(1) + 'px;--a:' + COL[r][0] + ';--b:' + COL[r][1] + ';transform:rotate(' + (t * spread).toFixed(1) + 'deg)">' + ico(r) + RN[r] + '</div>';
+  }).join('');
+}
+// ---------- Dice ----------
+// Two dice drawn with dots. G.rolls counts rolls; when it changes the dice tumble for DICEMS, then show the result.
+const DOTS = [[], [4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]], DICEMS = 2600;
+let SEENROLL = null, DICET = null;
+// --- Dice thrown onto the board ---
+// Each die is a CSS 3D cube (#roll .d3: shadow, .lift for the bounce, .cube for the spin). It flies in from the
+// left, drops, bounces twice and tumbles, and the spin ends with the rolled face towards you (FACE = the cube
+// turn that brings face n to the front). The view leans the die back (VIEWX) so you also see its near side.
+const FACE = {1: [0, 0], 2: [90, 0], 3: [0, -90], 4: [0, 90], 5: [-90, 0], 6: [0, 180]}, VIEWX = 24, DICEHOLD = 1500;
+let ROLLT = null;
+function throwDice(d) {
+  const box = $('roll'), H = $('view').clientHeight * .6 + 60;
+  clearTimeout(ROLLT); box.getAnimations().forEach(a => a.cancel()); box.innerHTML = '';
+  const dots = n => { let s = ''; for (let k = 0; k < 9; k++) s += '<i' + (DOTS[n].includes(k) ? ' class="on"' : '') + '></i>'; return s; };
+  const turn = (z, x, y) => 'rotateX(' + VIEWX + 'deg) rotateZ(' + z + 'deg) rotateX(' + x + 'deg) rotateY(' + y + 'deg)';
+  const spin = () => (2 + rnd(2)) * 360 * (Math.random() < .5 ? -1 : 1);      // 2-3 full turns each way, so the longer roll keeps tumbling
+  d.forEach((n, j) => {
+    const w = document.createElement('div');
+    w.className = 'd3' + (j ? ' red' : '');
+    w.innerHTML = '<div class="sh"></div><div class="lift"><div class="cube">' + [1, 2, 3, 4, 5, 6].map(k => '<div class="f f' + k + '">' + dots(k) + '</div>').join('') + '</div></div>';
+    box.appendChild(w);
+    const s = w.offsetWidth, fx = (j ? .8 : -.8) * s + (Math.random() - .5) * s * .4, fy = (Math.random() - .5) * s * .6, sx = fx - (2.4 + Math.random()) * s;
+    const [ax, ay] = FACE[n], end = turn(Math.round(Math.random() * 36 - 18), ax + spin(), ay + spin());
+    w.animate([{transform: 'translate(' + sx + 'px,' + fy + 'px)'}, {transform: 'translate(' + fx + 'px,' + fy + 'px)'}], {duration: DICEMS * .85, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both'});
+    w.querySelector('.lift').animate([
+      {transform: 'translateY(' + (-H) + 'px)', easing: 'ease-in'},
+      {transform: 'translateY(0)', offset: .32, easing: 'ease-out'},
+      {transform: 'translateY(' + (-.55 * s) + 'px)', offset: .45, easing: 'ease-in'},
+      {transform: 'translateY(0)', offset: .58, easing: 'ease-out'},
+      {transform: 'translateY(' + (-.15 * s) + 'px)', offset: .67, easing: 'ease-in'},
+      {transform: 'translateY(0)', offset: .75}, {transform: 'translateY(0)'}
+    ], {duration: DICEMS, fill: 'both'});
+    w.querySelector('.cube').animate([{transform: turn(Math.round(Math.random() * 180 - 90), 0, 0)}, {transform: end, offset: .85}, {transform: end}], {duration: DICEMS, easing: 'cubic-bezier(.25,.6,.35,1)', fill: 'both'});
+    w.querySelector('.sh').animate([{opacity: 0, transform: 'scale(.3)'}, {opacity: 1, transform: 'scale(1)', offset: .32}, {opacity: .6, transform: 'scale(.75)', offset: .45}, {opacity: 1, transform: 'scale(1)', offset: .58}, {opacity: 1, transform: 'scale(1)'}], {duration: DICEMS, fill: 'both'});
+  });
+  // they lie on the board a moment showing the roll, then fade away
+  ROLLT = setTimeout(() => {
+    box.animate([{opacity: 1}, {opacity: 0}], {duration: 350, fill: 'forwards'});
+    ROLLT = setTimeout(() => { box.innerHTML = ''; box.getAnimations().forEach(a => a.cancel()); }, 360);
+  }, DICEMS + DICEHOLD);
+}
+function dieHTML(n, cls) { let s = ''; for (let k = 0; k < 9; k++) s += '<i' + (DOTS[n].includes(k) ? ' class="on"' : '') + '></i>'; return '<div class="die' + cls + '">' + s + '</div>'; }
+function drawDice(a, b, rolling) { $('dice').innerHTML = dieHTML(a, rolling ? ' roll' : '') + dieHTML(b, ' red' + (rolling ? ' roll' : '')); }
+function showDice() {
+  const n = G.rolls || 0, fresh = SEENROLL !== null && n !== SEENROLL && n > 0 && G.dice;
+  SEENROLL = n;
+  if (fresh) {
+    const end = Date.now() + DICEMS;
+    clearInterval(DICET);
+    DICET = setInterval(() => {
+      if (Date.now() >= end || !G || !G.dice) { clearInterval(DICET); DICET = null; if (G && G.dice) drawDice(G.dice[0], G.dice[1], false); return; }
+      drawDice(1 + rnd(6), 1 + rnd(6), true);
+    }, 90);
+    drawDice(1 + rnd(6), 1 + rnd(6), true);
+    throwDice(G.dice);
+    harvestFx();
+  } else if (!DICET) {
+    if (G.phase === 'setup') $('dice').innerHTML = '';
+    else { const d = G.dice || [3, 4]; drawDice(d[0], d[1], false); }
+  }
+  const can = myTurn() && G.phase === 'roll';
+  $('dice').classList.toggle('ready', can); $('dice').disabled = !can;
+}
+function message() {
+  const p = G.turn, P = G.pl[p], n = esc(P.name);
+  if (G.phase === 'over') return '<b>' + esc(G.pl[G.win].name) + '</b> won the game!';
+  if (G.phase === 'discard') return 'A 7! Waiting for ' + Object.keys(G.disc).map(i => '<b>' + esc(G.pl[i].name) + '</b>').join(' and ') + ' to discard…';
+  if (G.offer) return offerFix(G.offer).yes.length && mySeat(G.offer.from) ? '<b>' + n + '</b>: tap ✓ to trade with someone who accepted, or ✗ to turn them down.' : '<b>' + n + '</b> offers ' + fmt(G.offer.give) + ' for ' + fmt(G.offer.get) + '. Waiting for answers…';
+  if (!myTurn()) return P.bot ? n + ' is thinking…' : 'Waiting for <b>' + n + '</b>…';
+  if (G.phase === 'setup') return G.su.step === 'town'
+    ? '<b>' + n + '</b>: tap a glowing corner to place your ' + (G.su.k < G.pl.length ? 'first' : 'second') + ' town.'
+    : '<b>' + n + '</b>: now tap a glowing line to add a road.';
+  if (G.phase === 'roll') return '<b>' + n + '</b>: tap the dice on the map to roll.';
+  if (G.phase === 'tide') return '<b>' + n + '</b>: pick a free resource.';
+  if (G.phase === 'storm') return '<b>' + n + '</b>: tap a land to send the bandit there. It gives nothing while the bandit is on it.';
+  if (MODE === 'road' && G.free > 0) return 'Free road: tap a glowing line (' + G.free + ' left).';
+  if (MODE) return 'Tap a glowing ' + (MODE === 'road' ? 'line' : MODE === 'fort' ? 'town' : MODE === 'wall' ? 'town or fort' : 'corner') + ' to build. Tap the button again to cancel.';
+  return '<b>' + n + '</b>: build, trade, or end your turn.';
+}
+function render() {
+  if (!G) return;
+  const p = G.turn, human = myTurn();
+  if (NET.role) VIEW = NET.seat; else if (human) VIEW = p;
+  drawBoard();
+  $('netinfo').hidden = !NET.role; $('netinfo').textContent = NET.role ? 'Room ' + NET.code : '';
+  $('players').innerHTML = G.pl.map((P, i) => '<div class="pl' + (i === p && G.phase !== 'over' ? ' cur' : '') + '" style="--c:' + PCOL[i] + '"><div class="av">' + esc(P.name.charAt(0).toUpperCase()) + '</div><div class="pi"><b>' + esc(P.name) + (NET.role && i === NET.seat ? ' (you)' : P.gone ? ' (away)' : '') + '</b><span><em>' + (G.phase === 'over' || i === VIEW ? score(i) : pubScore(i)) + ' pts</em></span><span>' + cards(i) + (G.deck ? ' res · ' + P.cards.length + ' cards' : ' cards') + '</span><span>Route ' + roadLen(i) + (G.deck ? ' · Guards ' + callers(i) : '') + '</span></div><div class="aw">' + (G.lr === i ? AWICON.route : '') + (G.la === i ? AWICON.army : '') + '</div></div>').join('');
+  showDice();
+  shipFx();
+  const H = (G.pl[VIEW] || {res: {}}).res;
+  $('hand').innerHTML = handHTML(G.pl[VIEW] ? H : null);
+  const main = human && G.phase === 'main' && !G.offer;     /* while an offer is open, only the offer panel works */
+  if (G.offer) MODE = null;
+  $('b-end').disabled = !main;
+  $('b-trade').disabled = !(main && cards(p) > 0);
+  fillOffers();
+  ['road', 'town', 'fort', 'wall'].forEach(w => {
+    const b = $('b-' + w);
+    b.disabled = !(main && (canPay(p, w) || (w === 'road' && G.free > 0)) && spots(p, w).length);
+    b.classList.toggle('on', main && MODE === w);
+  });
+  const deck = !!G.deck;
+  $('b-buy').parentNode.hidden = $('mycards').hidden = !deck;
+  $('actions').style.setProperty('--pc', PCOL[G.pl[VIEW] ? VIEW : 0]);
+  TIPW = TIPW === null ? null : '';       /* the hand may have changed: rebuild an open pop-up on the next move */
+  if (deck) {
+    $('b-buy').disabled = !(main && canPay(p, 'card') && G.deck.length);
+    $('b-buy').lastChild.lastChild.textContent = G.deck.length + ' left';
+    const mine = (G.pl[VIEW] || {cards: []}).cards;
+    $('mycards').innerHTML = !mine.length ? 'No progress cards yet.' : Object.keys(CARDS).filter(c => mine.some(x => x.c === c)).map(c => {
+      const all = mine.filter(x => x.c === c), ready = all.some(x => x.n < G.tn);
+      if (c === 'p') return '<button class="pt" disabled title="' + CARDS[c].d + '">' + CARDS[c].n + (all.length > 1 ? ' ×' + all.length : '') + ' +' + all.length + '</button>';
+      return '<button data-c="' + c + '" title="' + CARDS[c].d + '"' + (main && VIEW === p && !G.played && ready ? '' : ' disabled') + '>' + CARDS[c].n + (all.length > 1 ? ' ×' + all.length : '') + '</button>';
+    }).join('');
+  }
+  $('b-wall').parentNode.hidden = $('rumble').hidden = !G.fire;
+  if (G.fire) $('rumble').innerHTML = 'Volcano ' + [0, 1, 2].map(k => '<i' + (k < G.rum ? ' class="on"' : '') + '></i>').join('') + '<span>rumbles on doubles</span>';
+  // the log over the map; its last line (gold) says what to do now
+  const L = $('log'); L.innerHTML = G.log.map(t => '<div>' + esc(t) + '</div>').join('') + '<div class="now">' + message() + '</div>'; L.scrollTop = L.scrollHeight;
+  const tide = human && G.phase === 'tide';
+  if (PICK && !main) PICK = null;
+  $('m-pick').hidden = !(tide || PICK);
+  $('p-title').textContent = PICK ? PICK.title : 'Low tide!';
+  $('p-text').textContent = PICK ? PICK.text : 'A 7 means nobody harvests, but the tide leaves something on the beach. Pick one free resource.';
+  $('p-cancel').hidden = !PICK;
+  const dw = discardWho();
+  $('m-disc').hidden = dw < 0;
+  if (dw >= 0) fillDisc(dw); else DWHO = -1;
+  if (G.phase !== 'main' || !human) $('m-trade').hidden = true;
+  if (!$('m-trade').hidden) fillTrade();
+  if (G.phase === 'over' && !render.won) {
+    render.won = true;
+    $('w-title').textContent = G.pl[G.win].name + ' won!';
+    $('w-text').textContent = 'Final score: ' + G.pl.map((P, i) => P.name + ' ' + score(i)).join(', ') + '.';
+    $('m-win').hidden = false;
+  }
+  if (G.phase !== 'over') { render.won = false; $('m-win').hidden = true; }
+  clearTimeout(BOTT); BOTT = null;
+  if (G.phase !== 'over' && G.pl[p].bot && NET.role !== 'guest') BOTT = setTimeout(botStep, 700);
+  if (NET.role === 'host') broadcast();
+}
+
+// ---------- Saving ----------
+function save() { if (NET.role === 'guest') return; try { localStorage.setItem(SAVEKEY, JSON.stringify(G)); } catch (e) {} }
+function load() {
+  try {
+    const g = JSON.parse(localStorage.getItem(SAVEKEY));
+    if (!g || g.ver !== 1 || !Array.isArray(g.hex) || g.hex.length !== HEX.length || !Array.isArray(g.pl)) return false;
+    // older saves: Fruit became Grain, Fish became Wool (2026-11-17), and there were no ports
+    const OLD = {fruit: 'grain', fish: 'wool'};
+    const fix = o => { for (const k in OLD) if (o && k in o) { o[OLD[k]] = (o[OLD[k]] || 0) + o[k]; delete o[k]; } };
+    g.hex.forEach(h => { if (OLD[h.t]) h.t = OLD[h.t]; });
+    g.pl.forEach(P => fix(P.res));
+    (g.ports || []).forEach(o => { if (OLD[o.r]) o.r = OLD[o.r]; });
+    if (g.offer) { fix(g.offer.give); fix(g.offer.get); }
+    G = g; if (!G.ports) G.ports = makePorts();
+    VIEW = Math.max(0, G.pl.findIndex(p => !p.bot)); return true;
+  } catch (e) { return false; }
+}
+
+// ---------- Windows and buttons ----------
+const RULES = "<b>Town</b> = 1 point. <b>Fort</b> (upgrades a town) = 2 points. First to <b>10 points</b> wins. Towns can't sit right next to each other. <b>Trade:</b> 4 for 1 with the bank; build on a <b>port</b> for 3 for 1, or 2 for 1 for the resource on its sign.";
+const FIRERULES = '<b>Fire Mountain:</b> every doubles roll makes the volcano rumble. On the third it erupts and lava runs in a straight line to the sea. Lava lands give nothing until the next eruption, and a fort touching them falls back to a town unless it has a <b>wall</b>. Lands beside the volcano give <b>+1</b>.';
+const CARDRULES = 'A <b>7</b> moves the <b>bandit</b>: anyone holding more than 7 resources discards half, then the roller puts the bandit on a land, which gives nothing while he is there. <b>Progress cards</b>: play one per turn, but not on the turn you buy it.';
+// Picking a resource for a card (PICK = {title, text, cb}); the low-tide pick uses the same window
+let PICK = null;
+function openPick(title, text, cb) { PICK = {title, text, cb}; render(); }
+// Discarding after a 7: whose discard this screen is choosing (DWHO) and what they picked so far (DSEL)
+let DWHO = -1, DSEL = {};
+function discardWho() {
+  if (!G || G.phase !== 'discard' || !G.disc) return -1;
+  if (NET.role) return G.disc[NET.seat] ? NET.seat : -1;
+  const k = Object.keys(G.disc)[0];
+  return k == null ? -1 : +k;
+}
+function fillDisc(p) {
+  if (DWHO !== p) { DWHO = p; DSEL = {}; }
+  const need = G.disc[p], R = G.pl[p].res, got = RES.reduce((s, r) => s + (DSEL[r] || 0), 0);
+  $('d-title').textContent = G.pl[p].name + ': discard ' + need;
+  $('d-text').textContent = 'A 7 was rolled and this hand has more than ' + HANDMAX + ' resources, so half must go. Tap what to throw away (' + got + ' of ' + need + ' picked).';
+  $('d-res').innerHTML = RES.map(r => '<button data-r="' + r + '"' + (R[r] - (DSEL[r] || 0) < 1 || got >= need ? ' disabled' : '') + '>' + ico(r) + RN[r] + ' ' + (R[r] - (DSEL[r] || 0)) + (DSEL[r] ? '<br>−' + DSEL[r] : '') + '</button>').join('');
+  $('d-ok').disabled = got !== need;
+}
+const MODEHINT = ['A 7 moves the bandit, and progress cards bring surprises.', 'Lands beside the volcano give extra, but it erupts now and then. Lava ruins land and knocks down forts without walls.'];
+let FIRE = false;     // mode picked for the next game
+function fillMode(id, canPick) {
+  const el = $(id);
+  el.innerHTML = '<span style="flex:1">Mode</span>' + ['Classic', 'Fire Mountain'].map((n, i) => '<button data-f="' + i + '"' + (!!i === FIRE ? ' class="on"' : '') + (canPick ? '' : ' disabled') + '>' + n + '</button>').join('');
+  el.nextElementSibling.textContent = MODEHINT[+FIRE];
+}
+let SCOUNT = 3;
+const SCFG = DEFNAMES.map((n, i) => ({name: n, bot: i > 0}));
+function fillSetup() {
+  $('s-count').innerHTML = '<span style="flex:1">Players</span>' + [2, 3, 4].map(n => '<button data-n="' + n + '"' + (n === SCOUNT ? ' class="on"' : '') + '>' + n + '</button>').join('');
+  $('s-rows').innerHTML = SCFG.slice(0, SCOUNT).map((c, i) => '<div class="row"><i style="background:' + PCOL[i] + '"></i><input data-i="' + i + '" maxlength="12" value="' + esc(c.name) + '" aria-label="Player ' + (i + 1) + ' name"><button data-b="' + i + '">' + (c.bot ? 'Computer' : 'Human') + '</button></div>').join('');
+  $('s-cancel').hidden = !G;
+  fillMode('s-mode', true);
+}
+function openSetup() { fillSetup(); $('m-win').hidden = true; $('m-setup').hidden = false; }
+function fillTrade() {
+  const R = G.pl[G.turn].res;
+  const p = G.turn;
+  if (TGIVE && R[TGIVE] < rate(p, TGIVE)) TGIVE = null;
+  $('t-give').innerHTML = RES.map(r => '<button data-g="' + r + '"' + (R[r] < rate(p, r) ? ' disabled' : '') + (r === TGIVE ? ' class="on"' : '') + '>' + ico(r) + RN[r] + ' (' + R[r] + ')<br><b>' + rate(p, r) + ' for 1</b></button>').join('');
+  $('t-get').innerHTML = RES.map(r => '<button data-t="' + r + '"' + (!TGIVE || r === TGIVE ? ' disabled' : '') + '>' + ico(r) + RN[r] + '</button>').join('');
+  // offer to players: tap a resource to add one to that side
+  RES.forEach(r => { if ((OG[r] || 0) > R[r]) OG[r] = R[r]; });
+  const tag = n => n ? '<br><b>×' + n + '</b>' : '';
+  $('o-give').innerHTML = RES.map(r => '<button data-r="' + r + '"' + (R[r] - (OG[r] || 0) < 1 || OW[r] ? ' disabled' : '') + (OG[r] ? ' class="on"' : '') + '>' + ico(r) + RN[r] + tag(OG[r]) + '</button>').join('');
+  $('o-want').innerHTML = RES.map(r => '<button data-r="' + r + '"' + (OG[r] ? ' disabled' : '') + (OW[r] ? ' class="on"' : '') + '>' + ico(r) + RN[r] + tag(OW[r]) + '</button>').join('');
+  $('o-send').disabled = !(cleanRes(OG) && cleanRes(OW));
+}
+// Offer being built in the trade window: what I give (OG) and what I want (OW)
+let OG = {}, OW = {};
+// The trade offer panel (#offers). Can this screen act for seat p? Wifi: only your own seat. Same screen: any human.
+const mySeat = p => NET.role ? NET.seat === p : !!G.pl[p] && !G.pl[p].bot;
+const cardsRow = res => RES.filter(r => res[r]).map(r => '<span class="oc" style="--a:' + COL[r][0] + ';--b:' + COL[r][1] + '" title="' + res[r] + ' ' + RN[r] + '">' + ico(r) + '<b>' + res[r] + '</b></span>').join('');
+function fillOffers() {
+  const box = $('offers'), o = G.offer && G.phase === 'main' ? offerFix(G.offer) : null;
+  box.hidden = !o;
+  if (!o) return;
+  const boss = mySeat(o.from);       /* this screen belongs to the player who made the offer */
+  let h = '<div class="oh"><i style="background:' + PCOL[o.from] + '"></i><b>' + esc(G.pl[o.from].name) + '</b> offers</div>';
+  h += '<div class="ot"><div>' + cardsRow(o.give) + '</div><span>for</span><div>' + cardsRow(o.get) + '</div></div>';
+  G.pl.forEach((P, i) => {
+    if (i === o.from) return;
+    const st = offerState(o, i);
+    let right = '<em class="s-' + (st || 'wait') + '">' + (st === 'yes' ? '✓ Accepted' : st === 'no' ? '✗ Declined' : st === 'x' ? 'Turned down' : 'Thinking…') + '</em>';
+    if (st === 'yes' && boss) right = '<em class="s-yes">Accepted</em><button class="ok" data-ok="' + i + '" title="Trade with ' + esc(P.name) + '"' + (has(i, o.get) ? '' : ' disabled') + '>✓</button><button class="no" data-x="' + i + '" title="Turn ' + esc(P.name) + ' down">✗</button>';
+    else if (!st && mySeat(i)) right = '<em class="s-wait q">Accept?</em><button class="ok" data-yes="' + i + '" title="Accept"' + (has(i, o.get) ? '' : ' disabled') + '>✓</button><button class="no" data-no="' + i + '" title="Decline">✗</button>';
+    h += '<div class="or"><i style="background:' + PCOL[i] + '"></i><span>' + esc(P.name) + '</span>' + right + '</div>';
+  });
+  if (boss) h += '<button class="ocancel">Take it back</button>';
+  box.innerHTML = h;
+}
+
+$('board').addEventListener('click', e => {
+  const t = e.target.closest('.hit'), what = placing();
+  if (!t || !what) return;
+  if (t.dataset.h != null) go({t: 'storm', h: +t.dataset.h});
+  else if (t.dataset.e != null) go({t: 'road', e: +t.dataset.e});
+  else go({t: what, v: +t.dataset.v});
+});
+$('dice').onclick = () => { if (myTurn() && G.phase === 'roll') go({t: 'roll'}); };
+$('b-end').onclick = () => go({t: 'end'});
+['road', 'town', 'fort', 'wall'].forEach(w => { $('b-' + w).onclick = () => { MODE = MODE === w ? null : w; render(); }; });
+$('b-trade').onclick = () => { MODE = null; TGIVE = null; OG = {}; OW = {}; $('m-trade').hidden = false; render(); };
+$('t-close').onclick = () => { $('m-trade').hidden = true; };
+['road', 'town', 'fort', 'wall'].forEach(w => { $('b-' + w).innerHTML = buildLabel(w); });
+$('b-buy').innerHTML = buildLabel('card', ' ');
+$('b-trade').innerHTML = '<svg class="bi" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M-8-4h13M2-8l4 4-4 4M8 4H-5M-2 0l-4 4 4 4" fill="none" stroke="#111" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8-4h13M2-8l4 4-4 4M8 4H-5M-2 0l-4 4 4 4" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Trade</span>';
+$('actions').addEventListener('mousemove', e => { const b = e.target.closest('[data-cost]'); if (b) showTip(b.dataset.cost, e.clientX, e.clientY); else hideTip(); });
+$('actions').addEventListener('mouseleave', hideTip);
+$('o-give').onclick = e => { const b = e.target.closest('button'); if (b) { OG[b.dataset.r] = (OG[b.dataset.r] || 0) + 1; fillTrade(); } };
+$('o-want').onclick = e => { const b = e.target.closest('button'); if (b) { OW[b.dataset.r] = (OW[b.dataset.r] || 0) + 1; fillTrade(); } };
+$('o-clear').onclick = () => { OG = {}; OW = {}; fillTrade(); };
+$('o-send').onclick = () => { const a = {t: 'offer', give: OG, get: OW}; OG = {}; OW = {}; $('m-trade').hidden = true; go(a); };
+$('offers').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.yes != null) go({t: 'accept', p: +d.yes});
+  else if (d.no != null) go({t: 'decline', p: +d.no});
+  else if (d.ok != null) go({t: 'confirm', p: +d.ok});
+  else if (d.x != null) go({t: 'reject', p: +d.x});
+  else if (b.classList.contains('ocancel')) go({t: 'cancel'});
+};
+$('log').onclick = () => { const L = $('log'); L.classList.toggle('open'); L.scrollTop = L.scrollHeight; };
+$('t-give').onclick = e => { const b = e.target.closest('button'); if (b) { TGIVE = b.dataset.g; fillTrade(); } };
+$('t-get').onclick = e => { const b = e.target.closest('button'); if (b && TGIVE) go({t: 'trade', give: TGIVE, get: b.dataset.t}); };
+$('p-res').innerHTML = RES.map(r => '<button data-r="' + r + '">' + ico(r) + RN[r] + '</button>').join('');
+$('p-res').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (PICK) { const cb = PICK.cb; PICK = null; render(); cb(b.dataset.r); }
+  else go({t: 'pick', r: b.dataset.r});
+};
+$('p-cancel').onclick = () => { PICK = null; render(); };
+$('d-res').onclick = e => { const b = e.target.closest('button'); if (b && DWHO >= 0) { DSEL[b.dataset.r] = (DSEL[b.dataset.r] || 0) + 1; fillDisc(DWHO); } };
+$('d-reset').onclick = () => { DSEL = {}; if (DWHO >= 0) fillDisc(DWHO); };
+$('d-ok').onclick = () => { const a = {t: 'discard', p: DWHO, res: DSEL}; DSEL = {}; DWHO = -1; go(a); };
+$('b-buy').onclick = () => go({t: 'buy'});
+$('mycards').onclick = e => {
+  const b = e.target.closest('button[data-c]'); if (!b || b.disabled) return;
+  const c = b.dataset.c;
+  if (c === 'k') go({t: 'card', c});
+  if (c === 'r' && go({t: 'card', c})) { MODE = 'road'; render(); }
+  if (c === 'h') openPick('Bounty', 'Pick your first resource.', r1 => openPick('Bounty', 'Now pick your second resource.', r2 => go({t: 'card', c, r1, r2})));
+  if (c === 'm') openPick('Tribute', 'Pick a resource. Every other player gives you all they have of it.', r => go({t: 'card', c, r}));
+};
+$('newbtn').onclick = newClick;
+$('w-new').onclick = newClick;
+$('w-look').onclick = () => { $('m-win').hidden = true; };
+$('s-cancel').onclick = () => { $('m-setup').hidden = true; };
+$('s-count').onclick = e => { const b = e.target.closest('button'); if (b) { SCOUNT = +b.dataset.n; fillSetup(); } };
+$('s-rows').addEventListener('input', e => { if (e.target.dataset.i != null) SCFG[+e.target.dataset.i].name = e.target.value; });
+$('s-rows').onclick = e => { const b = e.target.closest('button'); if (b) { const c = SCFG[+b.dataset.b]; c.bot = !c.bot; fillSetup(); } };
+$('s-go').onclick = () => {
+  const cfg = SCFG.slice(0, SCOUNT).map((c, i) => ({name: c.name.trim() || DEFNAMES[i], bot: c.bot}));
+  newGame(cfg, FIRE); $('m-setup').hidden = true; save(); render();
+};
+$('s-mode').onclick = e => { const b = e.target.closest('button'); if (b) { FIRE = b.dataset.f === '1'; fillSetup(); } };
+$('l-mode').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { FIRE = b.dataset.f === '1'; sendLobby(); } };
+
+// ---------- Wifi multiplayer (PeerJS) ----------
+// The host's browser runs the real game. Guests send their moves ({t:'act',a}) to the host,
+// and the host sends everyone the whole game ({t:'state',g,seat}) after every change.
+const PEERJS = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+const ROOM = 'hexisles-room-', CODEAB = 'ABCDEFGHJKLMNPQRSTUVWXYZ', NAMEKEY = 'hexisles-name';
+function loadPeer(cb) {
+  if (window.Peer) return cb();
+  const s = document.createElement('script');
+  s.src = PEERJS; s.onload = cb;
+  s.onerror = () => netFail('Could not load the multiplayer helper. Check your internet connection.');
+  document.head.appendChild(s);
+}
+function myName() {
+  const n = $('n-name').value.trim() || 'Player';
+  try { localStorage.setItem(NAMEKEY, n); } catch (e) {}
+  return n;
+}
+function netFail(msg) {      // something went wrong before we got into a room
+  closeNet(); $('m-lobby').hidden = true; $('m-net').hidden = false; $('n-msg').textContent = msg;
+}
+function closeNet() { try { if (NET.peer) NET.peer.destroy(); } catch (e) {} NET = {role: null}; }
+function leaveNet() {
+  const guest = NET.role === 'guest';
+  closeNet(); $('m-lobby').hidden = true;
+  if (guest) { G = null; if (!load()) $('board').innerHTML = ''; }
+  render(); openSetup();
+}
+function newClick() {
+  if (!NET.role) return openSetup();
+  NET.msg = NET.role === 'guest' ? 'Only the host can start a new game.' : NET.msg;
+  $('m-win').hidden = true; $('m-lobby').hidden = false;
+  if (NET.role === 'host') sendLobby(); else fillLobby();
+}
+
+// --- lobby window (host and guests) ---
+function maxBots() { return 3 - NET.conns.length; }
+function lobbyNames() {
+  NET.bots = Math.max(0, Math.min(NET.bots, maxBots()));
+  return [NET.name].concat(NET.conns.map(c => c.name), DEFNAMES.slice(1, 1 + NET.bots));
+}
+function fillLobby() {
+  const host = NET.role === 'host', names = NET.names || [];
+  $('l-codebox').hidden = !host; $('l-code').textContent = NET.ready ? NET.code : '…';
+  $('l-msg').textContent = NET.msg || '';
+  $('l-names').innerHTML = names.map((n, i) => '<div class="row"><i style="background:' + PCOL[i] + '"></i><span>' + esc(n) + '</span></div>').join('');
+  $('l-bots').hidden = !host;
+  if (host) $('l-bots').innerHTML = '<span style="flex:1">Computer players</span>' + [0, 1, 2, 3].map(n => '<button data-n="' + n + '"' + (n === NET.bots ? ' class="on"' : '') + (n > maxBots() ? ' disabled' : '') + '>' + n + '</button>').join('');
+  fillMode('l-mode', host);
+  $('l-start').hidden = !host; $('l-start').disabled = !NET.ready || names.length < 2;
+  $('l-rejoin').hidden = !(NET.role === 'guest' && NET.lost);
+  $('l-cancel').hidden = !(G && NET.inGame && !NET.lost);
+}
+function sendLobby() {
+  NET.names = lobbyNames();
+  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, fire: FIRE}); });
+  fillLobby();
+}
+
+// --- host ---
+function hostStart() {
+  const name = myName();
+  closeNet();
+  NET = {role: 'host', seat: 0, name, conns: [], bots: 0, code: '', ready: false, inGame: false, msg: 'Opening a room…'};
+  $('m-net').hidden = true; $('m-setup').hidden = true; $('m-lobby').hidden = false; sendLobby();
+  loadPeer(hostOpen);
+}
+function hostOpen() {
+  if (NET.role !== 'host') return;
+  NET.code = ''; for (let i = 0; i < 4; i++) NET.code += CODEAB[rnd(CODEAB.length)];
+  const peer = NET.peer = new Peer(ROOM + NET.code);
+  peer.on('open', () => { NET.ready = true; NET.msg = 'Waiting for players…'; sendLobby(); });
+  peer.on('connection', c => {
+    c.on('data', d => hostData(c, d));
+    c.on('close', () => hostDrop(c));
+    c.on('error', () => hostDrop(c));
+  });
+  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id' && !NET.ready) { peer.destroy(); hostOpen(); }      // code already in use: pick another
+    else if (!NET.ready) netFail('Could not open a room (' + e.type + ').');
+  });
+}
+function hostData(c, d) {
+  if (NET.role !== 'host' || !d) return;
+  if (d.t === 'hello' && !NET.conns.includes(c)) {
+    let name = String(d.name || 'Player').slice(0, 12);
+    // someone who dropped out comes back to their old seat
+    const back = NET.inGame ? G.pl.findIndex(P => P.gone && P.name === name) : -1;
+    if (back >= 0) {
+      c.name = name; c.seat = back; NET.conns.push(c);
+      G.pl[back].gone = false; G.pl[back].bot = false; say(name + ' is back.');
+      c.send({t: 'you', name}); save(); render(); return;
+    }
+    if (NET.conns.length >= 3) { c.send({t: 'full'}); return; }
+    const taken = lobbyNames(); let k = 2; const base = name;
+    while (taken.includes(name)) name = base.slice(0, 10) + ' ' + k++;
+    c.name = name; c.seat = -1; NET.conns.push(c);
+    c.send({t: 'you', name}); sendLobby();
+    if (NET.inGame) c.send({t: 'state', g: G, seat: -1});       // game already running: they watch until the next one
+  }
+  if (d.t === 'act' && NET.inGame && c.seat >= 0 && d.a) {
+    try { if (act(d.a, c.seat)) { save(); render(); } } catch (e) {}
+  }
+}
+function hostDrop(c) {
+  const k = NET.conns ? NET.conns.indexOf(c) : -1;
+  if (NET.role !== 'host' || k < 0) return;
+  NET.conns.splice(k, 1);
+  if (NET.inGame && G.pl[c.seat] && G.phase !== 'over') {
+    G.pl[c.seat].gone = true; G.pl[c.seat].bot = true;
+    if (G.offer && G.offer.from === c.seat) G.offer = null;      // their trade offer goes with them
+    else if (G.offer) answer(c.seat, 'decline');
+    if (G.phase === 'discard' && G.disc[c.seat]) {      // they owed a discard: do it for them
+      autoDiscard(c.seat, G.disc[c.seat]); delete G.disc[c.seat];
+      if (!Object.keys(G.disc).length) G.phase = 'storm';
+    }
+    say(c.name + ' lost connection. A computer plays for them until they rejoin.');
+    save(); render();
+  }
+  sendLobby();
+}
+function hostBegin() {
+  const names = lobbyNames(), humans = 1 + NET.conns.length;
+  if (!NET.ready || names.length < 2) return;
+  NET.conns.forEach((c, i) => { c.seat = i + 1; });
+  newGame(names.map((n, i) => ({name: n, bot: i >= humans})), FIRE);
+  NET.inGame = true; $('m-lobby').hidden = true; save(); render();
+}
+function broadcast() {
+  if (!NET.inGame) return;
+  NET.conns.forEach(c => { if (c.open) c.send({t: 'state', g: G, seat: c.seat}); });
+}
+
+// --- guest ---
+function joinStart(name, code) {
+  closeNet();
+  if (code.length !== 4) { $('n-msg').textContent = 'Type the 4-letter room code.'; return; }
+  NET = {role: 'guest', seat: -1, name, code, names: [], inGame: false, lost: false, msg: 'Connecting…'};
+  $('m-net').hidden = true; $('m-setup').hidden = true; $('m-lobby').hidden = false; fillLobby();
+  loadPeer(() => {
+    if (NET.role !== 'guest') return;
+    const peer = NET.peer = new Peer();
+    peer.on('open', () => {
+      const c = NET.conn = peer.connect(ROOM + code, {reliable: true});
+      c.on('open', () => { NET.msg = 'Connected. Waiting for the host to start…'; c.send({t: 'hello', name}); fillLobby(); });
+      c.on('data', guestData);
+      c.on('close', guestLost);
+    });
+    peer.on('error', e => {
+      if (e.type === 'peer-unavailable') { if (NET.inGame) guestLost(); else netFail('No game found with the code ' + code + '.'); }
+      else if (!NET.conn || !NET.conn.open) { if (NET.inGame) guestLost(); else netFail('Could not connect (' + e.type + ').'); }
+    });
+  });
+}
+function guestData(d) {
+  if (NET.role !== 'guest' || !d) return;
+  if (d.t === 'you') NET.name = d.name;
+  if (d.t === 'full') netFail('That game is full.');
+  if (d.t === 'lobby') { NET.names = d.names; FIRE = !!d.fire; fillLobby(); }
+  if (d.t === 'state') {
+    const fresh = !NET.inGame || (G && G.phase === 'over' && d.g.phase !== 'over');
+    G = d.g; NET.seat = d.seat; NET.inGame = true; NET.lost = false;
+    if (fresh) { MODE = null; $('m-lobby').hidden = true; }
+    render();
+  }
+}
+function guestLost() {
+  if (NET.role !== 'guest' || NET.lost) return;
+  NET.lost = true; NET.msg = 'Connection to the host was lost.';
+  $('m-lobby').hidden = false; fillLobby();
+}
+
+$('s-net').onclick = () => {
+  let n = ''; try { n = localStorage.getItem(NAMEKEY) || ''; } catch (e) {}
+  if (!$('n-name').value) $('n-name').value = n;
+  $('n-msg').textContent = ''; $('m-setup').hidden = true; $('m-net').hidden = false;
+};
+$('n-back').onclick = () => { $('m-net').hidden = true; openSetup(); };
+$('n-host').onclick = hostStart;
+$('n-join').onclick = () => joinStart(myName(), $('n-code').value.trim().toUpperCase());
+$('n-code').onkeydown = e => { if (e.key === 'Enter') $('n-join').click(); };
+$('l-bots').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { NET.bots = +b.dataset.n; sendLobby(); } };
+$('l-start').onclick = hostBegin;
+$('l-leave').onclick = leaveNet;
+$('l-cancel').onclick = () => { $('m-lobby').hidden = true; };
+$('l-rejoin').onclick = () => joinStart(NET.name, NET.code);
+
+// The board's viewBox. On wide screens it is bigger than the island needs: the island looks smaller,
+// with open sea round it and room along the bottom for the bar. Narrow screens keep the island tight.
+const WIDE = matchMedia('(min-width:1100px)');
+function fitBoard() { const vb = WIDE.matches ? '-420 -300 840 720' : '-312 -280 624 540'; $('board').setAttribute('viewBox', vb); $('ships').setAttribute('viewBox', vb); if (G) render(); }
+WIDE.addEventListener('change', fitBoard);
+
+// ---------- Zoom and drag ----------
+// #zoom (holding the tilted board) is scaled by ZM and moved by ZX, ZY pixels, from its top-left corner.
+// Scroll wheel zooms around the pointer; dragging with the mouse moves the map (with a finger only once
+// zoomed in, so phones can still scroll the page). A drag never counts as a click on the board.
+let ZM = 1, ZX = 0, ZY = 0, DRAG = null, DRAGGED = false;
+const ZMIN = .6, ZMAX = 3;
+function applyZoom() {
+  const v = $('view'), z = $('zoom'), W = v.clientWidth, H = v.clientHeight;
+  // the middle of the window always stays over the board, so the island can't be lost off screen
+  ZX = Math.min(W / 2, Math.max(W / 2 - ZM * z.offsetWidth, ZX));
+  ZY = Math.min(H / 2, Math.max(H / 2 - ZM * z.offsetHeight, ZY));
+  z.style.transform = ZM === 1 && !ZX && !ZY ? '' : 'translate(' + ZX.toFixed(1) + 'px,' + ZY.toFixed(1) + 'px) scale(' + ZM.toFixed(3) + ')';
+  v.classList.toggle('zin', ZM > 1);
+  $('z-in').disabled = ZM >= ZMAX; $('z-out').disabled = ZM <= ZMIN; $('z-reset').disabled = ZM === 1 && !ZX && !ZY;
+  if (D3.on) $('z-in').disabled = $('z-out').disabled = $('z-reset').disabled = false;      // in 3D they move the camera
+}
+function zoomAt(k, cx, cy) {      // cx, cy: the point in the window that stays put
+  const z = Math.min(ZMAX, Math.max(ZMIN, ZM * k));
+  ZX = cx - z * (cx - ZX) / ZM; ZY = cy - z * (cy - ZY) / ZM; ZM = z;
+  applyZoom();
+}
+{
+  const v = $('view');
+  v.addEventListener('wheel', e => {
+    if (D3.on) return;      // the 3D camera handles its own zoom
+    e.preventDefault();
+    const r = v.getBoundingClientRect(), dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+    zoomAt(Math.exp(-dy * .0015), e.clientX - r.left, e.clientY - r.top);
+  }, {passive: false});
+  v.addEventListener('pointerdown', e => {
+    DRAGGED = false;
+    if (D3.on) return;
+    if (e.button !== 0 || e.target.closest('#zbtns') || (e.pointerType !== 'mouse' && ZM <= 1)) return;
+    DRAG = {id: e.pointerId, x: e.clientX, y: e.clientY, zx: ZX, zy: ZY, on: false};
+  });
+  v.addEventListener('pointermove', e => {
+    if (!DRAG || e.pointerId !== DRAG.id) return;
+    const dx = e.clientX - DRAG.x, dy = e.clientY - DRAG.y;
+    if (!DRAG.on) {
+      if (Math.hypot(dx, dy) < 6) return;      // a small wobble is still a click
+      DRAG.on = true; v.setPointerCapture(e.pointerId); v.classList.add('dragging');
+    }
+    ZX = DRAG.zx + dx; ZY = DRAG.zy + dy; applyZoom();
+  });
+  const stop = () => { if (!DRAG) return; DRAGGED = DRAG.on; DRAG = null; v.classList.remove('dragging'); };
+  v.addEventListener('pointerup', stop); v.addEventListener('pointercancel', stop);
+  v.addEventListener('click', e => { if (DRAGGED) { e.stopPropagation(); DRAGGED = false; } }, true);      // the drag's own click
+  const mid = k => zoomAt(k, v.clientWidth / 2, v.clientHeight / 2);
+  $('z-in').onclick = () => D3.on ? D3.dolly(1.3) : mid(1.3); $('z-out').onclick = () => D3.on ? D3.dolly(1 / 1.3) : mid(1 / 1.3);
+  $('z-reset').onclick = () => { if (D3.on) { D3.reset(); return; } ZM = 1; ZX = ZY = 0; applyZoom(); };
+  $('z-3d').onclick = () => set3D(!D3.on);
+  addEventListener('resize', applyZoom);
+  applyZoom();
+}
+addEventListener('resize', () => { if (G) $('hand').innerHTML = handHTML(G.pl[VIEW] ? G.pl[VIEW].res : null); });
+fitBoard();
+
+// ---------- 3D board (Three.js) ----------
+// A real 3D island drawn with WebGL: raised land tiles with textures, trees, wheat, sheep, rocks and a
+// smoking volcano, a sky with the sun, reflecting sea, shadows. It only draws: every click still becomes
+// the same go(action) as on the flat map. The flat SVG board keeps being drawn underneath (hidden), so
+// switching back is instant and the window keeps its size. Three.js comes from the internet (jsDelivr,
+// pinned version, see the import map in <head>); without it the flat map is used.
+const VIEWKEY = 'hexisles-view';      // localStorage: '2d' if the player switched the 3D view off
+const TOP = 9;                        // height of a land tile's top (sea level is 0, the beach 3)
+function want3D() { try { return localStorage.getItem(VIEWKEY) !== '2d'; } catch (e) { return true; } }
+function set3D(on) {
+  try { localStorage.setItem(VIEWKEY, on ? '3d' : '2d'); } catch (e) {}
+  if (on && !D3.ready) { if (!D3.failed) load3D(); return; }
+  show3D(on);
+}
+function show3D(on) {
+  D3.on = !!on && !!D3.ready;
+  $('view').classList.toggle('is3d', D3.on);
+  const b = $('z-3d');
+  b.textContent = D3.on ? '2D' : '3D';
+  b.title = D3.failed ? 'The 3D island could not load (it needs internet)' : D3.on ? 'Switch to the flat map' : 'Switch to the 3D island';
+  if (D3.on) { D3.resize(); if (G) D3.update(); }
+  applyZoom();
+}
+async function load3D() {
+  if (D3.loading) return;
+  D3.loading = true; $('z-3d').textContent = '…';
+  try {
+    const m = await Promise.all(['three', 'three/addons/objects/Water.js',
+      'three/addons/controls/OrbitControls.js', 'three/addons/utils/BufferGeometryUtils.js'].map(u => import(u)));
+    init3D(m[0], m[1].Water, m[2].OrbitControls, m[3]);
+    D3.ready = true;
+  } catch (e) { console.warn('The 3D board could not start:', e); D3.failed = true; }
+  D3.loading = false;
+  show3D(want3D());
+}
+
+function init3D(T, Water, Orbit, BU) {
+  const view = $('view');
+  const R = new T.WebGLRenderer({antialias: true});
+  R.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  R.outputColorSpace = T.SRGBColorSpace;
+  R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = .95;
+  R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap;
+  R.shadowMap.autoUpdate = false;      // shadows are only redrawn when something moves (see SHADOW)
+  const cv = R.domElement; cv.id = 'board3d'; view.insertBefore(cv, $('roll'));
+  const scene = new T.Scene(), cam = new T.PerspectiveCamera(36, 1, 5, 40000);
+  const TIME = {value: 0};             // seconds, shared with the swaying-plants shader
+  const ANISO = R.capabilities.getMaxAnisotropy();
+  let SHADOW = true;
+
+  // ----- sky, sun and light -----
+  const SUN = new T.Vector3().setFromSphericalCoords(1, T.MathUtils.degToRad(52), T.MathUtils.degToRad(-145));     // high, behind on the left
+  // a painted sky dome (pale at the horizon, deep blue overhead, a warm glow round the sun): it is what you see,
+  // what the sea mirrors, and the soft light that fills in the shadows
+  const dome = new T.Mesh(new T.SphereGeometry(5000, 32, 16), new T.ShaderMaterial({side: T.BackSide, depthWrite: false, fog: false,
+    uniforms: {sun: {value: SUN}},
+    vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); gl_Position.z = gl_Position.w; }',
+    fragmentShader: 'uniform vec3 sun; varying vec3 vp; void main(){ float h = clamp(vp.y, 0., 1.); vec3 c = mix(vec3(.55,.70,.80), vec3(.04,.17,.36), pow(h, .5));' +
+      ' c += vec3(1., .85, .6) * pow(max(dot(vp, sun), 0.), 40.) * .8; gl_FragColor = vec4(c, 1.); }'}));
+  scene.add(dome);      // (it follows the camera, see frame())
+  scene.environment = new T.PMREMGenerator(R).fromScene(scene).texture;
+  scene.fog = new T.Fog(0x9db8ca, 2500, 9000);
+  const sun = new T.DirectionalLight(0xfff0d8, 2.6);
+  sun.position.copy(SUN).multiplyScalar(800); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  const sc = sun.shadow.camera; sc.left = sc.bottom = -420; sc.right = sc.top = 420; sc.near = 200; sc.far = 1600;
+  sun.shadow.bias = -.0004; sun.shadow.normalBias = .5; sun.shadow.radius = 3;
+  scene.add(sun, sun.target, new T.HemisphereLight(0xd6ecff, 0x3d3324, .45));
+
+  // ----- painted textures (no image files: made from smooth random noise) -----
+  const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+  function noise(P, seed) {      // smooth noise that wraps round every P cells, so the textures tile without seams
+    return (x, y) => {
+      x *= P; y *= P;
+      const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
+      const at = (p, q) => hash(((p % P) + P) % P + seed, ((q % P) + P) % P - seed * 1.7);
+      return at(i, j) * (1 - a) * (1 - b) + at(i + 1, j) * a * (1 - b) + at(i, j + 1) * (1 - a) * b + at(i + 1, j + 1) * a * b;
+    };
+  }
+  function fbm(P, seed) { const L = [0, 1, 2, 3].map(k => noise(P << k, seed + k * 17)); return (x, y) => (L[0](x, y) * 8 + L[1](x, y) * 4 + L[2](x, y) * 2 + L[3](x, y)) / 15; }
+  const hx = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
+  const mix = (a, b, t) => a.map((v, k) => v + (b[k] - v) * Math.max(0, Math.min(1, t)));
+  function paint(N, fn) {
+    const c = document.createElement('canvas'); c.width = c.height = N;
+    const x = c.getContext('2d'), im = x.createImageData(N, N), d = im.data;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const p = fn(i / N, j / N), k = (j * N + i) * 4;
+      d[k] = p[0]; d[k + 1] = p[1]; d[k + 2] = p[2]; d[k + 3] = 255;
+    }
+    x.putImageData(im, 0, 0); return c;
+  }
+  const tex = (c, color, wrap) => {
+    const t = new T.CanvasTexture(c);
+    if (wrap !== false) t.wrapS = t.wrapT = T.RepeatWrapping;
+    t.anisotropy = ANISO; if (color) t.colorSpace = T.SRGBColorSpace; return t;
+  };
+  const PAL = {wood: ['#173f20', '#3e7b34'], clay: ['#8a4022', '#d4855a'], wool: ['#4a9134', '#98d05e'], grain: ['#a6781f', '#efc965'],
+    stone: ['#606268', '#b3b4b8'], volcano: ['#1d1816', '#4a3d37'], sand: ['#c9ad74', '#f0dfae']};
+  const LTEX = {};
+  Object.keys(PAL).forEach((t, n) => {
+    const a = hx(PAL[t][0]), b = hx(PAL[t][1]), big = fbm(4, n * 10 + 1), fine = fbm(16, n * 10 + 5), crack = fbm(6, n * 10 + 9);
+    LTEX[t] = tex(paint(256, (x, y) => {
+      const f = fine(x, y);
+      let k = big(x, y) * .8 + f * .55 - .2;
+      if (t === 'grain') k = k * .55 + .45 * (.5 + .5 * Math.sin((y * 16 + big(x, y) * 1.5) * Math.PI * 2));      // furrows
+      let col = mix(a, b, k);
+      if ((t === 'clay' || t === 'stone' || t === 'volcano') && Math.abs(crack(x, y) - .5) < .013) col = col.map(v => v * .5);     // cracks
+      if (t === 'wood' && f > .66) col = mix(col, [107, 90, 42], .5);          // leaf litter on the forest floor
+      if (t === 'wool' && f > .72) col = mix(col, [236, 226, 140], .4);        // little flowers
+      return col;
+    }), true);
+  });
+  // the sea's ripples: a "normal map" (which way each spot of the surface faces), made from noise
+  const wh = fbm(4, 77);
+  const waves = tex(paint(256, (x, y) => {
+    const e = 1 / 256, dx = (wh(x + e, y) - wh(x - e, y)) * 14, dy = (wh(x, y + e) - wh(x, y - e)) * 14, l = Math.hypot(dx, dy, 1);
+    return [(-dx / l * .5 + .5) * 255, (-dy / l * .5 + .5) * 255, (1 / l * .5 + .5) * 255];
+  }));
+  // pictures drawn as SVG (number discs, port signs, crates) turned into textures
+  const SVGT = {};
+  function svgTex(key, svg, w, h) {
+    if (SVGT[key]) return SVGT[key];
+    const c = document.createElement('canvas'); c.width = w; c.height = h || w;
+    const t = SVGT[key] = tex(c, true, false), img = new Image();
+    img.onload = () => { c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); t.needsUpdate = true; };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + (h || w) + '"'));
+    return t;
+  }
+  const tokTex = n => {
+    const p = pips(n), hot = p === 5;
+    let s = '<svg viewBox="-16 -16 32 32"><defs><radialGradient id="g" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#e3d3a6"/></radialGradient></defs>' +
+      '<rect x="-16" y="-16" width="32" height="32" fill="#cdbb8a"/><circle r="15.3" fill="url(#g)"/><circle r="14" fill="none" stroke="#b9a777" stroke-width=".5"/>' +
+      '<text y="4.8" text-anchor="middle" style="font:800 14px system-ui,sans-serif" fill="' + (hot ? '#c62828' : '#2a2212') + '">' + n + '</text>';
+    for (let k = 0; k < p; k++) s += '<circle cx="' + ((k - (p - 1) / 2) * 3.2) + '" cy="9.8" r="1.1" fill="' + (hot ? '#c62828' : '#5b4a2a') + '"/>';
+    return svgTex('n' + n, s + '</svg>', 256);
+  };
+  const signTex = r => svgTex('s' + r, '<svg viewBox="-11 -11 22 22"><circle r="10" fill="' + (r === 'any' ? '#f6ecd0' : COL[r][0]) + '" stroke="#3a2a14" stroke-width="1.6"/>' +
+    (r === 'any' ? '<text y="0" style="font:700 8.5px system-ui,sans-serif;text-anchor:middle;fill:#2a2212">3:1</text><text y="6.5" style="font:600 5px system-ui,sans-serif;text-anchor:middle;fill:#5b4a2a">ANY</text>'
+      : '<g transform="translate(0 -3) scale(.48)">' + cardGlyph(r) + '</g><text y="7.8" style="font:700 7px system-ui,sans-serif;text-anchor:middle;fill:#111;stroke:#fff;stroke-width:2;paint-order:stroke">2:1</text>') + '</svg>', 128);
+  const crateTex = (r, k) => svgTex('c' + r + k, '<svg viewBox="-6.5 -12 13 12">' + crate(r, k) + '</svg>', 128);
+  const plusTex = () => svgTex('plus', '<svg viewBox="-12 -8 24 16"><text y="5" style="font:800 13px system-ui,sans-serif;fill:#fff;stroke:#111;stroke-width:3;paint-order:stroke;text-anchor:middle">+1</text></svg>', 96, 64);
+
+  // ----- materials -----
+  const std = o => new T.MeshStandardMaterial(Object.assign({roughness: .85}, o));
+  function sway(m, amp, speed) {      // plants lean in the wind: the higher up a point is, the further it moves
+    m.onBeforeCompile = sh => {
+      sh.uniforms.uTime = TIME;
+      sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' +
+        'float sw = sin(uTime * ' + speed.toFixed(2) + ' + instanceMatrix[3].x * .07 + instanceMatrix[3].z * .045) * ' + amp.toFixed(3) + ' * max(position.y, 0.);\n' +
+        'transformed.x += sw; transformed.z += sw * .6;');
+    };
+    m.customProgramCacheKey = () => 'sway' + amp + '/' + speed;
+    return m;
+  }
+  const M3 = {
+    bark: std({roughness: 1}), pine: sway(std({roughness: .9}), .03, 1.1), leaf: sway(std({roughness: .8}), .03, 1.3),
+    rock: std({roughness: .92, flatShading: true}), snow: std({roughness: .55, flatShading: true}),
+    wheat: sway(std({roughness: .6}), .2, 1.8), grass: sway(std({roughness: .9}), .14, 2.2), reed: sway(std({}), .15, 1.9),
+    wood: std({roughness: .9}), fleece: std({roughness: 1}), dark: std({roughness: .8}),
+    brick: std({roughness: .95}), puddle: std({roughness: .05, metalness: .2}), mud: std({roughness: 1}), metal: std({roughness: .4, metalness: .7}),
+    stone: std({color: 0x9a948a, roughness: .95}), door: std({color: 0x1d1610, roughness: .9}), pole: std({color: 0x5a3d22}),
+    robe: std({color: 0x2b2f3a}), skin: std({color: 0xd9a877, roughness: .6}), hat: std({color: 0x3a2a1c}), red: std({color: 0x8a1f1f}), eye: std({color: 0xffffff}),
+    ring: std({color: 0xd8cfb8, roughness: .95}), hull: std({color: 0x7a4a22}), deck: std({color: 0xc9a46a}),
+    sail: std({color: 0xf4ecd6, side: T.DoubleSide, roughness: .9}), flag: std({color: 0xd94a3a, side: T.DoubleSide}),
+    disc: std({color: 0x8d7b4d, roughness: .8}), sand: std({map: LTEX.sand, roughness: 1}),
+    lava: std({color: 0x2a0a00, emissive: 0xff5a14, emissiveIntensity: 2}),
+    rumOn: std({color: 0x400000, emissive: 0xff5a2f, emissiveIntensity: 2}), rumOff: std({color: 0x2a1a14}),
+    spot: new T.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: .85, depthWrite: false}),
+    hit: new T.MeshBasicMaterial({transparent: true, opacity: 0, depthWrite: false}),
+    stormFill: new T.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: .14, depthWrite: false})
+  };
+  LTEX.sand.repeat.set(1 / 45, 1 / 45);
+  const PM = {};
+  function pm3(p, k) {      // a player's colour: 'wall' (a bit lighter), 'roof' (darker) or 'flag' (as it is)
+    if (PM[p + k]) return PM[p + k];
+    const c = new T.Color(PCOL[p]);
+    if (k === 'wall') c.lerp(new T.Color(0xffffff), .3);
+    if (k === 'roof') c.multiplyScalar(.6);
+    return PM[p + k] = std({color: c, roughness: k === 'roof' ? .7 : .6, side: k === 'flag' ? T.DoubleSide : T.FrontSide});
+  }
+
+  // ----- shapes used again and again -----
+  function hexShape(r) {      // a pointy-top hexagon; y is flipped so it lands the right way round once laid flat
+    const sh = new T.Shape();
+    for (let k = 0; k < 6; k++) { const a = Math.PI / 180 * (60 * k - 90), x = r * Math.cos(a), y = -r * Math.sin(a); k ? sh.lineTo(x, y) : sh.moveTo(x, y); }
+    sh.closePath(); return sh;
+  }
+  const extr = (r, depth, bev) => new T.ExtrudeGeometry(hexShape(r), {depth, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 1}).rotateX(-Math.PI / 2);
+  function lumpy(detail, amp, flat) {     // a ball with a bumpy surface (tree crowns, rocks)
+    let g = new T.IcosahedronGeometry(1, detail); g.deleteAttribute('normal'); g.deleteAttribute('uv');
+    g = BU.mergeVertices(g);
+    const p = g.attributes.position;
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k), y = p.getY(k), z = p.getZ(k), s = 1 + (hash(x * 7.1 + z * 3.3, y * 5.7 - x) - .5) * 2 * amp;
+      p.setXYZ(k, x * s, y * s, z * s);
+    }
+    if (flat) g = g.toNonIndexed();
+    g.computeVertexNormals(); return g;
+  }
+  const sph = (x, y, z, r, seg) => new T.SphereGeometry(r, seg || 10, 7).translate(x, y, z);
+  const cyl = (r1, r2, h, seg, y) => new T.CylinderGeometry(r1, r2, h, seg).translate(0, y == null ? h / 2 : y, 0);
+  const box = (w, h, d) => new T.BoxGeometry(w, h, d);
+  const G3 = {
+    tile: extr(S * TILE - 2, 4, 2).translate(0, 3, 0),          // from y 1 to TOP
+    trunk: cyl(.35, .5, 1, 6),
+    pine: BU.mergeGeometries([[.5, .5, .3], [.4, .45, .58], [.28, .4, .84]].map(([r, h, y]) => new T.ConeGeometry(r, h, 9).translate(0, y, 0))),
+    crown: lumpy(2, .14), rock: lumpy(1, .3, true),
+    stalk: BU.mergeGeometries([cyl(.06, .09, .78, 4), new T.ConeGeometry(.2, .32, 5).translate(0, .9, 0)]),
+    tuft: new T.ConeGeometry(.5, 1, 4).translate(0, .5, 0), reed: new T.ConeGeometry(.15, 1, 4).translate(0, .5, 0),
+    kiln: new T.LatheGeometry([[0, 0], [6.4, 0], [6.6, 1.5], [6.1, 4.5], [4.8, 7.2], [2.6, 8.9], [0, 9.4]].map(([x, y]) => new T.Vector2(x, y)), 20),
+    rim: new T.TorusGeometry(1, .22, 6, 24).rotateX(Math.PI / 2),
+    post: box(1, 1, 1).translate(0, .5, 0), cube: box(1, 1, 1), puddle: cyl(1, 1, .2, 20, 0), pile: cyl(.5, .5, 1, 6),
+    fleece: BU.mergeGeometries([sph(0, 3.4, 0, 2.5), sph(-1.7, 3.2, 1.1, 1.9), sph(1.7, 3.2, 1.1, 1.9), sph(-1.7, 3.2, -1.1, 1.9), sph(1.7, 3.2, -1.1, 1.9), sph(0, 4.6, 0, 1.9), sph(-2.6, 3.6, 0, 1.7)]),
+    sheepd: BU.mergeGeometries([sph(3.6, 4.1, 0, 1.35), sph(3.2, 4.9, .9, .5, 6), sph(3.2, 4.9, -.9, .5, 6)].concat([[-1.6, .9], [1.6, .9], [-1.6, -.9], [1.6, -.9]].map(([x, z]) => cyl(.35, .3, 2.2, 6).translate(x, 0, z)))),
+    disc: cyl(14.5, 15.2, 3, 40), face: new T.CircleGeometry(14.4, 48),
+    found: cyl(8, 9, TOP - 2, 6, (TOP + 2) / 2), found2: cyl(10.5, 11.5, TOP - 2, 6, (TOP + 2) / 2),
+    house: box(9, 7, 9), tower: box(13, 13, 13), cren: box(3, 3.2, 3), chim: box(1.6, 4, 1.6), door: box(2.4, 4, .4), gate: box(3.6, 6, .4), flag: box(6, 3.6, .25), mast: cyl(.3, .3, 9, 6, 0),
+    roof: new T.ExtrudeGeometry(new T.Shape([new T.Vector2(-6.2, 0), new T.Vector2(6.2, 0), new T.Vector2(0, 5.5)]), {depth: 10.4, bevelEnabled: false}).translate(0, 0, -5.2),
+    wall: new T.TorusGeometry(15, 2.2, 8, 36).rotateX(Math.PI / 2), spotRing: new T.TorusGeometry(17, 1.6, 8, 40).rotateX(Math.PI / 2), spotDisc: cyl(6.5, 6.5, 1.4, 24, 0),
+    townRing: new T.TorusGeometry(7.2, 1.1, 8, 32).rotateX(Math.PI / 2), crate: box(8, 8, 8), ball: new T.SphereGeometry(1, 14, 10)
+  };
+  const flatHex = (r, hole) => { const s = hexShape(r); if (hole) s.holes.push(hexShape(hole)); return new T.ShapeGeometry(s).rotateX(-Math.PI / 2); };
+  G3.hexFill = flatHex(S * .9); G3.hexRing = flatHex(S * .9, S * .84);
+  const rng = s => () => (s = (s * 9301 + 49297) % 233280) / 233280;      // same scenery every time for a tile
+  const inHex = (x, z, r) => Math.abs(x) <= r * .866 && Math.abs(z) + Math.abs(x) * .577 <= r;
+
+  // ----- the beach and the sea (the same in every game) -----
+  const beachParts = [];
+  HEX.forEach(h => {
+    beachParts.push(extr(S + 1, 6, 1.6).translate(h.x, -4.6, h.y));                                   // sand, top at y 3
+    beachParts.push(new T.CylinderGeometry(S + 6, S + 30, 16, 6, 1, true).toNonIndexed().translate(h.x, -6, h.y));     // sloping into the water
+  });
+  const beach = new T.Mesh(BU.mergeGeometries(beachParts), M3.sand); beach.receiveShadow = true; scene.add(beach);
+  const water = new Water(new T.PlaneGeometry(40000, 40000), {textureWidth: 512, textureHeight: 512, waterNormals: waves, sunDirection: SUN.clone(),
+    sunColor: 0xfff2dd, waterColor: 0x0a5878, distortionScale: 2.2, fog: true});
+  water.rotation.x = -Math.PI / 2; water.material.uniforms.size.value = 1.4; scene.add(water);
+  // shallow turquoise water and breaking foam round the island, painted onto see-through sheets
+  const SPAN = 1000, CN = 1024, w2p = v => (v + SPAN / 2) / SPAN * CN;
+  function island(x, r, fill) {
+    x.fillStyle = fill; x.beginPath();
+    HEX.forEach(h => { for (let k = 0; k < 6; k++) { const a = Math.PI / 180 * (60 * k - 90), px = w2p(h.x + r * Math.cos(a)), py = w2p(h.y + r * Math.sin(a)); k ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); });
+    x.fill();
+  }
+  const sheet = (draw, y) => {
+    const c = document.createElement('canvas'); c.width = c.height = CN; draw(c.getContext('2d'));
+    const m = new T.Mesh(new T.PlaneGeometry(SPAN, SPAN).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({map: tex(c, true, false), transparent: true, depthWrite: false}));
+    m.position.y = y; scene.add(m); return m;
+  };
+  sheet(x => { x.filter = 'blur(40px)'; island(x, S + 75, 'rgba(30,160,175,.5)'); x.filter = 'blur(14px)'; island(x, S + 32, 'rgba(80,210,200,.55)'); }, .3);
+  const foam = sheet(x => { x.filter = 'blur(3px)'; island(x, S + 16, '#fff'); x.globalCompositeOperation = 'destination-out'; x.filter = 'blur(4px)'; island(x, S + 8, '#000'); }, .5);
+
+  // ----- camera and controls (drag to turn round the island, scroll or pinch to zoom, right-drag to slide) -----
+  const C = new Orbit(cam, cv);
+  C.enableDamping = true; C.dampingFactor = .08; C.rotateSpeed = .55; C.zoomSpeed = .8;
+  C.minPolarAngle = .12; C.maxPolarAngle = 1.22; C.screenSpacePanning = false;
+  cv.style.touchAction = WIDE.matches ? 'none' : 'pan-y';      // on phones a straight-up swipe still scrolls the page
+  let FITTED = false;
+  function fit(reset) {
+    const w = view.clientWidth, h = view.clientHeight;
+    if (!w || !h) return;
+    R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
+    const v = T.MathUtils.degToRad(cam.fov / 2), hz = Math.atan(Math.tan(v) * cam.aspect);
+    const dist = (ISLE + 40) / Math.sin(Math.min(v * 1.25, hz)) * (cam.aspect < 1.2 ? 1.08 : WIDE.matches ? 1.12 : .95);
+    C.minDistance = dist * .28; C.maxDistance = dist * 1.8;
+    if (reset || !FITTED) {
+      FITTED = true;
+      C.target.set(0, 0, WIDE.matches ? 55 : 5);
+      cam.position.copy(C.target).add(new T.Vector3().setFromSphericalCoords(dist, T.MathUtils.degToRad(42), 0));
+    }
+    C.update();
+  }
+  new ResizeObserver(() => { if (D3.on) fit(false); }).observe(view);
+
+  // ----- what stays put for a whole game: lands and their scenery, number discs, ports, the volcano -----
+  const stat = new T.Group(), dyn = new T.Group(), hits = new T.Group();
+  scene.add(stat, dyn, hits);
+  let SKEY = null, TILES3 = [], DISCS = [], SMOKE = [], CRATER = null, junk = [];
+  const keep = o => { junk.push(o); return o; };       // made for this game only: thrown away when the next one starts
+  function inst(geo, mat, list, shadow) {               // many copies of one shape in one go (fast)
+    if (!list.length) return;
+    const m = new T.InstancedMesh(geo, mat, list.length), o = new T.Object3D(), c = new T.Color();
+    list.forEach((p, k) => {
+      o.position.set(p.x, p.y, p.z); o.rotation.set(p.rx || 0, p.ry || 0, p.rz || 0);
+      o.scale.set(p.sx, p.sy == null ? p.sx : p.sy, p.sz == null ? p.sx : p.sz); o.updateMatrix();
+      m.setMatrixAt(k, o.matrix); m.setColorAt(k, c.set(p.c).multiplyScalar(p.k || 1));
+    });
+    m.castShadow = shadow !== false; m.receiveShadow = true; stat.add(keep(m));
+  }
+  function scenery(t, i, h, r, L) {
+    const X = x => h.x + x, Z = z => h.y + z;
+    if (t === 'wood') for (let n = 0; n < 64; n++) {            // a thick forest: pines and round leafy trees
+      const x = (r() - .5) * 84, z = (r() - .5) * 84;
+      if (!inHex(x, z, 38) || Math.hypot(x, z) < 25) continue;
+      const s = .85 + r() * .35, k = .7 + r() * .45;
+      if (r() < .35) {
+        L.trunk.push({x: X(x), y: TOP, z: Z(z), sx: 1.6 * s, sy: 4 * s, c: '#5a3d22'});
+        L.pine.push({x: X(x), y: TOP + 2 * s, z: Z(z), sx: 12 * s, sy: 21 * s, ry: r() * 6, c: '#1d5a2e', k});
+      } else {
+        const th = 7 * s;
+        L.trunk.push({x: X(x), y: TOP, z: Z(z), sx: 1.8 * s, sy: th + 2, c: '#5a3d22'});
+        L.crown.push({x: X(x), y: TOP + th + 4 * s, z: Z(z), sx: 6.8 * s, sy: 5.8 * s, ry: r() * 6, c: n % 3 ? '#2f7a35' : '#3f8a30', k});
+      }
+    }
+    if (t === 'stone') {                                        // grey peaks behind the number, boulders in front
+      [[0, -27, 1.25], [-24, -14, 1], [24, -14, 1.05], [-28, 12, .7], [28, 12, .75], [-12, 31, .5], [13, 31, .45]].forEach(([x, z, s]) => {
+        x += (r() - .5) * 4; z += (r() - .5) * 4;
+        L.rock.push({x: X(x), y: TOP + 2, z: Z(z), sx: 11 * s, sy: 20 * s, sz: 11 * s, ry: r() * 6, c: '#8f8a84', k: .8 + r() * .3});
+        if (s > .9) L.snow.push({x: X(x), y: TOP + 2 + 17.5 * s, z: Z(z), sx: 4.3 * s, sy: 3.5 * s, ry: r() * 6, c: '#f2f4f8'});
+      });
+      for (let n = 0; n < 16; n++) { const x = (r() - .5) * 80, z = (r() - .5) * 80; if (inHex(x, z, 40) && Math.hypot(x, z) > 21) L.rock.push({x: X(x), y: TOP + .5, z: Z(z), sx: 1.5 + r() * 2.5, ry: r() * 6, c: '#9a9ca2', k: .8 + r() * .3}); }
+    }
+    if (t === 'grain') for (let z = -44; z <= 44; z += 2.6) for (let x = -44; x <= 44; x += 2.6) {     // wheat, stalk by stalk
+      const a = x + (r() - .5) * 2, b = z + (r() - .5) * 2;
+      if (!inHex(a, b, 41.5) || Math.hypot(a, b) < 19) continue;
+      L.stalk.push({x: X(a), y: TOP, z: Z(b), sx: 1.7, sy: 7 + r() * 2.5, rx: (r() - .5) * .25, rz: (r() - .5) * .25, ry: r() * 6, c: r() < .5 ? '#e8c35a' : '#d9ab3e', k: .8 + r() * .35});
+    }
+    if (t === 'wool') {                                         // grass, a fenced paddock and sheep
+      for (let n = 0; n < 110; n++) { const x = (r() - .5) * 84, z = (r() - .5) * 84; if (inHex(x, z, 42) && Math.hypot(x, z) > 17) L.tuft.push({x: X(x), y: TOP, z: Z(z), sx: 1.4 + r(), sy: 2 + r() * 2.5, ry: r() * 6, c: '#3f8a2c', k: .75 + r() * .5}); }
+      const F = 38, P = [0, 1, 2, 3, 4, 5].map(k => { const a = Math.PI / 180 * (60 * k - 90); return [F * Math.cos(a), F * Math.sin(a)]; });
+      const sides = P.map((a, j) => [a, P[(j + 1) % 6]]);
+      const gate = sides.reduce((g, s, j) => s[0][1] + s[1][1] > sides[g][0][1] + sides[g][1][1] ? j : g, 0);
+      const stretch = (a, b) => {
+        const dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz), n = Math.max(1, Math.round(len / 8));
+        for (let q = 0; q <= n; q++) L.post.push({x: X(a[0] + dx * q / n), y: TOP, z: Z(a[1] + dz * q / n), sx: 1.1, sy: 5.6, c: '#8a6236'});
+        [2.4, 4.6].forEach(y => L.rail.push({x: X(a[0] + dx / 2), y: TOP + y, z: Z(a[1] + dz / 2), sx: len, sy: .5, sz: .5, ry: Math.atan2(-dz, dx), c: '#a4784a'}));
+      };
+      sides.forEach(([a, b], j) => {
+        if (j !== gate) return stretch(a, b);
+        const m = t => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        stretch(a, m(.32)); stretch(m(.68), b);
+      });
+      const flock = [];
+      for (let n = 0; n < 50 && flock.length < 6; n++) {
+        const x = (r() - .5) * 60, z = (r() - .5) * 60;
+        if (!inHex(x, z, 29) || Math.hypot(x, z) < 21 || flock.some(([a, b]) => Math.hypot(a - x, b - z) < 9)) continue;
+        flock.push([x, z]);
+        const ry = r() * 6.28, s = .95 + r() * .2;
+        L.fleece.push({x: X(x), y: TOP, z: Z(z), sx: s, ry, c: '#f4f1ea', k: .9 + r() * .1});
+        L.sheepd.push({x: X(x), y: TOP, z: Z(z), sx: s, ry, c: '#2e2626'});
+      }
+    }
+    if (t === 'clay') {      // a clay works: a dug clay pit, a smoking brick kiln, fired bricks, a muddy puddle with reeds
+      // six places round the number disc, shuffled per tile; the kiln always gets one at the back so it never hides the number
+      const back = [[-27, -15], [0, -31], [27, -15]], front = [[-26, 16], [26, 16], [0, 31]];
+      const pickOut = a => a.splice(Math.floor(r() * a.length), 1)[0];
+      const kiln = pickOut(back), pit = pickOut(front), rest = back.concat(front);
+      const puddle = pickOut(rest), bricks = pickOut(rest);
+      const jit = ([x, z]) => [x + (r() - .5) * 4, z + (r() - .5) * 4];
+      { // the kiln: a brick beehive with a glowing fire mouth facing you, a chimney, smoke, and a log pile
+        const [x, z] = jit(kiln).map(v => v * .9), ry = (r() - .5) * .8, sn = Math.sin(ry), cs = Math.cos(ry);
+        const at = (u, w) => [X(x + cs * u + sn * w), Z(z - sn * u + cs * w)];      // u: across, w: towards the front
+        L.kiln.push({x: X(x), y: TOP + 1.2, z: Z(z), sx: 1.4, ry, c: '#c8684a', k: .9 + r() * .2});
+        L.hole.push({x: X(x), y: TOP + .7, z: Z(z), sx: 10.2, sy: 7, sz: 10.2, c: '#8a8278'});      // its stone base
+        const [dx, dz] = at(0, 8); L.mouth.push({x: dx, y: TOP + 3.6, z: dz, sx: 4.2, sy: 4.6, sz: 1.6, ry, c: '#ffffff'});
+        L.pile.push({x: X(x + 1.6), y: TOP + 12.4, z: Z(z - 1.4), sx: 2.8, sy: 5, c: '#7a3a26'});
+        L.smoke.push({x: X(x + 1.6), y: TOP + 18, z: Z(z - 1.4), s: .4});
+        [[1.4, 1.1], [-.8, 1.1], [.3, 2.9]].forEach(([w, y]) => { const [lx, lz] = at(9.5, w + 4); L.trunk.push({x: lx, y: TOP + y, z: lz, sx: 2, sy: 7, rz: Math.PI / 2, ry, c: '#6a4426'}); });      // logs, lying across
+      }
+      { // the clay pit: a dark dug hole with a raised rim of dug clay, two heaps and a shovel stuck in one
+        const [x, z] = jit(pit), ry = r() * 3;
+        L.hole.push({x: X(x), y: TOP + .15, z: Z(z), sx: 8.5, sy: 1, sz: 6.2, ry, c: '#2e1609'});
+        L.rim.push({x: X(x), y: TOP + .3, z: Z(z), sx: 9, sy: 6, sz: 6.8, ry, c: '#c4703f', k: .9 + r() * .2});
+        const hx = x + 12 * (x < 0 ? 1 : -1), hz = z - 4;
+        L.rock.push({x: X(hx), y: TOP, z: Z(hz), sx: 4.4, sy: 3.2, ry: r() * 6, c: '#c86c3c'});
+        L.rock.push({x: X(hx + 2.5), y: TOP, z: Z(hz + 5), sx: 3, sy: 2.2, ry: r() * 6, c: '#b9612f'});
+        L.post.push({x: X(hx), y: TOP + 1.5, z: Z(hz), sx: .55, sy: 10, rz: .45, c: '#8a6236'});           // shovel handle
+        L.blade.push({x: X(hx + .5), y: TOP + 1.6, z: Z(hz), sx: 2.4, sy: 2.8, sz: .35, rz: .45, c: '#8d9298'});
+      }
+      { // a muddy puddle with reeds
+        const [x, z] = jit(puddle);
+        L.puddle.push({x: X(x), y: TOP + .1, z: Z(z), sx: 5 + r() * 2, sy: 1, sz: 3 + r() * 2, ry: r() * 6, c: '#3b2416'});
+        for (let q = 0; q < 6; q++) { const a = r() * 6.28, d = 5.5 + r() * 2.5; L.reed.push({x: X(x + Math.cos(a) * d), y: TOP, z: Z(z + Math.sin(a) * d * .7), sx: 1, sy: 4 + r() * 3.5, rx: (r() - .5) * .3, rz: (r() - .5) * .3, c: '#6f7a32', k: .8 + r() * .4}); }
+      }
+      { // fired bricks stacked by the kiln's yard
+        const [x, z] = jit(bricks), ry = r() * 3;
+        [[0, 3], [1, 2], [2, 1]].forEach(([row, cnt]) => { for (let q = 0; q < cnt; q++) { const off = (q - (cnt - 1) / 2) * 3.6; L.brick.push({x: X(x + Math.cos(ry) * off), y: TOP + .75 + row * 1.6, z: Z(z - Math.sin(ry) * off), sx: 3.4, sy: 1.5, sz: 1.7, ry, c: '#b45a32', k: .8 + r() * .35}); } });
+      }
+    }
+  }
+  function puff(x, y, z, s, k) {      // one puff of smoke rising from (x, y, z); s = size (1 for the volcano), k = where in its rise it starts
+    const p = new T.Mesh(G3.ball, keep(std({color: 0x8a8580, transparent: true, opacity: .4, depthWrite: false, roughness: 1})));
+    p.userData = {k, x, y, z, s}; stat.add(p); SMOKE.push(p);
+  }
+  function build() {
+    junk.forEach(o => o.dispose()); junk = []; stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CRATER = null;
+    const L = {trunk: [], pine: [], crown: [], rock: [], snow: [], stalk: [], tuft: [], reed: [], post: [], rail: [], fleece: [], sheepd: [], brick: [], puddle: [], plank: [], pile: [],
+      kiln: [], mouth: [], hole: [], rim: [], blade: [], smoke: []};
+    HEX.forEach((h, i) => {
+      const t = G.hex[i].t, r = rng(i * 97 + 13);
+      const map = keep(LTEX[t].clone()); map.needsUpdate = true; map.repeat.set(1 / 55, 1 / 55); map.offset.set(r(), r());
+      const top = keep(std({map, bumpMap: map, bumpScale: 1.5, roughness: .95, emissive: 0xffe08a, emissiveIntensity: 0}));
+      const side = keep(std({map, color: 0x707070, roughness: 1}));
+      const m = new T.Mesh(G3.tile, [top, side]); m.position.set(h.x, 0, h.y); m.castShadow = m.receiveShadow = true; stat.add(m);
+      TILES3.push({top});
+      scenery(t, i, h, r, L);
+      if (t === 'volcano') {           // a smoking cone with glowing lava in its crater
+        const prof = [[38, 0], [35, 3], [28, 10], [20, 20], [12.5, 29], [10, 30.5], [8.6, 28.5], [0, 27.5]].map(([x, y]) => new T.Vector2(x, y));
+        const vm = keep(LTEX.volcano.clone()); vm.needsUpdate = true; vm.repeat.set(4, 1.5);
+        const cone = new T.Mesh(keep(new T.LatheGeometry(prof, 40)), keep(std({map: vm, bumpMap: vm, bumpScale: 2, roughness: .95})));
+        cone.position.set(h.x, TOP - .5, h.y); cone.castShadow = cone.receiveShadow = true; stat.add(cone);
+        const pool = new T.Mesh(keep(new T.CircleGeometry(8.8, 28).rotateX(-Math.PI / 2)), M3.lava); pool.position.set(h.x, TOP + 28.2, h.y); stat.add(pool);
+        CRATER = new T.PointLight(0xff6a20, 1800, 140, 2); CRATER.position.set(h.x, TOP + 34, h.y); stat.add(CRATER);
+        for (let k = 0; k < 7; k++) puff(h.x, TOP + 31, h.y, 1, k / 7);
+        return;
+      }
+      if (G.hex[i].n) {                // the number disc: a wooden token that always turns to face you
+        const g = new T.Group(), base = new T.Mesh(G3.disc, M3.disc), face = new T.Mesh(G3.face, std({map: tokTex(G.hex[i].n), roughness: .6}));
+        base.castShadow = base.receiveShadow = true; face.rotation.x = -Math.PI / 2; face.position.y = 3.05; face.receiveShadow = true;
+        keep(face.material); g.add(base, face); g.position.set(h.x, TOP, h.y); stat.add(g); DISCS.push(g);
+      }
+      if (fertile(i)) { const p = new T.Sprite(keep(new T.SpriteMaterial({map: plusTex()}))); p.position.set(h.x, TOP + 6, h.y + 24); p.scale.set(15, 10, 1); stat.add(p); }
+    });
+    (G.ports || []).forEach(o => {     // wooden jetties on pilings, with the port's sign on a post
+      const g = portGeo(o), at = (d, s) => [g.mx + g.nx * d + g.tx * s, g.my + g.ny * d + g.ty * s], ry = Math.atan2(g.nx, g.ny);
+      for (let d = JETTY - 4, n = 0; d < JETTY + 18; d += 2.6, n++) { const [x, z] = at(d, 0); L.plank.push({x, y: 4.2, z, sx: 9.2, sy: .8, sz: 2.3, ry, c: n % 2 ? '#a97a42' : '#bb8c52'}); }
+      for (let s = -11, n = 0; s < 12.5; s += 2.6, n++) { const [x, z] = at(JETTY + 24.75, s); L.plank.push({x, y: 4.6, z, sx: 2.3, sy: .8, sz: 15.5, ry, c: n % 3 ? '#b4864d' : '#c49559'}); }
+      [[2, -5.4], [2, 5.4], [10, -5.4], [10, 5.4], [17.5, -12.6], [17.5, 12.6], [32.3, -12.6], [32.3, 12.6]].forEach(([d, s]) => { const [x, z] = at(JETTY + d, s); L.pile.push({x, y: -8, z, sx: 1.9, sy: 13, c: '#4a2e14'}); });
+      const [x, z] = at(DOCK, 0);
+      L.pile.push({x, y: 5, z, sx: 1.2, sy: 12, c: '#6b4722'});
+      const sign = new T.Sprite(keep(new T.SpriteMaterial({map: signTex(o.r)}))); sign.position.set(x, 24, z); sign.scale.set(19, 19, 1); stat.add(sign);
+    });
+    inst(G3.trunk, M3.bark, L.trunk); inst(G3.pine, M3.pine, L.pine); inst(G3.crown, M3.leaf, L.crown);
+    inst(G3.rock, M3.rock, L.rock); inst(G3.rock, M3.snow, L.snow); inst(G3.stalk, M3.wheat, L.stalk);
+    inst(G3.tuft, M3.grass, L.tuft); inst(G3.reed, M3.reed, L.reed); inst(G3.post, M3.wood, L.post); inst(G3.cube, M3.wood, L.rail);
+    inst(G3.fleece, M3.fleece, L.fleece); inst(G3.sheepd, M3.dark, L.sheepd); inst(G3.cube, M3.brick, L.brick);
+    inst(G3.puddle, M3.puddle, L.puddle, false); inst(G3.cube, M3.wood, L.plank); inst(G3.pile, M3.wood, L.pile);
+    inst(G3.kiln, M3.brick, L.kiln); inst(G3.cube, M3.lava, L.mouth, false); inst(G3.puddle, M3.mud, L.hole, false);
+    inst(G3.rim, M3.mud, L.rim); inst(G3.cube, M3.metal, L.blade);
+    L.smoke.forEach(o => { for (let k = 0; k < 4; k++) puff(o.x, o.y, o.z, o.s, k / 4); });
+  }
+
+  // ----- what changes during play: roads, towns, forts, walls, the bandit, lava, where you can build -----
+  const part = (g, geo, mat, x, y, z) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+  function building(v, b) {
+    const g = new T.Group(), fort = b.l === 2;
+    part(g, fort ? G3.found2 : G3.found, M3.stone, 0, 0, 0);
+    if (!fort) {           // a house with a pitched roof, a door and a chimney
+      part(g, G3.house, pm3(b.p, 'wall'), 0, TOP + 4.5, 0);
+      part(g, G3.roof, pm3(b.p, 'roof'), 0, TOP + 8, 0);
+      part(g, G3.door, M3.door, -1.6, TOP + 3, 4.55);
+      part(g, G3.chim, M3.stone, 2.6, TOP + 11, -2);
+    } else {               // a square tower with battlements and a flag
+      part(g, G3.tower, pm3(b.p, 'wall'), 0, TOP + 7.5, 0);
+      [-5, 0, 5].forEach(x => [-5, 0, 5].forEach(z => { if (x || z) part(g, G3.cren, pm3(b.p, 'roof'), x, TOP + 15.6, z); }));
+      part(g, G3.gate, M3.door, 0, TOP + 4, 6.6);
+      part(g, G3.mast, M3.pole, 0, TOP + 19, 0);
+      part(g, G3.flag, pm3(b.p, 'flag'), 3, TOP + 21.6, 0);
+    }
+    g.rotation.y = (hash(v, 3) - .5) * .7;
+    g.position.set(VERT[v].x, 0, VERT[v].y);
+    return g;
+  }
+  const BANDIT3 = (() => {      // a hooded figure in a dark robe and a hat
+    const g = new T.Group(), f = new T.Group();
+    part(f, new T.LatheGeometry([[0, 0], [7, 0], [7.4, 1], [6, 8], [4.3, 14], [2.6, 17], [0, 17.5]].map(([x, y]) => new T.Vector2(x, y)), 24), M3.robe, 0, 0, 0);
+    part(f, new T.TorusGeometry(2.9, .9, 8, 20).rotateX(Math.PI / 2), M3.red, 0, 16.8, 0);
+    part(f, new T.SphereGeometry(3.6, 20, 14), M3.skin, 0, 20.5, 0);
+    part(f, cyl(3.7, 3.7, 1.6, 20, 0), M3.door, 0, 21, 0);
+    part(f, new T.SphereGeometry(.55, 8, 6), M3.eye, -1.3, 21.1, 3.4); part(f, new T.SphereGeometry(.55, 8, 6), M3.eye, 1.3, 21.1, 3.4);
+    part(f, cyl(5.8, 5.8, .6, 28, 0), M3.hat, 0, 23.7, 0);
+    part(f, cyl(3, 3.5, 3.6, 24, 0), M3.hat, 0, 25.7, 0);
+    part(f, cyl(3.55, 3.55, .9, 24, 0), M3.red, 0, 24.4, 0);
+    f.position.set(0, 3, -10.5); g.add(f);
+    return g;
+  })();
+  let dynJunk = [], DROPS = [];
+  function dropIn(key, obj) {      // a new piece falls onto the board (FELL is filled in by noteDrops)
+    obj.userData.y0 = obj.position.y;
+    if (Date.now() - (FELL[key] || 0) < DROPMS) DROPS.push({obj, key});
+  }
+  function dynamic() {
+    dynJunk.forEach(o => o.dispose()); dynJunk = []; DROPS = [];
+    dyn.clear(); hits.clear();
+    TILES3.forEach((o, i) => o.top.color.setScalar(scorched(i) ? .35 : G.deck && i === G.storm ? .5 : 1));
+    for (const e in G.r) {
+      const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b], m = new T.Mesh(G3.cube, pm3(G.r[e], 'flag'));
+      m.position.set((A.x + B.x) / 2, (2.5 + TOP + 2.4) / 2, (A.y + B.y) / 2);
+      m.scale.set(S * .74, TOP - .1, 5.6); m.rotation.y = Math.atan2(-(B.y - A.y), B.x - A.x);
+      m.castShadow = m.receiveShadow = true; dyn.add(m); dropIn('r' + e, m);
+    }
+    for (const v in G.b) {
+      const b = G.b[v], g = building(v, b);
+      dyn.add(g); dropIn('b' + v, g);
+      if (b.w) { const w = new T.Mesh(G3.wall, M3.ring); w.position.set(VERT[v].x, TOP + 1.2, VERT[v].y); w.castShadow = w.receiveShadow = true; dyn.add(w); }
+    }
+    if (G.deck && HEX[G.storm]) { BANDIT3.position.set(HEX[G.storm].x, TOP, HEX[G.storm].y); dyn.add(BANDIT3); dropIn('storm', BANDIT3); }
+    if (G.fire && G.lava && G.lava.length) {        // a glowing river of lava from the volcano
+      const path = new T.CurvePath(), pts = [HEX[volcano()]].concat(G.lava.map(i => HEX[i])).map(h => new T.Vector3(h.x, TOP + 1.2, h.y));
+      for (let k = 1; k < pts.length; k++) path.add(new T.LineCurve3(pts[k - 1], pts[k]));
+      const tube = new T.Mesh(new T.TubeGeometry(path, 24 * pts.length, 3, 8), M3.lava); dynJunk.push(tube.geometry); dyn.add(tube);
+    }
+    if (G.fire) {      // rumble dots in front of the volcano
+      const h = HEX[volcano()];
+      for (let k = 0; k < RUMMAX; k++) { const d = new T.Mesh(G3.ball, k < G.rum ? M3.rumOn : M3.rumOff); d.scale.setScalar(2.6); d.position.set(h.x + (k - (RUMMAX - 1) / 2) * 11, TOP + 2, h.y + 34); dyn.add(d); }
+    }
+    const what = placing(), hit = (geo, mat, u, x, y, z, sx, sy, sz, ry) => {
+      const m = new T.Mesh(geo, mat); m.position.set(x, y, z); if (sx) m.scale.set(sx, sy, sz); if (ry) m.rotation.y = ry; m.userData = u; hits.add(m); return m;
+    };
+    if (what === 'road') spots(G.turn, 'road').forEach(e => {
+      const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b], x = (A.x + B.x) / 2, z = (A.y + B.y) / 2, ry = Math.atan2(-(B.y - A.y), B.x - A.x);
+      const m = new T.Mesh(G3.cube, M3.spot); m.position.set(x, TOP + 1.5, z); m.scale.set(S * .6, 1.2, 3.6); m.rotation.y = ry; dyn.add(m);
+      hit(G3.cube, M3.hit, {e}, x, TOP, z, S * .8, 24, 20, ry);
+    });
+    if (what === 'town' || what === 'fort' || what === 'wall') spots(G.turn, what).forEach(v => {
+      const x = VERT[v].x, z = VERT[v].y;
+      if (what === 'town') {
+        const d = new T.Mesh(G3.spotDisc, M3.spot); d.position.set(x, TOP + 1.2, z); dyn.add(d);
+        const ring = new T.Mesh(G3.townRing, pm3(G.turn, 'flag')); ring.position.set(x, TOP + 1.4, z); dyn.add(ring);
+      } else { const d = new T.Mesh(G3.spotRing, M3.spot); d.position.set(x, TOP + 3, z); dyn.add(d); }
+      hit(G3.pile, M3.hit, {v}, x, TOP - 4, z, 38, 40, 38);
+    });
+    if (what === 'storm') HEX.forEach((h, i) => {
+      if (i === G.storm) return;
+      const ring = new T.Mesh(G3.hexRing, M3.spot); ring.position.set(h.x, TOP + .8, h.y); dyn.add(ring);
+      hit(G3.hexFill, M3.stormFill, {h: i}, h.x, TOP + .9, h.y);
+    });
+    SHADOW = true;
+  }
+
+  // ----- clicking the 3D board -----
+  const ray = new T.Raycaster(), ptr = new T.Vector2();
+  function pick(e) {
+    const r = cv.getBoundingClientRect();
+    ptr.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+    cam.updateMatrixWorld(); ray.setFromCamera(ptr, cam);
+    const h = ray.intersectObjects(hits.children, false)[0];
+    return h && h.object.userData;
+  }
+  let DOWN = null;
+  cv.addEventListener('pointerdown', e => { DOWN = {x: e.clientX, y: e.clientY}; });
+  cv.addEventListener('click', e => {
+    if (!DOWN || Math.hypot(e.clientX - DOWN.x, e.clientY - DOWN.y) > 6) return;     // that was a drag to turn the camera
+    const u = pick(e), what = placing();
+    if (!u || !what) return;
+    if (u.h != null) go({t: 'storm', h: u.h});
+    else if (u.e != null) go({t: 'road', e: u.e});
+    else go({t: what, v: u.v});
+  });
+  cv.addEventListener('pointermove', e => { if (!e.buttons) cv.classList.toggle('pick', !!pick(e)); });
+
+  // ----- the trade boat (same timeline as the flat map's, see sailShip) -----
+  const BOAT = (() => {
+    const g = new T.Group(), hull = new T.Shape([new T.Vector2(-20, 3.5), new T.Vector2(20, 3.5), new T.Vector2(15, -4), new T.Vector2(-15.5, -4)]);
+    part(g, new T.ExtrudeGeometry(hull, {depth: 9, bevelEnabled: true, bevelThickness: .8, bevelSize: .8, bevelSegments: 2}).translate(0, 0, -4.5), M3.hull, 0, 0, 0);
+    part(g, box(36, .5, 8.6), M3.deck, 0, 4.2, 0);
+    part(g, cyl(.5, .6, 35, 8, 0), M3.pole, 2, 21, 0);
+    const main = new T.Shape(); main.moveTo(3, 34); main.quadraticCurveTo(18, 22, 3, 8); main.closePath();
+    const jib = new T.Shape(); jib.moveTo(1, 32); jib.quadraticCurveTo(-11, 21, 1, 10); jib.closePath();
+    const flag = new T.Shape([new T.Vector2(2, 34.5), new T.Vector2(10, 36.6), new T.Vector2(2, 38.6)]);
+    part(g, new T.ShapeGeometry(main, 12), M3.sail, 0, 0, 0); part(g, new T.ShapeGeometry(jib, 12), M3.sail, 0, 0, 0); part(g, new T.ShapeGeometry(flag), M3.flag, 0, 0, 0);
+    return g;
+  })();
+  let SAIL = null;
+  const crateMesh = (r, k) => { const m = new T.Mesh(G3.crate, std({map: crateTex(r, k), roughness: .8})); m.castShadow = true; return m; };
+  function endSail() { if (!SAIL) return; scene.remove(BOAT, SAIL.got, SAIL.paid); SAIL.got.material.dispose(); SAIL.paid.material.dispose(); SAIL = null; }
+  const proj = (x, y, z) => { cam.updateMatrixWorld(); const v = new T.Vector3(x, y, z).project(cam), r = cv.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; };
+  function flyCard(r, x0, y0, p) {      // a card flies from the board to the player's hand (or profile)
+    const hand = $('hand'), mine = p === VIEW && hand.offsetParent, to = mine ? hand : document.querySelector('#players .pl:nth-child(' + (p + 1) + ')');
+    if (!to) return;
+    const Z = to.getBoundingClientRect(), x1 = Z.left + Z.width / 2, y1 = Z.top + Z.height / 2, c = document.createElement('div');
+    c.className = 'fly'; c.style.cssText = '--a:' + COL[r][0] + ';--b:' + COL[r][1]; c.innerHTML = ico(r);
+    document.body.appendChild(c);
+    c.animate([
+      {transform: 'translate(' + x0 + 'px,' + y0 + 'px) scale(.3)', opacity: 0},
+      {transform: 'translate(' + x0 + 'px,' + (y0 - 20) + 'px) scale(1.15)', opacity: 1, offset: .2},
+      {transform: 'translate(' + ((x0 + x1) / 2) + 'px,' + (Math.min(y0, y1) - 80) + 'px) scale(1)', offset: .55},
+      {transform: 'translate(' + x1 + 'px,' + y1 + 'px) scale(.55)', opacity: .9}
+    ], {duration: 1000, easing: 'ease-in-out', fill: 'both'}).onfinish = () => { c.remove(); to.animate([{transform: 'scale(1)'}, {transform: 'scale(1.04)'}, {transform: 'scale(1)'}], {duration: 220}); };
+    setTimeout(() => c.remove(), 1200);
+  }
+  function sailStep(now) {
+    const s = SAIL, p = (now - s.t0) / SHIPMS;
+    if (p >= 1) return endSail();
+    const lerp = (P, Q, k) => [P[0] + (Q[0] - P[0]) * k, P[1] + (Q[1] - P[1]) * k], eo = k => 1 - Math.pow(1 - k, 3), ei = k => k * k * k;
+    const turn = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+    const yIn = Math.atan2(-(s.B[1] - s.S0[1]), s.B[0] - s.S0[0]), yOut = Math.atan2(-(s.E[1] - s.B[1]), s.E[0] - s.B[0]);
+    let pos = s.B, yaw = yIn;
+    if (p < .35) pos = lerp(s.S0, s.B, eo(p / .35));
+    else if (p >= .6 && p < .66) { const k = (p - .6) / .06; yaw = yIn + turn(yIn, yOut) * k * k * (3 - 2 * k); }
+    else if (p >= .66) { pos = lerp(s.B, s.E, ei((p - .66) / .34)); yaw = yOut; }
+    const bob = Math.sin(TIME.value * 2.2) * .5;
+    BOAT.position.set(pos[0], bob, pos[1]); BOAT.rotation.set(Math.sin(TIME.value * 1.7) * .05, yaw, 0);
+    BOAT.scale.setScalar(Math.max(.001, Math.min(1, p / .08, (1 - p) / .1)));
+    const deck = [pos[0], 8.6 + bob, pos[1]], dock = [s.D[0], 9, s.D[1]];
+    const hop = (P, Q, k) => [P[0] + (Q[0] - P[0]) * k, P[1] + (Q[1] - P[1]) * k + Math.sin(k * Math.PI) * 16, P[2] + (Q[2] - P[2]) * k];
+    // what was bought rides in on deck and hops onto the platform; what was paid hops aboard and sails off
+    const g = p < .4 ? deck : p < .52 ? hop(deck, dock, (p - .4) / .12) : dock;
+    s.got.position.set(...g); s.got.rotation.y = yaw; s.got.scale.setScalar(Math.max(.001, Math.min(1, p / .08, (.62 - p) / .06)));
+    const q = p < .54 ? dock : p < .64 ? hop(dock, deck, (p - .54) / .1) : deck;
+    s.paid.position.set(...q); s.paid.rotation.y = yaw; s.paid.scale.setScalar(p < .5 ? .001 : Math.max(.001, Math.min(1, (p - .5) / .04, (1 - p) / .1)));
+    if (p >= .56 && !s.flown) { s.flown = true; const [x, y] = proj(...dock); flyCard(s.r, x, y, s.p); }
+  }
+
+  // ----- every frame -----
+  const clock = new T.Clock();
+  function frame() {
+    requestAnimationFrame(frame);
+    const dt = Math.min(clock.getDelta(), .1);
+    if (!D3.on) return;
+    const now = Date.now(), t = TIME.value += dt;
+    water.material.uniforms.time.value += dt * .55;
+    foam.material.opacity = .55 + .3 * Math.sin(t * 1.3);
+    C.update();
+    if (C.target.length() > 260) C.target.setLength(260);
+    C.target.y = 0;
+    dome.position.copy(cam.position);
+    const az = C.getAzimuthalAngle();
+    DISCS.forEach(d => { d.rotation.y = az; });
+    BANDIT3.rotation.y = az;
+    M3.spot.opacity = .55 + .35 * Math.sin(t * 4.5);
+    M3.lava.emissiveIntensity = 1.7 + .5 * Math.sin(t * 2.3);
+    if (CRATER) CRATER.intensity = 1800 * (.8 + .2 * Math.sin(t * 7) * Math.sin(t * 3.1));
+    SMOKE.forEach(p => {      // puffs of smoke drift up from the crater and the kilns' chimneys, and fade
+      const u = p.userData, s = u.s, k = (t * (.09 + (1 - s) * .08) + u.k) % 1;
+      p.position.set(u.x + (k * 26 + Math.sin(k * 9 + u.k * 20) * 3) * s, u.y + k * 55 * s, u.z - k * 12 * s);
+      p.scale.setScalar((3.5 + k * 13) * s); p.material.opacity = .45 * (1 - k) * Math.min(1, k * 6);
+    });
+    TILES3.forEach((o, i) => {      // lands that just paid out glow
+      const on = HARV && HARV.h.includes(i) && now > HARV.t && now < HARV.t + 1600;
+      o.top.emissiveIntensity = on ? .75 * Math.sin(Math.PI * (now - HARV.t) / 1600) : 0;
+    });
+    if (DROPS.length) {
+      SHADOW = true;
+      DROPS = DROPS.filter(d => {
+        const p = (now - (FELL[d.key] || 0)) / DROPMS;
+        if (p >= 1) { d.obj.position.y = d.obj.userData.y0; return false; }
+        d.obj.position.y = d.obj.userData.y0 + (p < .7 ? 70 * (1 - (p / .7) * (p / .7)) : 6 * Math.sin((p - .7) / .3 * Math.PI));
+        return true;
+      });
+    }
+    if (SAIL) sailStep(now);
+    if (SHADOW) { R.shadowMap.needsUpdate = true; SHADOW = false; }
+    R.render(scene, cam);
+  }
+  requestAnimationFrame(frame);
+
+  // ----- what the rest of the game uses -----
+  D3.update = () => {
+    const key = G.id + '|' + G.hex.map(h => h.t + h.n).join() + '|' + JSON.stringify(G.ports || []) + '|' + !!G.fire;
+    if (key !== SKEY) { SKEY = key; build(); }
+    dynamic();
+  };
+  D3.resize = () => fit(false);
+  D3.reset = () => fit(true);
+  D3.dolly = k => {
+    const off = cam.position.clone().sub(C.target);
+    off.setLength(Math.min(C.maxDistance, Math.max(C.minDistance, off.length() / k)));
+    cam.position.copy(C.target).add(off); C.update();
+  };
+  D3.screen = (x, y, z) => proj(x, y, z);      // where a board point shows on screen (used by tests too)
+  D3.three = {T, R, scene, cam, sun, C};        // for poking at it from the console
+  D3.rect = i => { const [x, y] = proj(HEX[i].x, TOP + 5, HEX[i].y); return {left: x, top: y, width: 0, height: 0}; };
+  D3.sail = t => {
+    const o = (G.ports || []).find(q => q.e === t.e);
+    if (!o) return;
+    endSail();
+    const g = portGeo(o), at = (d, s) => [g.mx + g.nx * d + g.tx * s, g.my + g.ny * d + g.ty * s];
+    SAIL = {t0: Date.now(), B: at(DOCK + 14, 38), D: at(DOCK, 0), S0: at(BERTH + 230, 190), E: at(BERTH + 240, -140), got: crateMesh(t.get, 1), paid: crateMesh(t.give, t.k), p: t.p, r: t.get, flown: false};
+    scene.add(BOAT, SAIL.got, SAIL.paid);
+  };
+}
+
+// ---------- Start ----------
+if (load()) render(); else openSetup();
+if (want3D()) load3D(); else show3D(false);
+</script>
 </body>
 </html>
