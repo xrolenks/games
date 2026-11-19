@@ -9,7 +9,13 @@ Static site on GitHub Pages: repo `xrolenks/games`, live at https://xrolenks.git
 - `fatalfists/index.html` — **Fatal Fists**, a one-on-one arcade fighter. "Coming soon" placeholder only (not built yet).
 - `.nojekyll` — serve files as-is.
 
-Every game must stay original: its own name, art, characters and wording, never a copy of an existing game, even when Rick describes it with another game's words.
+**Originality rule (Rick's update, 2026-11-18):** a game may use features and rules similar to an existing game (game rules and mechanics themselves can't be owned; fan-made games like colonist.io work this way), as long as everything you see and read is our own:
+- **Own name** for the game and its modes/expansions (never another game's title or brand, e.g. not "Catan", "Settlers", "Cities & Knights").
+- **Everyday words are fine** for cards, pieces, resources and goods, even when another game uses the same ones (Rick's update, 2026-11-18): generic words like wood, brick, sheep, wheat, ore, knight, road, city, robber, paper, cloth or coin aren't anyone's trademark. Only made-up brand names and titles are off limits.
+- **Own art and look**: drawn in code in our style, never copied or traced from the other game.
+- **Own wording**: rules text, card text and messages written fresh, never copied from a rulebook or the other game.
+- Own characters (no characters, logos or branding from the other game).
+Rick describing a feature with another game's words, or pointing at its rulebook, is fine: build the feature, keeping our own game/mode names, art and wording (everyday words for cards and resources are OK). Don't rename existing things in a game unless Rick asks.
 
 Each game folder has its own `CLAUDE.md` with that game's code map and Rick's rules for it. Read it before working on that game, and add new notes there, not here.
 
