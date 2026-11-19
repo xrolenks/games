@@ -5,7 +5,7 @@ Static site on GitHub Pages: repo `xrolenks/games`, live at https://xrolenks.git
 - `index.html` — home page; one `<a class="card">` per game, plus a game count next to "Games".
 - `404.html` — "Back to the games" links to `/games/`.
 - `wasteland/index.html` — **Wild Wasteland**, the whole game in one file (HTML + CSS + JS, no build, no dependencies, no image files). Notes: `wasteland/CLAUDE.md`.
-- `hexisles/index.html` — **Hex Isles**, a hex-island building board game, one file the same way. Notes: `hexisles/CLAUDE.md`.
+- `hexisles/` — **Hex Isles**, a hex-island building board game (no build step). Since 2026-11-19 (Rick's request) it's split by job: `index.html` (page HTML), `css/style.css`, `js/*.js`, `sound-effects/*.wav` (see `hexisles/CLAUDE.md` for the file map). Notes: `hexisles/CLAUDE.md`.
 - `fatalfists/index.html` — **Fatal Fists**, a one-on-one arcade fighter. "Coming soon" placeholder only (not built yet).
 - `.nojekyll` — serve files as-is.
 
@@ -34,7 +34,7 @@ The Browser pane's `file://` preview does **not** run the games' JS (buttons do 
 ```powershell
 param([string]$Root,[int]$Port=8765)
 $l=New-Object System.Net.HttpListener;$l.Prefixes.Add("http://localhost:$Port/");$l.Start()
-$t=@{'.html'='text/html; charset=utf-8';'.css'='text/css';'.js'='text/javascript';'.png'='image/png';'.svg'='image/svg+xml';'.json'='application/json'}
+$t=@{'.html'='text/html; charset=utf-8';'.css'='text/css';'.js'='text/javascript';'.png'='image/png';'.svg'='image/svg+xml';'.json'='application/json';'.wav'='audio/wav'}
 while($l.IsListening){$c=$l.GetContext();$p=[Uri]::UnescapeDataString($c.Request.Url.AbsolutePath) -replace '^/games',''
  $f=Join-Path $Root $p.TrimStart('/');if(Test-Path $f -PathType Container){$f=Join-Path $f 'index.html'}
  $code=200;if(-not(Test-Path $f -PathType Leaf)){$f=Join-Path $Root '404.html';$code=404}
