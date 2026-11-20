@@ -12,7 +12,7 @@ function setTimer(v) { TIMER = v; try { localStorage.setItem('hexisles-timer', v
 function fillTimer(id, canPick) {
   const el = $(id);
   el.innerHTML = '<span style="flex:1 0 100%">Turn timer</span>' + TIMES.map(s => '<button data-s="' + s + '"' + (s === TIMER ? ' class="on"' : '') + (canPick ? '' : ' disabled') + '>' + timeName(s) + '</button>').join('');
-  el.nextElementSibling.textContent = TIMER ? 'Each turn lasts up to ' + timeName(TIMER) + '. When time runs out, the computer finishes that turn.' : 'No time limit: take as long as you like.';
+  // (no description line under the timer: Rick removed it, 2026-11-20)
 }
 $('s-timer').onclick = e => { const b = e.target.closest('button'); if (b) { setTimer(+b.dataset.s); fillSetup(); } };
 $('l-timer').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { setTimer(+b.dataset.s); sendLobby(); } };

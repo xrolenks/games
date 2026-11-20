@@ -85,6 +85,7 @@ function fillMode(id, canPick) {
   el.nextElementSibling.textContent = MODEHINT[+FIRE];
   fillLevel(id === 's-mode' ? 's-level' : 'l-level', canPick);
   fillTimer(id === 's-mode' ? 's-timer' : 'l-timer', canPick);      // (js/timer.js)
+  fillPack(id === 's-mode' ? 's-pack' : 'l-pack');                  // (js/packs.js: everyone picks their own look)
 }
 // How well the computer players play (G.lvl): 0 Easy, 1 Normal, 2 Hard. Remembered for next time.
 const LEVELS = ['Easy', 'Normal', 'Hard'];

@@ -18,7 +18,7 @@
     <span id="snd"><button id="sndbtn" title="Sound volume" aria-label="Sound volume" aria-expanded="false"></button>
       <span id="sndpop" hidden><label for="sndvol">Sound</label><input type="range" id="sndvol" min="0" max="100" step="5"><span id="sndpct"></span></span></span>
     <span id="sets"><button id="setbtn" title="Settings" aria-label="Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M10.3 2h3.4l.5 2.6 1.6.9 2.5-.9 1.7 2.9-2 1.7v1.6l2 1.7-1.7 2.9-2.5-.9-1.6.9-.5 2.6h-3.4l-.5-2.6-1.6-.9-2.5.9-1.7-2.9 2-1.7V9.2l-2-1.7 1.7-2.9 2.5.9 1.6-.9zM12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" transform="translate(0 1.5)"/></svg></button>
-      <span id="setpop" hidden><b>Settings</b><label><input type="checkbox" id="set-turn"> Show "Your turn" when your turn starts</label><label><input type="checkbox" id="set-day"> Day and night on the 3D island</label></span></span>
+      <span id="setpop" hidden><b>Settings</b><label><input type="checkbox" id="set-turn"> Show "Your turn" when your turn starts</label></span></span>
     <button id="newbtn">New game</button>
   </header>
   <div id="players"></div>
@@ -66,8 +66,6 @@
 <div id="m-setup" class="modal" hidden>
   <div class="box">
     <h2>Hex Isles</h2>
-    <p>Settle the island. Build roads, towns and forts. First to 10 points wins. Every island is dealt fair: no matching lands side by side, and the best numbers spread out.</p>
-    <div class="row tutrow"><span style="flex:1">New to Hex Isles?</span><button id="s-tut">How to play</button></div>
     <div class="row" id="s-count"></div>
     <div id="s-rows"></div>
     <div class="row modepick" id="s-mode"></div>
@@ -75,8 +73,9 @@
     <div class="row modepick" id="s-level"></div>
     <p class="modehint"></p>
     <div class="row modepick timepick" id="s-timer"></div>
+    <div class="row modepick" id="s-pack"></div>
     <p class="modehint"></p>
-    <div class="row end"><button id="s-cancel">Cancel</button><button id="s-go" class="big">Start game</button></div>
+    <div class="row end"><button id="s-tut" class="tutbtn" title="New to Hex Isles? Learn by playing a short guided game">How to play</button><button id="s-cancel">Cancel</button><button id="s-go" class="big">Start game</button></div>
     <div class="row wifi"><span style="flex:1">Friends on their own phones or computers, anywhere?</span><button id="s-net">Play online</button></div>
   </div>
 </div>
@@ -105,6 +104,7 @@
     <div class="row modepick" id="l-level"></div>
     <p class="modehint"></p>
     <div class="row modepick timepick" id="l-timer"></div>
+    <div class="row modepick" id="l-pack"></div>
     <p class="modehint"></p>
     <div class="row end"><button id="l-leave">Leave</button><button id="l-cancel">Back to game</button><button id="l-rejoin" class="big">Rejoin</button><button id="l-start" class="big">Start game</button></div>
   </div>
@@ -183,6 +183,7 @@
 <script src="js/board3d.js"></script>
 <script src="js/sound.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/packs.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/stats.js"></script>
 <script src="js/tutorial.js"></script>

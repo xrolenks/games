@@ -376,13 +376,12 @@ function init3D(T, Water, Orbit, BU) {
     }
     SHADOW = true;
   }
-  const dayWanted = () => DAY.test != null ? DAY.test : typeof DAYON !== 'undefined' && !DAYON || !G ? .25 : .1 + (G.rolls || 0) / Math.max(1, G.pl.length) / 4;
-  function dayStep(dt) {
+  // (2026-11-20: the time of day no longer moves with the turns; it comes from the visual pack, js/packs.js)
+  const dayWanted = () => DAY.test != null ? DAY.test : typeof packOf === 'function' ? packOf().time : .25;
+  function dayStep() {
     const want = dayWanted();
-    if (DAY.cur === null || want < DAY.cur || want - DAY.cur > 1) DAY.cur = want;       // first draw, new game, load: jump straight there
-    else if (want > DAY.cur) DAY.cur = Math.min(want, DAY.cur + dt * .07);              // otherwise drift there over a few seconds
-    else return;
-    setDay(DAY.cur);
+    if (want === DAY.cur) return;
+    DAY.cur = want; setDay(want);      // a new pick shows straight away
   }
 
   // ----- camera and controls (drag to turn round the island, scroll or pinch to zoom, right-drag to slide) -----

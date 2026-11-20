@@ -74,7 +74,10 @@ header button{padding:5px 10px;font-size:.85rem}
 .spark,.hglow{transform-box:fill-box;transform-origin:center}
 /* the dice thrown onto the board: real 3D cubes (six faces) that fall, bounce and tumble, then settle on the roll */
 #view{position:relative}
-#roll{position:absolute;inset:0;pointer-events:none;perspective:700px}
+#roll{position:absolute;inset:0;pointer-events:none;perspective:700px;z-index:1}
+/* Night pack (js/packs.js) on the flat map: a moonlit blue tint over the board (the 3D island has real night light) */
+body[data-pack="night"] #view:not(.is3d){isolation:isolate}      /* (keeps the tint inside the map, off the bar laid over it) */
+body[data-pack="night"] #view:not(.is3d)::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:rgba(10,22,60,.55);mix-blend-mode:multiply;border-radius:inherit}
 .d3{position:absolute;left:50%;top:50%;transform-style:preserve-3d;--s:36px;width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2)}
 .d3 .sh{position:absolute;inset:-14%;border-radius:22%;background:radial-gradient(rgba(0,0,0,.55),rgba(0,0,0,.3) 45%,rgba(0,0,0,0) 72%)}
 .d3 .lift,.d3 .cube{position:absolute;inset:0;transform-style:preserve-3d}
@@ -313,7 +316,8 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
 @keyframes tick{to{transform:scale(1.25)}}
 
 /* How to play: coach box over the map, and the glow on the button it talks about (js/tutorial.js) */
-.row.tutrow{padding:8px 10px;background:rgba(255,207,90,.08);border:1px solid rgba(255,207,90,.35);border-radius:10px;font-size:.9rem}
+/* "How to play": a small button at the bottom left of the new-game window, beside Cancel and Start game (Rick, 2026-11-20) */
+.row.end .tutbtn{margin-right:auto;font-size:.82rem;padding:6px 10px;border-color:rgba(255,207,90,.45)}
 #coach{position:absolute;left:0;right:0;margin:0 auto;top:8px;z-index:3;width:min(94%,380px);padding:10px 12px;background:rgba(8,18,28,.95);border:1px solid var(--accent);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.55);font-size:.85rem;animation:opop .25s ease-out}
 #coach .ch-top{display:flex;align-items:baseline;gap:8px}
 #coach .ch-top b{flex:1;color:var(--accent);font-size:1rem}
