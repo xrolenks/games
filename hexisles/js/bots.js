@@ -79,12 +79,20 @@ function botMain(p) {
     const short = fortCount() > islandDefence(), weak = myForts.length && defence(p) <= Math.min(...G.pl.map((_, i) => defence(i)));
     // the bandit sits on one of its lands: send a guard on duty after it, unless the island needs every guard for a raid soon
     const hit = G.storm != null && HEX[G.storm].v.some(v => G.b[v] && G.b[v].p === p), ch = spots(p, 'gchase');
-    if (hit && ch.length && !(near && short)) return {t: 'gchase', e: ch[0]};
+    if (hit && ch.length && !(near && short)) return {t: 'gchase', v: ch[0]};      // (knights: corners)
+    // (a knight must stand by the bandit's land to chase it: walk one there, if a spare Grain can wake it up again)
+    if (hit && !ch.length && banditAwake() && !(near && short) && (P.res.grain || 0) >= 1 && G.botMoved !== G.rolls) {
+      for (const v of spots(p, 'kmove')) {
+        const to = kmoveTo(p, v).find(x => VERT[x].h.includes(G.storm));
+        if (to != null) { G.botMoved = G.rolls; return {t: 'kmove', v, to}; }
+      }
+    }
+    if (hit && spots(p, 'activate').some(v => VERT[v].h.includes(G.storm)) && canPay(p, 'activate')) return {t: 'activate', v: spots(p, 'activate').find(v => VERT[v].h.includes(G.storm))};
     if (myForts.length && (short || defence(p) < myForts.length || (near && weak))) {
       const act = spots(p, 'activate'), hire = spots(p, 'guard'), train = spots(p, 'train');
-      if (act.length && canPay(p, 'activate')) return {t: 'activate', e: act[0]};      // a resting guard is cheaper to use than a new one
-      if (hire.length && canPay(p, 'guard')) return {t: 'guard', e: hire[0]};
-      if (train.length && canPay(p, 'train')) return {t: 'train', e: train[0]};
+      if (act.length && canPay(p, 'activate')) return {t: 'activate', v: act[0]};      // a resting guard is cheaper to use than a new one
+      if (hire.length && canPay(p, 'guard')) return {t: 'guard', v: hire.sort((a, b) => okTown(p, a) - okTown(p, b))[0]};      // (keep good town spots free)
+      if (train.length && canPay(p, 'train')) return {t: 'train', v: train.sort((x, y) => G.gd[x].s - G.gd[y].s)[0]};      // (strength 1s before mighty ones)
     }
     // a wall when the hand is near the discard limit (walls raise it by 2)
     if (handSize(p) >= handMax(p) - 1 && canPay(p, 'wall')) {
@@ -94,10 +102,10 @@ function botMain(p) {
     // improve a track when it can (cheapest first); Easy only sometimes
     const tr = Object.keys(TRACKS).filter(k => canImprove(p, k)).sort((a, b) => imp(p, a) - imp(p, b));
     if (tr.length && (L > 0 || Math.random() < .5)) return {t: 'improve', k: tr[0]};
-    // goods it can't use (its track is maxed out, or it has no fort): sell 2 to the bank
+    // goods it can't use (its track is maxed out, or it has no fort): sell them to the bank (4 for 1, or 2 with Trade level 3)
     const spare = Object.keys(TRACKS).map(k => TRACKS[k].g).find(g => {
       const k = Object.keys(TRACKS).find(x => TRACKS[x].g === g);
-      return (P.res[g] || 0) >= GOODSRATE && (!okImprove(p, k) || P.res[g] > TRACKMAX + 1);
+      return (P.res[g] || 0) >= rate(p, g) && (!okImprove(p, k) || P.res[g] > TRACKMAX + 1);
     });
     if (spare) return {t: 'trade', give: spare, get: RES.slice().sort((x, y) => P.res[x] - P.res[y])[0]};
   }
@@ -139,6 +147,7 @@ function botStorm(p) {
 function botStep() {
   BOTT = null;
   if (!G || G.phase === 'over' || !G.pl[G.turn].bot) return;
+  if (G.cdisc) return;      // (waiting for a person to throw away a progress card)
   const p = G.turn, P = G.pl[p];
   if (G.offer && G.offer.from === p) {      // a bot's own trade offer: take the first yes, or wait a bit for people, then take it back
     const o = offerFix(G.offer);

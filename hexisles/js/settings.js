@@ -30,6 +30,12 @@ function turnPop() {
 }
 $('set-turn').checked = TURNON;
 $('set-turn').onchange = e => { TURNON = e.target.checked; try { localStorage.setItem(TURNKEY, TURNON ? '1' : '0'); } catch (x) {} if (!TURNON && $('turnpop')) $('turnpop').remove(); };
+// Day and night on the 3D island (2026-11-19): on by default; '0' in DAYKEY = always daytime
+const DAYKEY = 'hexisles-daynight';
+let DAYON = true;
+try { DAYON = localStorage.getItem(DAYKEY) !== '0'; } catch (e) {}
+$('set-day').checked = DAYON;
+$('set-day').onchange = e => { DAYON = e.target.checked; try { localStorage.setItem(DAYKEY, DAYON ? '1' : '0'); } catch (x) {} };
 $('setbtn').onclick = () => { const p = $('setpop'); p.hidden = !p.hidden; $('setbtn').setAttribute('aria-expanded', String(!p.hidden)); };
 document.addEventListener('pointerdown', e => { if (!e.target.closest('#sets')) { $('setpop').hidden = true; $('setbtn').setAttribute('aria-expanded', 'false'); } }, true);
 

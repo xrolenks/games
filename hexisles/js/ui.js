@@ -11,6 +11,7 @@ function load() {
     const fix = o => { for (const k in OLD) if (o && k in o) { o[OLD[k]] = (o[OLD[k]] || 0) + o[k]; delete o[k]; } };
     g.hex.forEach(h => { if (OLD[h.t]) h.t = OLD[h.t]; });
     g.pl.forEach(P => fix(P.res));
+    knightsToCorners(g);      // (knights stood on roads until 2026-11-19)
     (g.ports || []).forEach(o => { if (OLD[o.r]) o.r = OLD[o.r]; });
     if (g.offer) { fix(g.offer.give); fix(g.offer.get); }
     // older Forts and Guards saves (2026-11-18): one kind called "goods" (becomes Paper), then Carvings/Rugs/Silver
@@ -26,7 +27,7 @@ function load() {
 // ---------- Windows and buttons ----------
 const RULES = "<b>Town</b> = 1 point. <b>Fort</b> (upgrades a town) = 2 points. First to <b>10 points</b> wins. Towns can't sit right next to each other. <b>Trade:</b> 4 for 1 with the bank; build on a <b>port</b> for 3 for 1, or 2 for 1 for the resource on its sign.";
 const FIRERULES = '<b>Fire Mountain:</b> every doubles roll makes the volcano rumble. On the third it erupts and lava runs in a straight line to the sea. Lava lands give nothing until the next eruption, and a fort touching them falls back to a town unless it has a <b>wall</b>. Lands beside the volcano give <b>+1</b>.';
-const CARDRULES = 'A <b>7</b> moves the <b>bandit</b>: anyone holding more than 7 resources discards half, then the roller puts the bandit on a land, which gives nothing while he is there. <b>Progress cards</b>: play one per turn, but not on the turn you buy it.';
+const CARDRULES = 'A <b>7</b> moves the <b>bandit</b>: anyone holding more than 7 resources discards half, then the roller puts the bandit on a land, which gives nothing while he is there. <b>Progress cards</b>: play one per turn (before or after rolling), but not on the turn you buy it.';
 // Picking a resource for a card (PICK = {title, text, cb}); the low-tide pick uses the same window
 let PICK = null;
 function openPick(title, text, cb) { PICK = {title, text, cb}; render(); }
@@ -53,6 +54,15 @@ $('r-opts').onclick = e => {
   if (b.dataset.p != null) go({t: 'rob', p: +b.dataset.p});
   else if (b.dataset.r) go({t: 'give', r: b.dataset.r});
 };
+// Science level 3 bonus picks waiting (G.spick = {seat: picks}): which seat this screen picks for now, or -1.
+// Shown between moves (roll or main phase), so it never covers a discard, a robbery or a raid pick.
+let SWHO = -1;
+function sciWho() {
+  if (!G || !G.spick || !['roll', 'main'].includes(G.phase)) return -1;
+  if (NET.role) return G.spick[NET.seat] ? NET.seat : -1;
+  const k = Object.keys(G.spick).find(s => G.pl[s] && !G.pl[s].bot);
+  return k == null ? -1 : +k;
+}
 function discardWho() {
   if (!G || G.phase !== 'discard' || !G.disc) return -1;
   if (NET.role) return G.disc[NET.seat] ? NET.seat : -1;
@@ -103,7 +113,8 @@ function fillTrade() {
   const p = G.turn;
   if (TGIVE && R[TGIVE] < rate(p, TGIVE)) TGIVE = null;
   $('t-give').innerHTML = KINDS().map(r => '<button data-g="' + r + '"' + (!(R[r] >= rate(p, r)) ? ' disabled' : '') + (r === TGIVE ? ' class="on"' : '') + '>' + ico(r) + RN[r] + ' (' + R[r] + ')<br><b>' + rate(p, r) + ' for 1</b></button>').join('');
-  $('t-get').innerHTML = RES.map(r => '<button data-t="' + r + '"' + (!TGIVE || r === TGIVE ? ' disabled' : '') + '>' + ico(r) + RN[r] + '</button>').join('');
+  const gets = KINDS();      // (Forts and Knights: any trade can get goods too; Classic: KINDS() is just the resources)
+  $('t-get').innerHTML = gets.map(r => '<button data-t="' + r + '"' + (!TGIVE || r === TGIVE ? ' disabled' : '') + '>' + ico(r) + RN[r] + '</button>').join('');
   // offer to players: tap a resource to add one to that side
   RES.forEach(r => { if ((OG[r] || 0) > R[r]) OG[r] = R[r]; });
   const tag = n => n ? '<br><b>×' + n + '</b>' : '';
@@ -139,22 +150,36 @@ $('board').addEventListener('click', e => {
   const t = e.target.closest('.hit'), what = placing();
   if (!t || !what) return;
   if (t.dataset.h != null) go({t: 'storm', h: +t.dataset.h});
-  else if (t.dataset.e != null) go({t: GMODES.includes(what) ? what : 'road', e: +t.dataset.e});
+  else if (t.dataset.e != null) go({t: 'road', e: +t.dataset.e});
+  else if (GMODES.includes(what)) knightTap(what, +t.dataset.v);      // (knights stand on corners)
   else go({t: upWhat(what, +t.dataset.v), v: +t.dataset.v, p: what === 'sack' ? sackWho() : undefined});      // (p: which raid victim picked)
 });
 $('dice').onclick = () => { if (myTurn() && G.phase === 'roll') go({t: 'roll'}); };
-$('b-end').onclick = () => go({t: 'end'});
+$('b-end').onclick = () => {      // (Forts and Knights: over the progress card limit, throw cards away first)
+  if (G.decks && G.pl[G.turn].cards.length > PCMAX) return tossChoose(G.turn, () => go({t: 'end'}));
+  go({t: 'end'});
+};
 ['road', 'town', 'fort', 'wall'].forEach(w => { $('b-' + w).onclick = () => { MODE = MODE === w ? null : w; render(); }; });
 // --- the Guards button and its menu (Forts and Knights) ---
-const GMODES = ['guard', 'train', 'activate', 'gchase'];
+const GMODES = ['guard', 'train', 'activate', 'kmove', 'gchase'];
 const GMENU = {
-  guard: ['Hire a knight', 'Stands on one of your roads, off duty'],
+  guard: ['Hire a knight', 'Stands on a corner by one of your roads, off duty'],
   train: ['Train a knight', 'Strength 1 → 2'],
   activate: ['Put on duty', 'Only knights on duty defend against raids'],
-  gchase: ['Chase the bandit', 'A knight on duty moves the bandit, then rests']
+  kmove: ['Move a knight', 'A knight on duty walks along your roads to an empty corner, then rests'],
+  gchase: ['Chase the bandit', 'A knight on duty on the bandit\'s land sends it away, then rests']
 };
+function knightTap(what, v) {      // a tap on a glowing corner in a knights mode (both boards)
+  if (what !== 'kmove') return go({t: what, v});
+  if (KFROM == null) { KFROM = v; return render(); }
+  const from = KFROM; KFROM = null; MODE = null; go({t: 'kmove', v: from, to: v});
+}
+// Moving a knight takes two taps: the knight (KFROM), then where it goes. gSpots = the glowing corners for a knights mode.
+let KFROM = null;
+const gSpots = what => what === 'kmove' && KFROM != null ? kmoveTo(G.turn, KFROM) : spots(G.turn, what);
 let GMOPEN = false;
 function fillGuards(p, main) {
+  if (MODE !== 'kmove' || !main) KFROM = null;
   const all = Object.values(guards()).filter(g => g.p === VIEW), on = all.filter(g => g.a).length;
   const b = $('b-guards'), can = m => main && spots(p, m).length > 0 && canPay(p, m);
   const html = '<svg class="bi" viewBox="-12 -12 24 24" aria-hidden="true">' + BICON.guard + '</svg><span>Knights<small>' + (all.length ? on + ' of ' + all.length + ' on duty' : 'none yet') + '</small></span>';
@@ -166,7 +191,7 @@ function fillGuards(p, main) {
   M.style.setProperty('--pc', PCOL[G.pl[VIEW] ? VIEW : 0]);      // the guard pictures are in the player's colour
   M.hidden = !GMOPEN;
   if (!GMOPEN) return;
-  M.innerHTML = GMODES.map(m => '<button data-m="' + m + '"' + (can(m) ? '' : ' disabled') + '><svg viewBox="-12 -12 24 24" aria-hidden="true">' + (m === 'train' ? BICON.train : m === 'gchase' ? '<g transform="scale(.5) translate(0 4)">' + BANDIT + '</g>' : BICON.guard) + '</svg><span>' + GMENU[m][0] + '<small>' + GMENU[m][1] + '</small></span><span class="cost">' + costChips(m) + '</span></button>').join('');
+  M.innerHTML = GMODES.map(m => '<button data-m="' + m + '"' + (can(m) ? '' : ' disabled') + '><svg viewBox="-12 -12 24 24" aria-hidden="true">' + (m === 'train' ? BICON.train : m === 'kmove' ? BICON.guard + '<path d="M3 8h8m-3-3l3 3-3 3" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' : m === 'gchase' ? '<g transform="scale(.5) translate(0 4)">' + BANDIT + '</g>' : BICON.guard) + '</svg><span>' + GMENU[m][0] + '<small>' + (m === 'train' && perk(p, 'pol') ? 'Strength 1 → 2 → 3 (mighty)' : GMENU[m][1]) + '</small></span><span class="cost">' + costChips(m) + '</span></button>').join('');
   // above the Guards button, kept on screen
   const R = b.getBoundingClientRect(), W = M.offsetWidth, H = M.offsetHeight;
   M.style.left = Math.max(6, Math.min(innerWidth - W - 6, R.left + R.width / 2 - W / 2)) + 'px';
@@ -174,10 +199,10 @@ function fillGuards(p, main) {
 }
 $('b-guards').onclick = () => {
   IMOPEN = false;
-  if (GMODES.includes(MODE)) { MODE = null; GMOPEN = false; } else GMOPEN = !GMOPEN;
+  if (GMODES.includes(MODE)) { MODE = null; KFROM = null; GMOPEN = false; } else GMOPEN = !GMOPEN;
   render();
 };
-$('gmenu').onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; MODE = b.dataset.m; GMOPEN = false; render(); };
+$('gmenu').onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; MODE = b.dataset.m; KFROM = null; GMOPEN = false; render(); };
 document.addEventListener('pointerdown', e => { if (GMOPEN && !e.target.closest('#gmenu, #b-guards')) { GMOPEN = false; $('gmenu').hidden = true; if (G) render(); } }, true);
 // --- the Improve button and its menu (Forts and Knights): Science / Trade / Politics, levels 0-5 ---
 // a little picture per track, also used on the Sea die: a book (Science), scales (Trade), a crown (Politics)
@@ -203,7 +228,8 @@ function fillImprove(p, main) {
     const T = TRACKS[k], lv = imp(p, k), max = lv >= TRACKMAX, C = (G.castle || {})[k];
     const pips = '<span class="pips" style="--t:' + T.c + '">' + Array.from({length: TRACKMAX}, (_, i) => '<i' + (i < lv ? ' class="on"' : '') + '></i>').join('') + '</span>';
     const who = C ? (C.p === p ? 'you' : G.pl[C.p].name) + (C.perm ? ' (permanent)' : '') : 'nobody yet';
-    const note = (max ? 'Top level' : 'Level ' + (lv + 1) + ': card when red ≤ ' + Math.min(6, lv + 2)) + ' · Castle: ' + who;
+    const note = (max ? 'Top level' : 'Level ' + (lv + 1) + ': card when red ≤ ' + Math.min(6, lv + 2)) + ' · Castle: ' + who +
+      '<br>' + (lv >= PERKAT ? '✓ ' : 'Level ' + PERKAT + ': ') + PERK[k];      // the level 3 bonus (Rick, 2026-11-19)
     return '<button data-k="' + k + '"' + (can(k) ? '' : ' disabled') + '><svg viewBox="-12 -12 24 24" aria-hidden="true">' + TRACKICON[k] + '</svg><span>' + T.n + ' <b style="color:' + T.c + '">' + lv + '</b>/5<small>' + note + '</small>' + pips + '</span>' +
       '<span class="cost">' + (max ? '' : ('<i style="--a:' + COL[T.g][0] + '"></i>').repeat(impCost(p, k))) + '</span></button>';
   }).join('') + '<small style="color:var(--dim);font-size:.7rem;padding:0 4px">Level N costs N ' + Object.values(TRACKS).map(T => RN[T.g]).join(' / ') + '. First to level ' + CASTLEAT + ' turns a fort into that track\'s castle (+' + CASTLEPTS + ' points, never sacked); level ' + TRACKMAX + ' takes it from someone at level ' + CASTLEAT + ' and keeps it for good. You need a fort.</small>';
@@ -241,6 +267,7 @@ $('p-res').innerHTML = RES.map(r => '<button data-r="' + r + '">' + ico(r) + RN[
 $('p-res').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   if (PICK) { const cb = PICK.cb; PICK = null; render(); cb(b.dataset.r); }
+  else if (SWHO >= 0) go({t: 'spick', p: SWHO, r: b.dataset.r});
   else go({t: 'pick', r: b.dataset.r});
 };
 $('p-cancel').onclick = () => { PICK = null; render(); };
@@ -253,9 +280,25 @@ $('b-buy').onclick = () => go({t: 'buy'});
 // uses the same window and can't be cancelled.
 let CHOOSE = null, CHNOW = null;
 function openChoose(title, text, opts, cb) { CHOOSE = {title, text, opts, cb}; render(); }
+// too many progress cards (Forts and Knights): who this screen picks a card to throw away for, or -1
+function cdWho() {
+  if (!G || !G.cdisc) return -1;
+  if (NET.role) return G.cdisc.includes(NET.seat) ? NET.seat : -1;
+  const i = G.cdisc.find(q => !G.pl[q].bot);
+  return i == null ? -1 : i;
+}
+// the cards as buttons with their pictures, for throwing one away
+const tossOpts = i => [...new Set(G.pl[i].cards.map(x => x.c))].map(c => { const A = CARDART[c], n = G.pl[i].cards.filter(x => x.c === c).length;
+  return {v: c, html: '<svg viewBox="' + A.vb + '" style="width:44px;height:44px">' + A.svg(PCOL[i]) + '</svg><br>' + CINFO(c).n + (n > 1 ? ' ×' + n : '')}; });
+function tossChoose(i, then) {      // your own turn, over the limit: throw cards away until you're back to PCMAX, then `then`
+  openChoose('Too many progress cards', 'You can keep ' + PCMAX + '. Pick one to throw away' + (then ? ', then your turn ends.' : '.'), tossOpts(i), c => {
+    if (!go({t: 'cdisc', c, p: i})) return;
+    if (G.pl[i].cards.length > PCMAX) tossChoose(i, then); else if (then) then();
+  });
+}
 function fillChoose() {
-  const tw = tpickWho();
-  const C = tw >= 0 ? {fixed: true, title: G.pl[tw].name + ': pick a track', text: 'You tied for the most defence. Take a progress card from one of these decks:',
+  const tw = tpickWho(), cw = tw >= 0 ? -1 : cdWho();
+  const C = cw >= 0 ? {fixed: true, title: G.pl[cw].name + ': too many progress cards', text: 'You can keep ' + PCMAX + '. Pick one to throw away.', opts: tossOpts(cw), cb: c => go({t: 'cdisc', c, p: cw})} : tw >= 0 ? {fixed: true, title: G.pl[tw].name + ': pick a track', text: 'You tied for the most defence. Take a progress card from one of these decks:',
     opts: Object.keys(TRACKS).map(k => ({v: k, html: '<svg viewBox="-12 -12 24 24" style="width:30px;height:30px">' + TRACKICON[k] + '</svg><br>' + TRACKS[k].n + '<br><b>' + (G.decks[k].length + G.usedT[k].length) + ' cards</b>'})),
     cb: k => go({t: 'tpick', k, p: tw})} : CHOOSE;
   CHNOW = C;

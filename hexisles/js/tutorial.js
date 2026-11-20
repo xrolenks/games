@@ -18,7 +18,7 @@ const TUT = [
   {t: 'Towns and forts', x: 'A new town costs Wood, Clay, Wool and Grain and is worth 1 point. It must touch one of your roads, and no two towns can be on neighbouring corners. Later, turn a town into a fort (3 Stone + 2 Grain): 2 points, and it collects twice as much.', hi: 'b-town'},
   {t: 'Trading', x: 'Missing something? Tap Trade to swap 4 of one card for 1 of any other with the bank, or offer a deal to the other players. A town on a port (the wooden jetties round the coast) gets a better rate.', hi: 'b-trade'},
   {t: 'Sevens and the bandit', x: 'A roll of 7 pays nobody. Anyone holding more than 7 cards throws away half, then the roller moves the bandit to a land. That land pays nothing while he\'s there, and the roller robs one card from someone who lives there.'},
-  {t: 'Progress cards', x: 'Card costs Wool, Grain and Stone and gives you a progress card: a Knight to chase the bandit away, free roads, free resources, or a secret point. Play one per turn, but not on the turn you bought it.', hi: 'b-buy'},
+  {t: 'Progress cards', x: 'Card costs Wool, Grain and Stone and gives you a progress card: a Knight to chase the bandit away, free roads, free resources, or a secret point. Play one per turn, before or after you roll, but not on the turn you bought it.', hi: 'b-buy'},
   {t: 'End your turn', x: 'When you\'re done, tap End turn. Then Coral takes a turn.', hi: 'b-end', done: () => G.tn > 0},
   {t: 'You\'re ready!', x: 'Bonus points: the longest unbroken road route (at least 5 roads) and the most Knights played (at least 3) are worth 2 points each. Keep playing this game against Coral, or tap New game any time.', last: true}
 ];

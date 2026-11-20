@@ -258,6 +258,7 @@ function piece(v, b) {
   // a little building with a lit front, a shaded side and a shadow on the ground
   const town = '<polygon points="-8,8 -8,-2 0,-10 8,-2 8,8" fill="' + c + '"/><polygon points="0,-10 8,-2 8,8 0,8" fill="rgba(0,0,0,.28)"/><polygon points="-8,-2 0,-10 8,-2 6,-2 0,-8 -6,-2" fill="rgba(255,255,255,.35)"/><rect x="-5.5" y="2" width="3.5" height="6" fill="rgba(0,0,0,.55)"/><polygon points="-8,8 -8,-2 0,-10 8,-2 8,8" fill="none" stroke="#111" stroke-width="2" stroke-linejoin="round"/>';
   // a castle (Forts and Knights): the big two-tower fort with roofs in its track's colour
+  // (the flat map stays simple, Rick 2026-11-19: chimney smoke and fluttering flags are 3D only)
   const body = b.l !== 2 ? town : b.c && TRACKS[b.c] ? CITADEL2D(c).replaceAll('#e8b84a', TRACKS[b.c].c) : b.u === 2 ? CITADEL2D(c) : b.u === 1 ? KEEP2D(c) : FORT2D(c);
   return '<g class="deco" transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(1.1)"><ellipse cx="3" cy="9" rx="12" ry="4" fill="rgba(0,0,0,.35)"/>' + (b.w ? WALL2D('back') : '') +
     drop('b' + v, b.p + ':' + b.l + ':' + (b.u || 0) + ':' + (b.c || ''), body) + (b.w ? drop('w' + v, 1, WALL2D('front')) : '') + '</g>';
@@ -276,21 +277,85 @@ const RAIDSHIP = () => SHIP.replace('#f4ecd6', '#2a2422').replace('#e6d9bc', '#3
 const FLEETFAR = [-310, -262], FLEETNEAR = [-205, -190];
 function fleetAt(k) { const t = Math.min(1, k / FLEETMAX); return [FLEETFAR[0] + (FLEETNEAR[0] - FLEETFAR[0]) * t, FLEETFAR[1] + (FLEETNEAR[1] - FLEETFAR[1]) * t]; }
 const FLEETSHIPS = [[0, 0], [-36, 14], [-14, -30]];      // three ships around the fleet's spot
-const GUARDBODY = (c, s) => '<ellipse cx="1.5" cy="7.5" rx="7.5" ry="2.6" fill="rgba(0,0,0,.4)"/>' +
+// A knight's picture by strength (Rick, 2026-11-19): 1 = on foot; 2 = mounted on a brown horse with a lance and a pennant
+// in the player's colour; 3 = a mighty knight: gold armour on a white horse, with a pulsing golden glow (.radiant).
+const GUARDBODY = (c, s) => s > 1 ? MOUNTED(c, s === 3) : FOOTMAN(c, s);
+// The mounted knights' lance (Rick, 2026-11-19, like a real one): a tapered grip at the hand, a cone-shaped guard,
+// a long thin shaft and a slim sharp point, along the line from (-3,-3.2) up to the front
+const LANCEU = [16.4 / 18.9, -9.4 / 18.9];      // which way the lance points (from its back end at -3,-3.2)
+// a point s along the lance and w off to its side
+const LANCEAT = (s, w) => (-3 + LANCEU[0] * s - LANCEU[1] * (w || 0)).toFixed(2) + ' ' + (-3.2 + LANCEU[1] * s + LANCEU[0] * (w || 0)).toFixed(2);
+function LANCE2D(gold) {
+  const P = (pts, fill, sw) => '<path d="M' + pts.map(([s, w]) => LANCEAT(s, w)).join('L') + 'Z" fill="' + fill + '" stroke="#111" stroke-width="' + sw + '" stroke-linejoin="round"/>';
+  const metal = gold ? '#f5c84a' : '#b8bec8', tip = gold ? '#ffe58a' : '#e8edf2';
+  return P([[5.4, .5], [9.9, .64], [9.9, -.64], [5.4, -.5]], '#3a2a1c', .45) +                               // grip (the hand holds it)
+    P([[12, .42], [20.6, .25], [20.6, -.25], [12, -.42]], gold ? '#e2b84a' : '#a9b0b9', .35) +               // long thin shaft, all metal (Rick, 2026-11-19)
+    P([[9.8, 1.2], [10.5, 1.55], [12.3, .45], [12.3, -.45], [10.5, -1.55], [9.8, -1.2]], metal, .5) +         // cone guard, wide at the back
+    P([[20.4, .3], [21.4, .8], [23.4, 0], [21.4, -.8], [20.4, -.3]], tip, .45);                               // slim sharp point
+}
+function MOUNTED(c, gold) {
+  const coat = gold ? '#f1ece0' : '#8a5a2e', arm = gold ? '#f5c84a' : '#b8bec8', ln = gold ? '#7a5410' : '#111';
+  // legs taper to the fetlock and end in dark hooves (2026-11-19, a more lifelike horse)
+  const leg = x => '<path d="M' + x + ' 3.4h1.6l-.25 4.4h-1.1z" fill="' + coat + '" stroke="#111" stroke-width=".7" stroke-linejoin="round"/><rect x="' + (x + .1) + '" y="7.7" width="1.35" height="1.2" rx=".3" fill="#2b2522" stroke="#111" stroke-width=".5"/>';
+  const maneC = gold ? '#d9cfb8' : '#2a1a10';
+  return (gold ? '<g class="radiant"><circle cy="-1" r="14.5" fill="#ffd95e" opacity=".16"/><circle cy="-1" r="10" fill="#ffe58a" opacity=".24"/>' +
+      [0, 45, 90, 135, 180, 225, 270, 315].map(a => '<path d="M0-12.5v-3" transform="translate(0 -1) rotate(' + a + ')" stroke="#ffd95e" stroke-width="1.3" stroke-linecap="round"/>').join('') + '</g>' : '') +
+    '<ellipse cx="1" cy="9" rx="10" ry="2.6" fill="rgba(0,0,0,.4)"/>' +
+    leg(-5.8) + leg(-3.8) + leg(3) + leg(5) +
+    '<path d="M-6.6 0q-3.2 1.8-2.4 6.4" fill="none" stroke="' + (gold ? '#d9cfb8' : '#3a2412') + '" stroke-width="1.8" stroke-linecap="round"/>' +      // tail
+    '<path d="M4.4-.4L8.4-6l2.4 1.3L7.2 2.4z" fill="' + coat + '" stroke="#111" stroke-width=".8" stroke-linejoin="round"/>' +      // neck
+    '<ellipse cx="7" cy="1.4" rx="7.4" ry="3.5" transform="translate(-6 0)" fill="' + coat + '" stroke="#111" stroke-width=".9"/>' +      // body
+    '<ellipse cx="10.4" cy="-5" rx="2.8" ry="1.5" transform="rotate(28 10.4 -5)" fill="' + coat + '" stroke="#111" stroke-width=".8"/>' +      // head
+    '<path d="M8.6-6.4l.3-2 1.2 1.4" fill="' + coat + '" stroke="#111" stroke-width=".6"/><circle cx="10.6" cy="-5.6" r=".45" fill="#111"/>' +
+    '<path d="M4.5-1.3Q6.2-4.4 8.6-6.9" stroke="' + maneC + '" stroke-width="1.3" fill="none" stroke-linecap="round"/>' +      // mane along the top of the neck
+    '<circle cx="12.5" cy="-3.7" r=".3" fill="#111"/>' +      // nostril
+    // the mighty knight's horse wears gold armour (Rick, 2026-11-19): chest and rump plates, neck plates and a face plate
+    (gold ? '<g fill="none" stroke="#7a5410" stroke-linecap="round"><path d="M6.2-1.6Q8.9-.2 7.6 3" stroke-width="2.1"/><path d="M-3.2-1.8Q-6.2-1.6-6.4 1.4" stroke-width="2.1"/>' +
+      '<path d="M5.6-2.1L8.3.3M6.8-3.8L9.4-1.9" stroke-width="1.5"/></g>' +
+      '<g fill="none" stroke="#f5c84a" stroke-linecap="round"><path d="M6.2-1.6Q8.9-.2 7.6 3" stroke-width="1.4"/><path d="M-3.2-1.8Q-6.2-1.6-6.4 1.4" stroke-width="1.4"/>' +
+      '<path d="M5.6-2.1L8.3.3M6.8-3.8L9.4-1.9" stroke-width=".9"/></g>' +
+      '<ellipse cx="10.9" cy="-5.1" rx="2.2" ry=".72" transform="rotate(28 10.9 -5.1)" fill="#f5c84a" stroke="#7a5410" stroke-width=".4"/><circle cx="10.6" cy="-5.7" r=".42" fill="#111"/>' : '') +
+    '<path d="M-3.6-1.9h6.6v4.6q-3.3 1.5-6.6 0z" fill="' + c + '" stroke="#111" stroke-width=".8"/>' +      // saddle cloth in the player's colour
+    '<path d="M-2.2-1.6V-8.2Q.3-9.9 2.8-8.2V-1.6Z" fill="' + arm + '" stroke="' + ln + '" stroke-width=".9"/>' +      // body armour
+    '<path d="M-1.2-8L-1.5-7.4" stroke="' + arm + '" stroke-width="1.6" stroke-linecap="round"/>' +      // left arm (to the shield's hand)
+    '<path d="M1.8-7.4Q3.4-7.6 3.9-6.8" stroke="' + arm + '" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="4" cy="-7" r=".9" fill="#d9a877" stroke="#111" stroke-width=".4"/>' +      // right arm holding the lance
+    '<circle cx=".3" cy="-10.6" r="2.3" fill="#d9a877" stroke="#111" stroke-width=".8"/><path d="M-2.3-11a2.6 2.6 0 0 1 5.2 0Z" fill="' + arm + '" stroke="' + ln + '" stroke-width=".8"/>' +
+    '<circle cx="1.5" cy="-10.3" r=".5" fill="#1d1610"/><path d="M.8-11.3l1.4.3" stroke="#1d1610" stroke-width=".45" stroke-linecap="round"/>' +      // eye and brow (looking ahead)
+    // the mighty knight's grizzled grey beard and lighter moustache (Rick, 2026-11-19)
+    (gold ? '<path d="M-.6-9.8q.4 3.4 3.4 1.4q.7-.7.3-1.6q-1.7.7-3.7.2z" fill="#8f8a84" stroke="#111" stroke-width=".4" stroke-linejoin="round"/><path d="M-.1-8.7l.3.8M.9-8.3l.2.9M1.9-8.7l.3.6" stroke="#c9c4bb" stroke-width=".3"/>' +
+      '<path d="M1.5-9.6q.8-.5 1.5.1" stroke="#c9c4bb" stroke-width=".7" fill="none" stroke-linecap="round"/>' : '') +
+    '<path d="M.3-13.4q2.2-2.8 4.4-1.8" stroke="' + (gold ? '#fff6d0' : '#c62828') + '" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +      // plume
+    LANCE2D(gold) +      // lance (no pennant since 2026-11-19, Rick's request)
+    // shield: smaller and higher (Rick, 2026-11-19), clear of the leg and the saddle cloth
+    // (2026-11-19: a proper shield with a rim and a boss, held in the left hand)
+    '<path d="M-5.3-9.8h3.8v2.6q0 2.2-1.9 3.2q-1.9-1-1.9-3.2z" fill="' + c + '" stroke="' + (gold ? '#b8860b' : '#9aa1aa') + '" stroke-width=".55"/><path d="M-5.3-9.8h3.8v2.6q0 2.2-1.9 3.2q-1.9-1-1.9-3.2z" fill="none" stroke="' + ln + '" stroke-width=".25"/>' +
+    '<circle cx="-3.4" cy="-7.7" r=".6" fill="' + (gold ? '#f5c84a' : '#c9ced6') + '" stroke="#111" stroke-width=".3"/>' +
+    '<circle cx="-1.55" cy="-7.4" r=".7" fill="#d9a877" stroke="#111" stroke-width=".35"/>';      // the hand gripping it
+}
+const FOOTMAN = (c, s) => '<ellipse cx="1.5" cy="7.5" rx="7.5" ry="2.6" fill="rgba(0,0,0,.4)"/>' +
   (s > 1 ? '<path d="M5.5 8V-12" stroke="#5a3d22" stroke-width="1.4"/><path d="M5.5-15.5l1.7 3.4h-3.4z" fill="#e8edf2" stroke="#111" stroke-width=".6"/>' : '') +
   '<path d="M-4 7.5V-1Q0-4 4-1V7.5Z" fill="' + c + '" stroke="#111" stroke-width="1.2"/><path d="M1-2.6Q4-1.4 4-1V7.5H1Z" fill="rgba(0,0,0,.25)"/>' +
+  // arms (2026-11-19, Rick: "eyes and arms like the bandit"): sleeves in the player's colour, hands; the right one holds the spear
+  '<path d="M-3.4-.6L-2.8 1.6" stroke="#111" stroke-width="2.9" stroke-linecap="round"/><path d="M-3.4-.6L-2.8 1.6" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round"/>' +
+  '<path d="M3.4-.6L' + (s > 1 ? '5.3 2' : '5.8 3.8') + '" stroke="#111" stroke-width="2.9" stroke-linecap="round"/><path d="M3.4-.6L' + (s > 1 ? '5.3 2' : '5.8 3.8') + '" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round"/>' +
+  '<circle cx="' + (s > 1 ? 5.5 : 6) + '" cy="' + (s > 1 ? 2.4 : 4.3) + '" r="1.2" fill="#d9a877" stroke="#111" stroke-width=".5"/>' +
   '<circle cy="-4.5" r="3.2" fill="#d9a877" stroke="#111" stroke-width="1"/><path d="M-3.7-5a3.7 3.7 0 0 1 7.4 0Z" fill="#b8bec8" stroke="#111" stroke-width=".9"/>' +
+  '<circle cx="-1.2" cy="-3.9" r=".6" fill="#1d1610"/><circle cx="1.2" cy="-3.9" r=".6" fill="#1d1610"/>' +      // eyes
+  '<path d="M-2-4.9l1.4.3M2-4.9l-1.4.3" stroke="#1d1610" stroke-width=".55" stroke-linecap="round"/>' +      // brows
   (s > 1 ? '<path d="M0-8.6q2.5-3.5 5-2.2" stroke="#c62828" stroke-width="1.8" fill="none" stroke-linecap="round"/>' : '') +
-  '<path d="M-8-1.5h5.4v4.8q0 3-2.7 4.2q-2.7-1.2-2.7-4.2z" fill="' + c + '" stroke="#111" stroke-width="1"/>' +
-  (s > 1 ? '<circle cx="-5.3" cy="2" r="1.3" fill="#e8b84a" stroke="#111" stroke-width=".5"/>' : '');
+  // shield (2026-11-19): flat top, pointed bottom, a steel rim and boss, gripped by the left hand at its edge
+  '<path d="M-8.2-1.6h5.6v4.6q0 3.2-2.8 4.5q-2.8-1.3-2.8-4.5z" fill="' + c + '" stroke="#9aa1aa" stroke-width="1"/><path d="M-8.2-1.6h5.6v4.6q0 3.2-2.8 4.5q-2.8-1.3-2.8-4.5z" fill="none" stroke="#111" stroke-width=".45"/>' +
+  '<circle cx="-5.4" cy="2" r="1.1" fill="' + (s > 1 ? '#e8b84a' : '#c9ced6') + '" stroke="#111" stroke-width=".45"/>' +
+  '<circle cx="-2.6" cy="2.2" r="1.15" fill="#d9a877" stroke="#111" stroke-width=".5"/>';
 function edgeMid(e) { const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b]; return [(A.x + B.x) / 2, (A.y + B.y) / 2]; }
 // on duty: full colour with a gold ring at its feet; resting (inactive): greyed out with a little "z"
-function guard2D(e, g) {
-  const [x, y] = edgeMid(e);
+function guard2D(e, g) {      // (e: the knight's corner since 2026-11-19; they used to stand on roads)
+  const x = VERT[e].x, y = VERT[e].y;
   const body = g.a ? '<ellipse cx="0" cy="7.5" rx="8.5" ry="3.2" fill="none" stroke="#ffcf5a" stroke-width="1.6"/>' + GUARDBODY(PCOL[g.p], g.s)
-    : '<g class="off">' + GUARDBODY(PCOL[g.p], g.s) + '</g><text x="6" y="-9" style="font:800 7px system-ui,sans-serif;fill:#fff;stroke:#111;stroke-width:1.6;paint-order:stroke">z</text>';
+    // resting: greyed out with a still "z" (the flat map stays simple; the floating Z's are 3D only)
+    : '<g class="off">' + GUARDBODY(PCOL[g.p], g.s) + '</g><text class="zz" x="' + (g.s > 1 ? 3 : 4) + '" y="' + (g.s > 1 ? -14 : -9) + '">z</text>';
   return '<g class="deco" transform="translate(' + x.toFixed(1) + ' ' + (y - 3).toFixed(1) + ') scale(1.2)">' + drop('g' + e, g.p + ':' + g.s + ':' + (g.a ? 1 : 0), body) +
-    '<title>' + esc(G.pl[g.p].name) + "'s knight (strength " + g.s + (g.a ? ', on duty' : ', resting: needs 1 Grain to go on duty') + ')</title></g>';
+    '<title>' + esc(G.pl[g.p].name) + "'s " + (g.s === 3 ? 'mighty knight' : g.s === 2 ? 'mounted knight' : 'knight') + ' (strength ' + g.s + (g.a ? ', on duty' : ', resting: needs 1 Grain to go on duty') + ')</title></g>';
 }
 function seg(e, k) {
   const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b];
@@ -308,8 +373,10 @@ function noteDrops() {
   for (const v in G.b) { now['b' + v] = G.b[v].p + ':' + G.b[v].l + ':' + (G.b[v].u || 0) + ':' + (G.b[v].c || ''); if (G.b[v].w) now['w' + v] = 1; }
   if (G.deck) now.storm = G.storm;
   for (const e in guards()) now['g' + e] = G.gd[e].p + ':' + G.gd[e].s + ':' + (G.gd[e].a ? 1 : 0);
-  if (SEEN && SEEN.id === G.id) for (const k in now) if (SEEN.now[k] !== now[k]) FELL[k] = Date.now();
+  const landed = [];
+  if (SEEN && SEEN.id === G.id) for (const k in now) if (SEEN.now[k] !== now[k]) { FELL[k] = Date.now(); landed.push(k); }
   SEEN = {id: G.id, now};
+  if (landed.length) dustFx(landed);      // a puff of dust as each lands (js/flair.js)
 }
 function drop(key, val, inner) {
   const age = Date.now() - (FELL[key] || 0);
@@ -426,6 +493,7 @@ function harvestFx() {
   setTimeout(() => {
     if (!G) return;
     drawBoard();
+    harvestPop(hs);      // "+N" chips and sparkles (js/flair.js)
     const lands = document.querySelectorAll('#board .hex');
     let k = 0;
     hs.forEach(i => {
@@ -488,6 +556,14 @@ function chaseFx() {
   SEENCHASE = n;
   if (!fresh) return;
   if (D3.on && D3.chase) D3.chase(G.chase); else chase2D(G.chase);
+}
+// A raid (2026-11-19, Rick's request; 3D only, pure show): the fleet sails up to the beach, then flees (the knights
+// won) or waits until everyone has chosen a fort to lose and pillages them. G.raidfx = {n counter, r, v, w} (see raid()).
+let SEENRAID = null;
+function raidFx() {
+  const n = G.raidfx ? G.raidfx.n : 0, fresh = SEENRAID !== null && n !== SEENRAID && G.raidfx;
+  SEENRAID = n;
+  if (fresh && D3.on && D3.raid) D3.raid(G.raidfx);
 }
 // Robbing (2026-11-19, Rick's request): the handed-over card lifts out of the robbed player's hand (or profile)
 // and flies in an arc to the robber's hand (or profile). G.robfx = {n counter, from, to, r}; played when n
@@ -755,7 +831,12 @@ function drawBoard() {
     s += '<polygon class="deco" points="' + corners(h, TILE) + '" fill="rgba(12,18,34,.45)"/>';
     if (!chase2Busy()) s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + (h.y - 4).toFixed(1) + ')">' + drop('storm', G.storm, BANDIT) + '</g>';      // (a Guard's chase draws its own)
   }
+  // the longest route (2026-11-19): a plain gold edge under its roads and a thin gold line along them (still: the flat map
+  // stays simple; 3D has the glowing strip)
+  const route = G.lr != null && G.lr >= 0 ? routeEdges(G.lr) : [];
+  route.forEach(e => { s += '<line class="deco lglow" ' + seg(e, .12) + '/>'; });
   for (const e in G.r) s += '<g class="deco">' + drop('r' + e, G.r[e], '<line transform="translate(1.5 3)" ' + seg(e, .16) + ' stroke="rgba(0,0,0,.4)" stroke-width="10" stroke-linecap="round"/><line ' + seg(e, .16) + ' stroke="#111" stroke-width="10" stroke-linecap="round"/><line ' + seg(e, .16) + ' stroke="' + PCOL[G.r[e]] + '" stroke-width="5.5" stroke-linecap="round"/><line transform="translate(-.8 -1.2)" ' + seg(e, .2) + ' stroke="rgba(255,255,255,.45)" stroke-width="1.4" stroke-linecap="round"/>') + '</g>';
+  route.forEach(e => { s += '<line class="deco lroute" ' + seg(e, .2) + '/>'; });
   for (const v in G.b) s += piece(v, G.b[v]);
   for (const e in guards()) s += guard2D(e, G.gd[e]);
   if (G.fg) {      // the raider fleet out at sea, closer with every raider face of the Sea die
@@ -767,9 +848,9 @@ function drawBoard() {
   if (what === 'road') spots(G.turn, 'road').forEach(e => {
     s += '<line class="spot deco" ' + seg(e, .2) + ' stroke="#fff" stroke-width="7" stroke-linecap="round"/><line class="hit" data-e="' + e + '" ' + seg(e, .1) + ' stroke-width="24" stroke-linecap="round"/>';
   });
-  if (GMODES.includes(what)) spots(G.turn, what).forEach(e => {
-    const [x, y] = edgeMid(e);
-    s += '<circle class="spot deco" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="13" fill="none" stroke="#fff" stroke-width="3"/><circle class="hit" data-e="' + e + '" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="16"/>';
+  if (GMODES.includes(what)) gSpots(what).forEach(v => {      // (knights stand on corners)
+    const x = VERT[v].x, y = VERT[v].y;
+    s += '<circle class="spot deco" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="13" fill="none" stroke="#fff" stroke-width="3"/><circle class="hit" data-v="' + v + '" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="16"/>';
   });
   if (what === 'town' || what === 'fort' || what === 'wall' || what === 'upgrade' || what === 'castle' || what === 'sack') spots(what === 'sack' ? sackWho() : G.turn, what).forEach(v => {
     const x = VERT[v].x.toFixed(1), y = VERT[v].y.toFixed(1), ring = what !== 'town';
@@ -778,9 +859,26 @@ function drawBoard() {
   if (what === 'storm') HEX.forEach((h, i) => {
     if (i !== G.storm) s += '<polygon class="spot hit" data-h="' + i + '" points="' + corners(h, .9) + '" style="fill:rgba(255,255,255,.1);stroke:#fff;stroke-width:2;stroke-dasharray:6 5"/>';
   });
+  s += '<g id="ghost2d" class="deco"></g>';      // the see-through preview under the pointer, on top of the spot markers (see ghostMarkup)
   $('board').innerHTML = s;
   if (D3.on) D3.update();
 }
+// --- see-through preview (Rick, 2026-11-19): pointing at a glowing spot shows the piece you'd build there ---
+function ghostMarkup(what, d) {
+  const p = G.turn;
+  if (what === 'road' && d.e != null) { const e = +d.e; return '<line ' + seg(e, .16) + ' stroke="#111" stroke-width="10" stroke-linecap="round"/><line ' + seg(e, .16) + ' stroke="' + PCOL[p] + '" stroke-width="5.5" stroke-linecap="round"/>'; }
+  if ((what === 'town' || what === 'fort') && d.v != null) return piece(+d.v, {p, l: what === 'fort' ? 2 : 1, w: G.b[d.v] && G.b[d.v].w});
+  if (d.v != null && (what === 'guard' || what === 'train' || what === 'activate')) {
+    const g = guards()[d.v] || {p, s: 1};
+    return guard2D(+d.v, {p, s: what === 'train' ? g.s + 1 : g.s, a: 1});
+  }
+  return '';
+}
+$('board').addEventListener('pointerover', e => {
+  const t = e.target.closest('.hit'), g = $('ghost2d');
+  if (g) g.innerHTML = t && placing() ? ghostMarkup(placing(), t.dataset) : '';
+});
+$('board').addEventListener('pointerout', e => { const g = $('ghost2d'); if (g && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.hit'))) g.innerHTML = ''; });
 // Award badges shown on a player's profile
 const AWICON = {
   route: '<svg viewBox="-12 -12 24 24"><title>Longest route: +2 points</title><path d="M-8 7L-3-1L3 3L8-7" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8 7L-3-1L3 3L8-7" fill="none" stroke="#ffcf5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-8" cy="7" r="2" fill="#fff"/><circle cx="8" cy="-7" r="2" fill="#fff"/></svg>',
@@ -833,12 +931,39 @@ function hideTip() {
   TIPW = null; $('tip').hidden = true;
   document.querySelectorAll('#hand .rc.need').forEach(c => c.classList.remove('need'));
 }
+// Progress card bubble (Rick, 2026-11-19): pointing at one of your progress cards shows a speech bubble above the
+// pointer with its name and what it does (and whether you can play it now). Disabled buttons don't get pointer events
+// in some browsers, so the listener is on #mycards and finds the card under the pointer itself.
+const CTIP = document.createElement('div'); CTIP.id = 'cardtip'; CTIP.hidden = true; document.body.appendChild(CTIP);
+let CTIPC = null;
+function cardTip(e) {
+  const c = [...document.querySelectorAll('#mycards .pc')].find(b => { const r = b.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; });
+  if (!c) { CTIP.hidden = true; CTIPC = null; return; }
+  if (CTIPC !== c) {
+    CTIPC = c;
+    CTIP.innerHTML = '<b>' + c.dataset.tn + '</b><span>' + c.dataset.tip + '</span>' + (c.dataset.note ? '<em>' + c.dataset.note + '</em>' : '');
+    CTIP.hidden = false;
+  }
+  CTIP.style.left = Math.max(6, Math.min(innerWidth - CTIP.offsetWidth - 6, e.clientX - CTIP.offsetWidth / 2)) + 'px';
+  CTIP.style.top = Math.max(6, e.clientY - CTIP.offsetHeight - 18) + 'px';
+  CTIP.style.setProperty('--tx', (e.clientX - parseFloat(CTIP.style.left)) + 'px');      // (the bubble's tail points at the pointer)
+}
+document.addEventListener('pointermove', e => { if (!CTIP.hidden || e.target.closest && e.target.closest('#mycards')) cardTip(e); });
+document.addEventListener('pointerdown', () => { CTIP.hidden = true; CTIPC = null; });
 // The hand: every resource is its own card, grouped by kind and fanned like cards held in a hand.
+const HANDFAN = 8;      // more cards than this: the hand shows one stack per kind
 function handHTML(R) {
   if (!R) return '';
   const list = []; KINDS().forEach(r => { for (let i = 0; i < (R[r] || 0); i++) list.push(r); });
   if (!list.length) return '<div class="none">No resource cards.</div>';
-  const W = $('hand').clientWidth || 320, n = list.length, step = Math.min(34, (W - 62) / Math.max(1, n - 1));
+  const W = $('hand').clientWidth || 320;
+  // a big hand (Rick, 2026-11-19: "condense the hand of cards ... to save space"): one stacked card per kind with a ×N badge
+  if (list.length > HANDFAN || (W - 62) / Math.max(1, list.length - 1) < 16) {
+    const kinds = KINDS().filter(r => R[r] > 0), m = kinds.length, st = Math.min(54, (W - 62) / Math.max(1, m - 1)), x1 = (W - (46 + st * (m - 1))) / 2;
+    return kinds.map((r, i) => '<div class="rc' + (R[r] > 1 ? ' stack' : '') + '" data-r="' + r + '" data-k="1" style="left:' + (x1 + i * st).toFixed(1) + 'px;--a:' + COL[r][0] + ';--b:' + COL[r][1] + ';transform:rotate(' + ((m > 1 ? i / (m - 1) - .5 : 0) * Math.min(24, m * 4)).toFixed(1) + 'deg)" title="' + R[r] + ' ' + RN[r] + '">' +
+      ico(r) + RN[r] + (R[r] > 1 ? '<b class="cnt">×' + R[r] + '</b>' : '') + '</div>').join('');
+  }
+  const n = list.length, step = Math.min(34, (W - 62) / Math.max(1, n - 1));
   const x0 = (W - (46 + step * (n - 1))) / 2, spread = Math.min(30, n * 4);
   let kth = 0;       /* which card of its kind this is (1 = first) */
   return list.map((r, i) => {

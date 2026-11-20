@@ -17,7 +17,7 @@ const landName = t => t === 'volcano' && !G.fire ? "Bandits' Lair" : LAND[t];   
 const COL = {paper: ['#f3ead2', '#c9b88e', '#7a6a44'], cloth: ['#7aa7e0', '#3d6bb0', '#1f3a66'], coin: ['#f2cf5b', '#c08a1e', '#6a4a0e'], wood: ['#46a565', '#27703f', '#16442a'], clay: ['#d98458', '#a5532d', '#6a3117'], wool: ['#a6d86f', '#6aa83f', '#3e6b22'], grain: ['#f5db72', '#d9ab33', '#8f6c1a'], stone: ['#b3bac6', '#7b8392', '#4a515e'], volcano: ['#66504a', '#392823', '#1d1310']};
 const TILES = {wood: 4, clay: 3, wool: 4, grain: 4, stone: 3, volcano: 1};
 const NUMS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];      // one per land except the middle one
-const COST = {road: {wood: 1, clay: 1}, town: {wood: 1, clay: 1, wool: 1, grain: 1}, fort: {stone: 3, grain: 2}, card: {wool: 1, grain: 1, stone: 1}, guard: {wool: 1, stone: 1}, train: {grain: 1, stone: 1}, activate: {grain: 1}, gchase: {},
+const COST = {road: {wood: 1, clay: 1}, town: {wood: 1, clay: 1, wool: 1, grain: 1}, fort: {stone: 3, grain: 2}, card: {wool: 1, grain: 1, stone: 1}, guard: {wool: 1, stone: 1}, train: {grain: 1, stone: 1}, activate: {grain: 1}, gchase: {}, kmove: {},
   // Forts and Guards: upgrading a fort with goods
   keep: {paper: 1, cloth: 1, stone: 2}, citadel: {coin: 2, paper: 1, cloth: 1, grain: 1},
   // a wall: Clay + Stone in Fire Mountain; 2 Clay in Forts and Guards (Rick's rule, 2026-11-18)
@@ -92,7 +92,8 @@ function makePorts() {
 function portAt(v) { return (G.ports || []).find(o => EDGE[o.e].a === +v || EDGE[o.e].b === +v); }
 // How many of resource r player p must give for 1 of anything: 4 at the bank, 3 with an 'any' port, 2 with that resource's port
 function rate(p, r) {
-  if (GOODS.includes(r)) return GOODSRATE;      // Forts and Guards: the bank buys goods 2 for 1 (ports don't change that)
+  // Forts and Knights goods: 2 for 1 from Trade level 3 (PERKAT); before that like resources (4, or 3 with an 'any' port)
+  if (GOODS.includes(r) && perk(p, 'trd')) return GOODSRATE;
   if (G.fleetT === p || (G.mkt && G.mkt.p === p && G.mkt.r === r)) return 2;      // Trade Fleet / Market Day cards, this turn
   let n = BANK;
   for (const v in G.b) {
@@ -144,9 +145,9 @@ function erupt() {
 // Defence wins: the player with the most guard strength gets a Hero badge (P.hero, +1 point each, kept);
 // a tie gives each tied player 2 resources instead. Raiders win: among players with a fort that has no wall,
 // the one(s) with the least guard strength each lose a fort (back to a town). Then the fleet starts again.
-// Guards (G.gd = {edge: {p, s: 1 or 2}}) stand on their owner's roads: hire for Wool + Stone (strength 1),
+// Guards (G.gd = {corner: {p, s: 1-3, a}}) stand on corners at the end of their owner's roads (on roads until 2026-11-19): hire for Wool + Stone (strength 1),
 // train for Grain + Stone (strength 2). Walls here only raise the discard limit (see handMax); Keeps and Citadels are raid-proof.
-const GOODSRATE = 2;      // the bank gives 1 resource for 2 goods
+const GOODSRATE = 2;      // with Trade level 3, the bank gives 1 card for 2 goods (see rate())
 // Sea die faces (Rick, 2026-11-18): 3 raider faces and one face per improvement track (it was 3 raid, 2 calm, 1 treasure)
 const FLEETMAX = 7, MAXGUARDS = 6, SEAFACE = [null, 'raid', 'raid', 'raid', 'sci', 'trd', 'pol'];
 // --- Improvement tracks (Rick, 2026-11-18; they replaced Keeps and Citadels) ---
@@ -159,6 +160,21 @@ const FLEETMAX = 7, MAXGUARDS = 6, SEAFACE = [null, 'raid', 'raid', 'raid', 'sci
 // permanent once its owner is at level 5. A fort holds one castle; with no free fort, the claim waits until one is built.
 const TRACKS = {sci: {n: 'Science', g: 'paper', c: '#4a9be0'}, trd: {n: 'Trade', g: 'cloth', c: '#3fb27f'}, pol: {n: 'Politics', g: 'coin', c: '#e0a83a'}};
 const TRACKMAX = 5, CASTLEAT = 4, BANNERPTS = 2, CASTLEPTS = 2;      // (BANNERPTS: banners only exist in older saves)
+// Level 3 bonuses (Rick, 2026-11-19), one per track, from level PERKAT up:
+// Science: a roll (not a 7) that gives you nothing lets you take 1 resource of your choice (G.spick, sciPick);
+// Trade: the bank takes your goods 2 for 1 (otherwise 4 for 1, or 3 at an 'any' port, see rate());
+// Politics: a strength-2 knight can be trained once more into a mighty knight, strength 3 (okTrain).
+const PERKAT = 3;
+const PERK = {sci: 'a roll that gives you nothing (not a 7): take 1 resource you choose', trd: 'trade goods 2 for 1 with the bank', pol: 'train knights once more: mighty knights, strength 3'};
+const perk = (p, k) => !!G.fg && imp(p, k) >= PERKAT;
+// Science bonus: player i takes resource r for one of their pending picks
+function sciPick(i, r) {
+  if (!G.spick || !G.spick[i] || !RES.includes(r)) return false;
+  G.pl[i].res[r]++;
+  if (--G.spick[i] <= 0) delete G.spick[i];
+  say(G.pl[i].name + ' took 1 ' + RN[r] + ' (Science bonus).');
+  return true;
+}
 const freeForts = p => Object.keys(G.b).filter(v => G.b[v].p === p && G.b[v].l === 2 && !G.b[v].c).map(Number);
 // which castle (track key) player p should claim now, or null: first to CASTLEAT, or taking a non-permanent one at TRACKMAX
 function castleDue(p) {
@@ -219,10 +235,47 @@ const okKeep = () => false, okCitadel = () => false;
 function wallCount(p) { let n = 0; for (const v in G.b) if (G.b[v].p === p && G.b[v].w) n++; return n; }
 const handMax = p => HANDMAX + (G.fg ? 2 * wallCount(p) : 0);      // more than this on a 7: discard half
 const handSize = p => KINDS().reduce((s, r) => s + (G.pl[p].res[r] || 0), 0);
-function okGuard(p, e) { return !!G.fg && G.r[e] === p && !guards()[e] && guardCount(p) < MAXGUARDS; }
-function okTrain(p, e) { const g = guards()[e]; return !!G.fg && !!g && g.p === p && g.s === 1; }
+// Knights stand on corners (Rick, 2026-11-19; they were on roads): an empty corner (no town, fort or knight) at the end
+// of one of your roads. G.gd is keyed by corner since then (G.gdv = 1; older saves are moved over by knightsToCorners).
+const knightSpot = (p, v) => !!VERT[v] && !G.b[v] && !guards()[v] && VERT[v].e.some(e => G.r[e] === p);
+function okGuard(p, v) { return !!G.fg && knightSpot(p, v) && guardCount(p) < MAXGUARDS; }
+function knightsToCorners(g) {      // an older save's knights were keyed by road: put each on a free end of its road
+  if (!g.gd || g.gdv) return;
+  const old = g.gd, b = g.b || {}; g.gd = {}; g.gdv = 1;
+  for (const e in old) {
+    const E = EDGE[e]; if (!E) continue;
+    const v = [E.a, E.b].concat(VERT.map((_, x) => x)).find(x => !b[x] && !g.gd[x] && VERT[x].e.some(k => (g.r || {})[k] === old[e].p));
+    if (v != null) g.gd[v] = old[e];
+  }
+}
+// strength 1 → 2; with Politics level 3, 2 → 3 (a mighty knight)
+function okTrain(p, e) { const g = guards()[e]; return !!G.fg && !!g && g.p === p && (g.s === 1 || (g.s === 2 && perk(p, 'pol'))); }
 function okActivate(p, e) { const g = guards()[e]; return !!G.fg && !!g && g.p === p && !g.a; }
-function okChase(p, e) { const g = guards()[e]; return !!G.fg && !!g && g.p === p && !!g.a && G.storm != null; }
+// chasing the bandit off: the knight must stand on a corner of the bandit's land (Rick, 2026-11-19), and the bandit must be awake
+function okChase(p, v) { const g = guards()[v]; return !!G.fg && !!g && g.p === p && !!g.a && G.storm != null && banditAwake() && VERT[v].h.includes(G.storm); }
+// Forts and Knights: the bandit sleeps in its lair until the raiders first attack (Rick, 2026-11-19): no moving it on a 7
+const banditAwake = () => !G.fg || (G.raids || 0) > 0;
+// Moving a knight (Rick, 2026-11-19): a knight on duty walks along its owner's roads to another empty corner (no
+// town, fort or knight on it, nor on the corners it passes), then rests. kmoveTo(p, v) = where knight v can go.
+function kmoveTo(p, v) {
+  const g = guards()[v];
+  if (!G.fg || !g || g.p !== p || !g.a) return [];
+  const seen = new Set([+v]), out = [], q = [+v];
+  while (q.length) {
+    const a = q.shift();
+    for (const e of VERT[a].e) {
+      if (G.r[e] !== p) continue;
+      const b = EDGE[e].a === a ? EDGE[e].b : EDGE[e].a;
+      if (seen.has(b)) continue;
+      seen.add(b);
+      if (G.b[b] && G.b[b].p === p) { q.push(b); continue; }      // (through your own towns)
+      if (G.b[b] || guards()[b]) continue;                          // (blocked)
+      out.push(b); q.push(b);
+    }
+  }
+  return out;
+}
+const okMove = (p, v) => kmoveTo(p, v).length > 0;
 function seaDie() {
   const n = 1 + rnd(6), f = SEAFACE[n];
   G.sea = n;
@@ -241,9 +294,21 @@ function seaDie() {
 }
 function raid() {
   G.fleet = 0; G.raids = (G.raids || 0) + 1;
+  // the 3D landing animation (2026-11-19, Rick's request): every screen plays it when n changes (raidFx).
+  // r = how it went ('home' nothing to raid, 'won' the knights won, 'away' only castles, 'lost' forts sacked),
+  // v = the sacked forts (filled by sackFort), w = still waiting for players to choose which fort they lose
+  G.raidfx = {n: ((G.raidfx || {}).n || 0) + 1, r: 'home', v: [], w: false};
   const str = fortCount(), pw = G.pl.map((_, i) => defence(i)), def = pw.reduce((a, b) => a + b, 0);
   say('The raiders landed! Forts on the island: ' + str + '. Defence: ' + def + '.');
   if (!str) { say('With no forts to raid, the raiders sailed home.'); return; }
+  G.raidfx.r = def >= str ? 'won' : 'lost';
+  // after the attack every knight on duty is worn out and goes back to resting (Rick, 2026-11-19). k = the ones who
+  // fought, so the 3D battle still shows them marching out before they lie down.
+  G.raidfx.k = Object.keys(guards()).filter(v => G.gd[v].a).map(Number);
+  raidFight(str, def, pw);
+  if (G.raidfx.k.length) { G.raidfx.k.forEach(v => { G.gd[v].a = 0; }); say('Worn out from the battle, every knight on duty goes back to rest.'); }
+}
+function raidFight(str, def, pw) {
   if (def >= str) {
     const top = Math.max(...pw), lead = pw.map((x, i) => x === top ? i : -1).filter(i => i >= 0);
     if (lead.length === 1) { const P = G.pl[lead[0]]; P.hero = (P.hero || 0) + 1; say('The knights drove them off! ' + P.name + ' is a Hero of the Isles: +1 point.'); }
@@ -260,7 +325,7 @@ function raid() {
     return;
   }
   const at = G.pl.map((_, i) => i).filter(i => sackable(i).length);
-  if (!at.length) { say('The raiders couldn\'t break into the castles, and sailed away.'); return; }
+  if (!at.length) { G.raidfx.r = 'away'; say('The raiders couldn\'t break into the castles, and sailed away.'); return; }
   // the player(s) with the least defence each lose a fort of their choice (Rick's rule, 2026-11-18). Computer players and
   // anyone with just one fort that can be sacked lose it at once; the others pick (phase 'sack', G.sack = seats still to
   // pick, G.sackNext = the phase to go back to afterwards).
@@ -270,11 +335,11 @@ function raid() {
     if (f.length === 1 || G.pl[i].bot) sackFort(i, f.sort((a, b) => vScore(a) - vScore(b))[0]);
     else pick.push(i);
   });
-  if (pick.length) { G.sack = pick; G.sackNext = G.phase; G.phase = 'sack'; say('Raiders! ' + pick.map(i => G.pl[i].name).join(' and ') + (pick.length > 1 ? ' must each' : ' must') + ' choose a fort to lose.'); }
+  if (pick.length) { G.raidfx.w = true; G.sack = pick; G.sackNext = G.phase; G.phase = 'sack'; say('Raiders! ' + pick.map(i => G.pl[i].name).join(' and ') + (pick.length > 1 ? ' must each' : ' must') + ' choose a fort to lose.'); }
 }
 // forts the raiders can take from player i: plain forts (not castles, nor Keeps/Citadels from older saves; walls don't help)
 const sackable = i => Object.keys(G.b).filter(v => G.b[v].p === i && G.b[v].l === 2 && !G.b[v].u && !G.b[v].c).map(Number);
-function sackFort(i, v) { G.b[v].l = 1; say('The raiders sacked a fort: ' + G.pl[i].name + ' loses it, and it\'s a town again.'); }
+function sackFort(i, v) { G.b[v].l = 1; if (G.raidfx && G.raidfx.v) G.raidfx.v.push(+v); say('The raiders sacked a fort: ' + G.pl[i].name + ' loses it, and it\'s a town again.'); }
 // ---------- Forts and Knights progress cards (Rick, 2026-11-18) ----------
 // 54 cards: 18 per track (Rick, 2026-11-18). One deck per track (G.decks[k], made in newGame; played cards go to G.usedT[k] and are shuffled back in when that deck
 // runs out). Inspired by the expansion Rick pointed at, with Hex Isles' own names, pictures (CARDART) and wording, and
@@ -299,7 +364,7 @@ const FGCARDS = {
   guild: {tr: 'trd', q: 3, n: 'Guild Charter', d: 'Name a goods: every other player gives you 1 of it.', need: 'goods'},
   magi: {tr: 'pol', q: 2, n: 'Magistrate', d: 'Move the bandit, then take a random card from every other player on that land.'},
   charter: {tr: 'pol', q: 2, n: 'Royal Charter', d: '1 point, scored the moment you draw it.', vp: true},
-  turn: {tr: 'pol', q: 2, n: 'Turncoat', d: "Another player's strongest knight comes over to one of your roads.", need: 'player'},
+  turn: {tr: 'pol', q: 2, n: 'Turncoat', d: "Another player's strongest knight comes over to a corner by one of your roads.", need: 'player'},
   plot: {tr: 'pol', q: 3, n: 'Plotter', d: "Another player's strongest knight on duty goes to rest.", need: 'player'},
   fire: {tr: 'pol', q: 2, n: 'Firebrand', d: 'Every other player with at least as many points as you discards half their hand.'},
   snoop: {tr: 'pol', q: 3, n: 'Snoop', d: 'Take a random progress card from another player.', need: 'player'},
@@ -336,7 +401,8 @@ const cheapFort = {stone: 2, grain: 1};
 function fgCan(p, c) {
   const I = FGCARDS[c]; if (!I || I.vp) return false;
   if (I.when === 'roll') return G.phase === 'roll';
-  if (G.phase !== 'main' || G.offer) return false;
+  if ((G.phase !== 'main' && G.phase !== 'roll') || G.offer) return false;      // (before rolling too, Rick 2026-11-19)
+  if (c === 'magi' && !banditAwake()) return false;      // (the bandit sleeps until the first raid)
   if (I.need === 'player') return fgTargets(p, c).length > 0;
   if (c === 'mason') return Object.keys(TRACKS).some(k => okImprove(p, k)) && !G.pl[p].mason;
   if (c === 'wallb') return spots(p, 'wall').length > 0;
@@ -378,7 +444,7 @@ function playFG(p, a) {
     G.b[v].l = 2; say(N + ' and raised a fort for 2 Stone and 1 Grain.'); castleCheck(p);
   }
   if (c === 'survey') { G.free = 2; say(N + ': 2 free roads.'); }
-  if (c === 'armour') { const es = spots(p, 'train').slice(0, 2); es.forEach(e => { G.gd[e].s = 2; }); say(N + ' and trained ' + es.length + (es.length > 1 ? ' knights.' : ' knight.')); }
+  if (c === 'armour') { const es = spots(p, 'train').slice(0, 2); es.forEach(e => { G.gd[e].s++; }); say(N + ' and trained ' + es.length + (es.length > 1 ? ' knights.' : ' knight.')); }
   if (c === 'dues') {
     let n = 0;
     others.forEach(i => { const g = GOODS.slice().sort((x, y) => (G.pl[i].res[y] || 0) - (G.pl[i].res[x] || 0))[0]; if (G.pl[i].res[g] > 0) { G.pl[i].res[g]--; P.res[g]++; n++; } });
@@ -392,7 +458,7 @@ function playFG(p, a) {
     if (c === 'snoop') { const k = rnd(T.cards.length), x = T.cards.splice(k, 1)[0]; P.cards.push({c: x.c, n: G.tn}); say(N + ' and took a progress card from ' + T.name + '.'); }
     if (c === 'turn') {
       const e = strongest(a.p, false), g = G.gd[e]; delete G.gd[e];
-      const to = EDGE.map((_, x) => x).filter(x => G.r[x] === p && !guards()[x])[0];
+      const to = VERT.map((_, x) => x).filter(x => knightSpot(p, x))[0];
       if (to != null && guardCount(p) < MAXGUARDS) { G.gd[to] = {p, s: g.s, a: g.a}; say(N + ': one of ' + T.name + "'s knights came over to their side!"); }
       else say(N + ': one of ' + T.name + "'s knights deserted (with nowhere to stand, they left the island).");
     }
@@ -425,6 +491,29 @@ function playFG(p, a) {
 // raid tie (Rick's rule): each tied player draws a card from the track of their choice. Computer players pick their
 // highest track at once; people pick in phase 'tpick' (G.tpick = seats still to pick, G.tpNext = phase to go back to).
 const bestTrack = i => Object.keys(TRACKS).sort((a, b) => imp(i, b) - imp(i, a))[0];
+// --- Progress card limit (Forts and Knights; Rick, 2026-11-19) ---
+// A player may keep at most PCMAX progress cards (point cards score at once and aren't kept). Someone who goes over
+// when it isn't their turn must throw one away straight away: the game waits for them (G.cdisc = those seats;
+// computer players throw away at once). On your own turn you may hold more, but must be back to PCMAX to end it.
+const PCMAX = 4;
+function cardToss(i, c) {
+  const P = G.pl[i], k = P.cards.findIndex(x => x.c === c);
+  if (k < 0 || !FGCARDS[c]) return false;
+  P.cards.splice(k, 1); G.usedT[FGCARDS[c].tr].push(c);
+  say(P.name + ' threw away a progress card (' + PCMAX + ' is the most you can keep).');
+  return true;
+}
+const botToss = i => G.pl[i].cards.slice().sort((x, y) => (fgCan(i, y.c) ? 1 : 0) - (fgCan(i, x.c) ? 1 : 0))[0].c;      // (one it can't use now)
+function cardLimit() {
+  if (!G || !G.decks || G.phase === 'setup' || G.phase === 'over') { if (G) G.cdisc = null; return; }
+  G.pl.forEach((P, i) => { if (i !== G.turn && P.bot) while (P.cards.length > PCMAX) cardToss(i, botToss(i)); });
+  const w = G.pl.map((_, i) => i).filter(i => i !== G.turn && G.pl[i].cards.length > PCMAX);
+  G.cdisc = w.length ? w : null;
+}
+function cardDiscard(i, c) {      // {t:'cdisc', c, p}: throw a card away when over the limit (out of turn, or before ending your turn)
+  if (!G.decks || !G.pl[i] || G.pl[i].cards.length <= PCMAX) return false;
+  return cardToss(i, c);
+}
 function tpickDo2(i, k) { if (!drawFG(i, k)) say('The ' + TRACKS[k].n + ' deck is empty.'); else say(G.pl[i].name + ' took a ' + TRACKS[k].n + ' card.'); }
 function tpickDo(i, k) {
   if (G.phase !== 'tpick' || !G.tpick || !G.tpick.includes(i) || !TRACKS[k]) return false;
@@ -443,7 +532,7 @@ function tpickWho() {
 function sackPick(i, v) {
   if (G.phase !== 'sack' || !G.sack || !G.sack.includes(i) || !sackable(i).includes(v)) return false;
   sackFort(i, v); G.sack = G.sack.filter(q => q !== i);
-  if (!G.sack.length) { G.phase = G.sackNext || 'main'; G.sack = null; }
+  if (!G.sack.length) { G.phase = G.sackNext || 'main'; G.sack = null; if (G.raidfx) G.raidfx.w = false; }
   return true;
 }
 
@@ -527,10 +616,10 @@ function newGame(cfg, fg, level, timer) {
     G.pl.forEach(P => { P.cards = []; });
   }
   if (fg) { G.deck = []; G.decks = fgDecks(); G.usedT = {sci: [], trd: [], pol: []}; }      // track decks instead of Classic's deck
-  if (fg) { G.fleet = 0; G.gd = {}; G.sea = 0; G.raids = 0; G.castle = {}; G.pl.forEach(P => { GOODS.forEach(k => { P.res[k] = 0; }); P.imp = {sci: 0, trd: 0, pol: 0}; }); }
+  if (fg) { G.fleet = 0; G.gd = {}; G.gdv = 1; G.sea = 0; G.raids = 0; G.castle = {}; G.pl.forEach(P => { GOODS.forEach(k => { P.res[k] = 0; }); P.imp = {sci: 0, trd: 0, pol: 0}; }); }
   MODE = null; VIEW = Math.max(0, G.pl.findIndex(p => !p.bot));
   say('A new island appears. Everyone places two towns, each with a road.');
-  if (fg) say('Forts and Knights: raiders are out at sea. Hire knights and put them on duty to defend the island\'s forts.');
+  if (fg) say('Forts and Knights: raiders are out at sea. Hire knights and put them on duty to defend the island\'s forts. The bandit sleeps until the raiders first attack. Keep at most ' + PCMAX + ' progress cards.');
   if (G.pl.some(P => P.bot)) say('Computer players: ' + LEVELS[G.lvl] + '.');
   if (G.timer) { say('Turn timer: ' + timeName(G.timer) + ' a turn.'); clockCheck(); }
 }
@@ -539,18 +628,34 @@ function say(t) { G.log.push(t); if (G.log.length > 40) G.log.shift(); G.said = 
 function setupOrder() { const a = G.pl.map((_, i) => i); return a.concat(a.slice().reverse()); }
 // --- Awards: longest route and most Storm Callers played, 2 points each ---
 const ROUTEMIN = 5, CALLMIN = 3, AWARD = 2;
-// Longest unbroken chain of p's roads (no road used twice; another player's town or fort cuts it)
+// Longest unbroken chain of p's roads (no road used twice; another player's town, fort or knight cuts it:
+// knights block roads since 2026-11-19, Rick's rule)
+const cutsRoute = (p, v) => (G.b[v] && G.b[v].p !== p) || (guards()[v] && guards()[v].p !== p);
 function roadLen(p) {
   let best = 0; const used = new Set();
   const walk = (v, len) => {
     best = Math.max(best, len);
-    if (len && G.b[v] && G.b[v].p !== p) return;
+    if (len && cutsRoute(p, v)) return;
     for (const e of VERT[v].e) {
       if (G.r[e] !== p || used.has(e)) continue;
       used.add(e); walk(EDGE[e].a === v ? EDGE[e].b : EDGE[e].a, len + 1); used.delete(e);
     }
   };
   for (const e in G.r) if (G.r[e] === p) { walk(EDGE[e].a, 0); walk(EDGE[e].b, 0); }
+  return best;
+}
+// the roads (edges) of player p's longest unbroken route, for the gold shine on the board (same walk as roadLen)
+function routeEdges(p) {
+  let best = []; const used = [];
+  const walk = v => {
+    if (used.length > best.length) best = used.slice();
+    if (used.length && cutsRoute(p, v)) return;
+    for (const e of VERT[v].e) {
+      if (G.r[e] !== p || used.includes(e)) continue;
+      used.push(e); walk(EDGE[e].a === v ? EDGE[e].b : EDGE[e].a); used.pop();
+    }
+  };
+  for (const e in G.r) if (G.r[e] === p) { walk(EDGE[e].a); walk(EDGE[e].b); }
   return best;
 }
 function callers(p) { return G.pl[p].kn || 0; }      // Storm Callers played
@@ -585,8 +690,17 @@ function discard(p, res) {
   KINDS().forEach(r => { R[r] -= res[r] || 0; });
   say(G.pl[p].name + ' discarded ' + sum + ' cards.');
   delete G.disc[p];
-  if (!Object.keys(G.disc).length) G.phase = 'storm';
+  if (!Object.keys(G.disc).length) G.phase = sevenPhase();
   return true;
+}
+// Progress cards can be played before rolling (Rick, 2026-11-19, both modes). If one sends the bandit off (or makes a
+// castle pick), the turn goes back to the roll afterwards: G.back = 'roll' until the dice are rolled.
+const backPhase = () => G.back || 'main';
+// after a 7 (and any discards): move the bandit, unless it's still asleep (Forts and Knights, before the first raid)
+function sevenPhase() {
+  if (banditAwake()) return 'storm';
+  say('The bandit sleeps in its lair until the raiders first attack.');
+  return backPhase();
 }
 function cards(p) { return RES.reduce((s, r) => s + G.pl[p].res[r], 0); }
 // --- Robbing (Classic) ---
@@ -605,7 +719,7 @@ function giveCard(v, r) {
   G.pl[v].res[r]--; T.res[r] = (T.res[r] || 0) + 1;
   G.robfx = {n: (G.robfx ? G.robfx.n : 0) + 1, from: v, to: G.rob.by, r};      // the card flies from one player to the other (robFx)
   say(G.pl[v].name + ' handed ' + T.name + ' a card.');
-  G.rob = null; G.phase = 'main';
+  G.rob = null; G.phase = backPhase();
   return true;
 }
 function botGive(v) {      // which card a computer player gives up: the one it has most of (Easy: any)
@@ -623,14 +737,15 @@ function pay(p, what) { const c = COST[what]; for (const r in c) G.pl[p].res[r] 
 
 // ---------- Where can things go? ----------
 function okTown(p, v, setup) {
-  if (G.b[v] || VERT[v].n.some(n => G.b[n])) return false;
+  if (G.b[v] || VERT[v].n.some(n => G.b[n]) || guards()[v]) return false;      // (a knight's corner is taken too)
   return setup || VERT[v].e.some(e => G.r[e] === p);
 }
 function okRoad(p, e, setup) {
   if (e in G.r) return false;
   const ends = [EDGE[e].a, EDGE[e].b];
   if (setup) return ends.includes(G.su.v);
-  return ends.some(v => G.b[v] ? G.b[v].p === p : VERT[v].e.some(x => G.r[x] === p));
+  // (another player's town, fort or knight on that corner blocks building on past it)
+  return ends.some(v => G.b[v] ? G.b[v].p === p : cutsRoute(p, v) ? false : VERT[v].e.some(x => G.r[x] === p));
 }
 function okFort(p, v) { return !!G.b[v] && G.b[v].p === p && G.b[v].l === 1; }
 function spots(p, what) {
@@ -643,10 +758,11 @@ function spots(p, what) {
   if (what === 'keep') return VERT.map((_, v) => v).filter(v => okKeep(p, v));
   if (what === 'citadel') return VERT.map((_, v) => v).filter(v => okCitadel(p, v));
   if (what === 'upgrade') return spots(p, 'keep').filter(() => canPay(p, 'keep')).concat(spots(p, 'citadel').filter(() => canPay(p, 'citadel')));
-  if (what === 'guard') return EDGE.map((_, e) => e).filter(e => okGuard(p, e));
-  if (what === 'train') return EDGE.map((_, e) => e).filter(e => okTrain(p, e));
-  if (what === 'activate') return EDGE.map((_, e) => e).filter(e => okActivate(p, e));
-  if (what === 'gchase') return EDGE.map((_, e) => e).filter(e => okChase(p, e));
+  if (what === 'guard') return VERT.map((_, v) => v).filter(v => okGuard(p, v));      // (knights: corners, see knightSpot)
+  if (what === 'train') return VERT.map((_, v) => v).filter(v => okTrain(p, v));
+  if (what === 'activate') return VERT.map((_, v) => v).filter(v => okActivate(p, v));
+  if (what === 'gchase') return VERT.map((_, v) => v).filter(v => okChase(p, v));
+  if (what === 'kmove') return VERT.map((_, v) => v).filter(v => okMove(p, v));      // (knights that can move; where to: kmoveTo)
   return VERT.map((_, v) => v).filter(v => okFort(p, v));
 }
 
@@ -656,6 +772,7 @@ function act(a, who) {
   const had = a && a.t === 'roll' && G ? G.pl.map((_, i) => handSize(i)) : null;      // hands before a roll (for the harvest stat)
   if (!act1(a, who)) return false;
   if (G.phase !== 'over' && G.phase !== 'setup') { awards(); if (G.phase === 'main') checkWin(G.turn); }
+  cardLimit();
   stat(a, had);
   clockCheck();
   return true;
@@ -718,15 +835,19 @@ function act1(a, who) {
   if (a.t === 'give') return giveCard(who == null ? (G.rob && G.rob.from) : who, a.r);
   if (a.t === 'sack') return sackPick(who == null ? a.p : who, a.v);
   if (a.t === 'tpick') return tpickDo(who == null ? a.p : who, a.k);
+  if (a.t === 'spick') return sciPick(who == null ? a.p : who, a.r);      // Science bonus pick (any time, out of turn too)
+  if (a.t === 'cdisc') return cardDiscard(who == null ? a.p : who, a.c);  // throwing away a progress card over the limit
   const p = G.turn, P = G.pl[p];
   if (who != null && who !== p) return false;
+  if (G.cdisc && G.cdisc.length) return false;      // (waiting for someone to throw away a progress card)
   if (G.phase === 'setup') {
     if (a.t === 'town' && G.su.step === 'town' && okTown(p, a.v, true)) {
       // only the second town (the way back round, G.su.k >= players) gives its lands' resources (Rick's rule, 2026-11-18);
       // in Forts and Guards that second one is a fort (Rick's rule, 2026-11-18)
       const second = G.su.k >= G.pl.length, fort = second && !!G.fg;
       G.b[a.v] = {p, l: fort ? 2 : 1}; G.su.v = a.v; G.su.step = 'road';
-      if (second) VERT[a.v].h.forEach(h => { const t = G.hex[h].t; if (t !== 'volcano') P.res[t]++; });
+      // (Forts and Knights: the starting fort also gives its lands' goods, as a fort does on a roll; Rick, 2026-11-19)
+      if (second) VERT[a.v].h.forEach(h => { const t = G.hex[h].t; if (t === 'volcano') return; P.res[t]++; if (fort && GOODSOF[t]) P.res[GOODSOF[t]] = (P.res[GOODSOF[t]] || 0) + 1; });
       say(P.name + ' founded a ' + (fort ? 'fort' : 'town') + (second ? ' and collected its first resources.' : '.'));
       return true;
     }
@@ -741,16 +862,16 @@ function act1(a, who) {
   }
   if (a.t === 'roll' && G.phase === 'roll') {
     const d = G.fix || [1 + rnd(6), 1 + rnd(6)], sum = d[0] + d[1];      // (G.fix: chosen with a Stargazer card)
-    G.fix = null;
+    G.fix = null; G.back = null;
     G.dice = d; G.rolls = (G.rolls || 0) + 1;
     if (sum === 7 && G.deck) {      // Classic: big hands discard half, then the roller moves the storm
-      say(P.name + ' rolled 7. The bandit is on the move!');
+      say(P.name + ' rolled 7.' + (banditAwake() ? ' The bandit is on the move!' : ''));
       G.disc = {};
       G.pl.forEach((Q, i) => {
         const n = handSize(i);
         if (n > handMax(i)) { if (Q.bot) autoDiscard(i, Math.floor(n / 2)); else G.disc[i] = Math.floor(n / 2); }
       });
-      G.phase = Object.keys(G.disc).length ? 'discard' : 'storm';
+      G.phase = Object.keys(G.disc).length ? 'discard' : sevenPhase();
       if (G.fg) seaDie();
       return true;
     }
@@ -769,6 +890,13 @@ function act1(a, who) {
     const parts = got.map((g, i) => Object.keys(g).length ? G.pl[i].name + ' ' + Object.keys(g).map(r => '+' + g[r] + ' ' + RN[r]).join(' ') : '').filter(Boolean);
     say(P.name + ' rolled ' + sum + '. ' + (parts.length ? parts.join(', ') + '.' : 'Nobody got anything.'));
     G.phase = 'main';
+    // Science level 3: anyone who got nothing picks a free resource (computers at once; people whenever they like, see sciWho)
+    G.pl.forEach((Q, i) => {
+      if (!perk(i, 'sci') || Object.keys(got[i]).length) return;
+      say(Q.name + "'s Science pays off: nothing came their way, so they pick a free resource.");
+      G.spick = G.spick || {}; G.spick[i] = (G.spick[i] || 0) + 1;
+      if (Q.bot) sciPick(i, RES.slice().sort((x, y) => Q.res[x] - Q.res[y])[0]);
+    });
     if (G.fg) seaDie();
     if (G.fire && d[0] === d[1]) {
       G.rum = (G.rum || 0) + 1;
@@ -783,7 +911,7 @@ function act1(a, who) {
   if (a.t === 'storm' && G.phase === 'storm' && Number.isInteger(a.h) && G.hex[a.h] && a.h !== G.storm) {
     // a Guard chases the bandit off: every screen sees G.chase.n go up and plays the knight animation (chaseFx)
     if (G.guard) { G.chase = {n: (G.chase ? G.chase.n : 0) + 1, from: G.storm, to: a.h, p}; G.guard = false; }
-    G.storm = a.h; G.phase = 'main';
+    G.storm = a.h; G.phase = backPhase();
     if (G.magi) {      // Magistrate card: a random card from every other player on that land, instead of robbing one
       G.magi = false;
       say(P.name + ' sent the bandit to the ' + landName(G.hex[a.h].t) + (G.hex[a.h].n ? ' (' + G.hex[a.h].n + ').' : '.'));
@@ -801,16 +929,19 @@ function act1(a, who) {
   }
   if (a.t === 'rob' && G.phase === 'rob' && G.rob && G.rob.opts.includes(a.p)) { startGive(p, a.p); return true; }
   if (a.t === 'card' && G.decks && FGCARDS[a.c]) {      // a Forts and Knights progress card (see playFG)
-    const k = P.cards.findIndex(x => x.c === a.c && x.n < G.tn);       // not one drawn this turn
-    if (G.played || k < 0 || !fgCan(p, a.c) || !playFG(p, a)) return false;
-    P.cards.splice(k, 1); G.played = true; G.usedT[FGCARDS[a.c].tr].push(a.c);
+    // (no limit per turn in Forts and Knights, Rick 2026-11-19; G.played only counts for Classic)
+    const k = P.cards.findIndex(x => x.c === a.c && x.n < G.tn), before = G.phase === 'roll';       // not one drawn this turn
+    if (k < 0 || !fgCan(p, a.c) || !playFG(p, a)) return false;
+    P.cards.splice(k, 1); G.usedT[FGCARDS[a.c].tr].push(a.c);
+    if (before && G.phase !== 'roll') G.back = 'roll';      // (it moved the bandit or asked for a castle: come back to the roll)
     return true;
   }
   if (a.t === 'castle' && G.phase === 'castle' && G.cpick && freeForts(p).includes(a.v)) {      // picking the fort for a castle
-    const k = G.cpick; G.cpick = null; G.phase = 'main';
+    const k = G.cpick; G.cpick = null; G.phase = backPhase();
     placeCastle(p, k, a.v); castleCheck(p);
     return checkWin(p);
   }
+  if (a.t === 'card' && G.deck && CARDS[a.c] && G.phase === 'roll') return classicCard(p, a);      // (before rolling)
   if (G.phase !== 'main') return false;
   if (a.t === 'offer' && !G.offer) {
     const give = cleanRes(a.give), get = cleanRes(a.get);
@@ -831,14 +962,24 @@ function act1(a, who) {
   if (a.t === 'buy' && G.deck && (G.deck.length || (G.used || []).length) && canPay(p, 'card')) {
     pay(p, 'card'); P.cards.push({c: drawCard(), n: G.tn}); say(P.name + ' bought a progress card.'); return checkWin(p);
   }
-  if (a.t === 'card' && G.deck && !G.played && CARDS[a.c] && a.c !== 'p') {
+  if (a.t === 'card' && G.deck && CARDS[a.c]) return classicCard(p, a);
+  if (a.t === 'town' && canPay(p, 'town') && okTown(p, a.v, false)) {
+    pay(p, 'town'); G.b[a.v] = {p, l: 1}; say(P.name + ' built a town.'); return checkWin(p);
+  }
+  return mainRest(p, a);
+}
+// Classic progress cards: one per turn, in the main phase or before rolling (Rick, 2026-11-19)
+function classicCard(p, a) {
+  const P = G.pl[p];
+  if (G.played || a.c === 'p' || !(G.phase === 'main' || G.phase === 'roll') || G.offer) return false;
+  {
     const k = P.cards.findIndex(x => x.c === a.c && x.n < G.tn);       // not one bought this turn
     if (k < 0) return false;
     if (a.c === 'h' && !(RES.includes(a.r1) && RES.includes(a.r2))) return false;
     if (a.c === 'm' && !RES.includes(a.r)) return false;
     P.cards.splice(k, 1); G.played = true;
     if (G.fg) (G.used = G.used || []).push(a.c);      // Forts and Knights: played cards can come round again (see drawCard)
-    if (a.c === 'k') { G.phase = 'storm'; G.guard = true; P.kn = (P.kn || 0) + 1; say(P.name + ' played a Knight.'); }
+    if (a.c === 'k') { if (G.phase === 'roll') G.back = 'roll'; G.phase = 'storm'; G.guard = true; P.kn = (P.kn || 0) + 1; say(P.name + ' played a Knight.'); }
     if (a.c === 'r') { G.free = 2; say(P.name + ' played Road Building: 2 free roads.'); }
     if (a.c === 'h') { P.res[a.r1]++; P.res[a.r2]++; say(P.name + ' played Year of Plenty: ' + RN[a.r1] + ' and ' + RN[a.r2] + '.'); }
     if (a.c === 'm') {
@@ -848,26 +989,32 @@ function act1(a, who) {
     }
     return true;
   }
-  if (a.t === 'town' && canPay(p, 'town') && okTown(p, a.v, false)) {
-    pay(p, 'town'); G.b[a.v] = {p, l: 1}; say(P.name + ' built a town.'); return checkWin(p);
-  }
+}
+// the rest of the main-phase moves (split from act1 when Classic cards moved out, 2026-11-19)
+function mainRest(p, a) {
+  const P = G.pl[p];
   if (a.t === 'fort' && canPay(p, 'fort') && okFort(p, a.v)) {
     pay(p, 'fort'); G.b[a.v].l = 2; say(P.name + ' raised a fort.'); castleCheck(p); return checkWin(p);      // (a waiting castle claim can use the new fort)
   }
   if (a.t === 'wall' && canPay(p, 'wall') && okWall(p, a.v)) {
     pay(p, 'wall'); G.b[a.v].w = 1; say(P.name + ' built a wall.'); return true;
   }
-  if (a.t === 'guard' && canPay(p, 'guard') && okGuard(p, a.e)) {
-    pay(p, 'guard'); G.gd[a.e] = {p, s: 1, a: 0}; say(P.name + ' hired a knight.'); return true;
+  // knights: a.v = the corner (since 2026-11-19)
+  if (a.t === 'guard' && canPay(p, 'guard') && okGuard(p, a.v)) {
+    pay(p, 'guard'); G.gd[a.v] = {p, s: 1, a: 0}; G.gdv = 1; say(P.name + ' hired a knight.'); return true;
   }
-  if (a.t === 'activate' && canPay(p, 'activate') && okActivate(p, a.e)) {
-    pay(p, 'activate'); G.gd[a.e].a = 1; say(P.name + ' fed a knight and put them on duty.'); return true;
+  if (a.t === 'activate' && canPay(p, 'activate') && okActivate(p, a.v)) {
+    pay(p, 'activate'); G.gd[a.v].a = 1; say(P.name + ' fed a knight and put them on duty.'); return true;
   }
-  if (a.t === 'gchase' && okChase(p, a.e)) {      // an active guard chases the bandit (same as a Knight card, without the card), then rests
-    G.gd[a.e].a = 0; G.phase = 'storm'; G.guard = true; say(P.name + "'s knight went after the bandit."); return true;
+  if (a.t === 'gchase' && okChase(p, a.v)) {      // an active guard chases the bandit (same as a Knight card, without the card), then rests
+    G.gd[a.v].a = 0; G.phase = 'storm'; G.guard = true; say(P.name + "'s knight went after the bandit."); return true;
   }
-  if (a.t === 'train' && canPay(p, 'train') && okTrain(p, a.e)) {
-    pay(p, 'train'); G.gd[a.e].s = 2; say(P.name + ' trained a knight.'); return true;
+  if (a.t === 'kmove' && kmoveTo(p, a.v).includes(+a.to)) {      // walk a knight on duty along your roads; it rests afterwards
+    const g = G.gd[a.v]; delete G.gd[a.v]; g.a = 0; G.gd[a.to] = g;
+    say(P.name + ' moved a knight (it rests now).'); return true;
+  }
+  if (a.t === 'train' && canPay(p, 'train') && okTrain(p, a.v)) {
+    pay(p, 'train'); G.gd[a.v].s++; say(P.name + (G.gd[a.v].s === 3 ? ' trained a mighty knight!' : ' trained a knight.')); return true;
   }
   if (a.t === 'improve' && canImprove(p, a.k)) {      // up one level in a track: costs (new level) of its goods
     const k = a.k, lv = imp(p, k) + 1;
@@ -882,17 +1029,20 @@ function act1(a, who) {
   if (a.t === 'citadel' && canPay(p, 'citadel') && okCitadel(p, a.v)) {
     pay(p, 'citadel'); G.b[a.v].u = 2; say(P.name + ' raised a Citadel!'); return checkWin(p);
   }
-  if (a.t === 'trade' && GOODS.includes(a.give) && G.fg && RES.includes(a.get) && (P.res[a.give] || 0) >= GOODSRATE) {      // the bank buys goods
-    P.res[a.give] -= GOODSRATE; P.res[a.get]++; say(P.name + ' traded ' + GOODSRATE + ' ' + RN[a.give] + ' for 1 ' + RN[a.get] + '.'); return true;
-  }
-  if (a.t === 'trade' && RES.includes(a.give) && RES.includes(a.get) && a.give !== a.get && P.res[a.give] >= rate(p, a.give)) {
+  // bank and port trades. Forts and Knights (Rick, 2026-11-19): goods can be given (4 for 1, 3 at an 'any' port, 2 with Trade
+  // level 3) and any trade can get goods too, e.g. 2 Wood at a Wood port for 1 Cloth
+  if (a.t === 'trade' && KINDS().includes(a.give) && a.give !== a.get && (RES.includes(a.get) || (G.fg && GOODS.includes(a.get))) && (P.res[a.give] || 0) >= rate(p, a.give)) {
     const n = rate(p, a.give), o = n < BANK && usedPort(p, a.give, n);
-    P.res[a.give] -= n; P.res[a.get]++; say(P.name + ' traded ' + n + ' ' + RN[a.give] + ' for 1 ' + RN[a.get] + (o ? ' at the port.' : '.'));
+    P.res[a.give] -= n; P.res[a.get] = (P.res[a.get] || 0) + 1; say(P.name + ' traded ' + n + ' ' + RN[a.give] + ' for 1 ' + RN[a.get] + (o ? ' at the port.' : '.'));
     // a port trade sends a boat (every screen sees G.ship.n go up and plays it: see shipFx)
     if (o) G.ship = {n: (G.ship ? G.ship.n : 0) + 1, e: o.e, p, give: a.give, get: a.get, k: n};
     return true;
   }
   if (a.t === 'end') {
+    if (G.decks && P.cards.length > PCMAX) {      // must be back down to the limit first (computer players just throw extras away)
+      if (!P.bot) return false;
+      while (P.cards.length > PCMAX) cardToss(p, botToss(p));
+    }
     G.turn = (G.turn + 1) % G.pl.length; G.phase = 'roll';
     if (G.deck) { G.tn++; G.played = false; G.free = 0; }
     G.mkt = null; G.fleetT = null;      // Market Day / Trade Fleet last one turn
@@ -908,7 +1058,7 @@ function checkWin(p) {
 // Is it this screen's turn? (wifi game: my seat; same-screen game: any human)
 function myTurn() { return !!G && G.phase !== 'over' && (NET.role ? G.turn === NET.seat : !G.pl[G.turn].bot); }
 
-const OUTOFTURN = ['discard', 'accept', 'decline', 'give', 'sack', 'tpick'];     // moves a player can make when it isn't their turn
+const OUTOFTURN = ['discard', 'accept', 'decline', 'give', 'sack', 'tpick', 'spick', 'cdisc'];     // moves a player can make when it isn't their turn
 // Do a move, then save and redraw. A wifi guest sends the move to the host instead.
 function go(a) {
   if (NET.role === 'guest') {

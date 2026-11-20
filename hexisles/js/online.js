@@ -135,11 +135,12 @@ function hostDrop(c) {
 function seatGone(s) {
   const P = G.pl[s];
   P.gone = true; P.bot = true; delete P.wait;
+  cardLimit();      // (they owed a progress card: the computer throws one away for them)
   if (G.offer && G.offer.from === s) G.offer = null;      // their trade offer goes with them
   else if (G.offer) answer(s, 'decline');
   if (G.phase === 'discard' && G.disc[s]) {      // they owed a discard: do it for them
     autoDiscard(s, G.disc[s]); delete G.disc[s];
-    if (!Object.keys(G.disc).length) G.phase = 'storm';
+    if (!Object.keys(G.disc).length) G.phase = sevenPhase();
   }
   if (G.phase === 'give' && G.rob && G.rob.from === s) giveCard(s, botGive(s));      // they were being robbed: pick for them
   if (G.phase === 'tpick' && G.tpick && G.tpick.includes(s)) tpickDo(s, bestTrack(s));      // they had a track card to pick

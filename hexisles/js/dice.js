@@ -86,6 +86,7 @@ function showDice() {
 function message() {
   const p = G.turn, P = G.pl[p], n = esc(P.name);
   if (G.phase === 'over') return '<b>' + esc(G.pl[G.win].name) + '</b> won the game!';
+  if (G.cdisc) return 'Waiting for ' + G.cdisc.map(i => '<b>' + esc(G.pl[i].name) + '</b>').join(' and ') + ' to throw away a progress card (' + PCMAX + ' is the most you can keep)…';
   if (G.phase === 'discard') return 'A 7! Waiting for ' + Object.keys(G.disc).map(i => '<b>' + esc(G.pl[i].name) + '</b>').join(' and ') + ' to discard…';
   if (G.offer) return offerFix(G.offer).yes.length && mySeat(G.offer.from) ? '<b>' + n + '</b>: tap ✓ to trade with someone who accepted, or ✗ to turn them down.' : '<b>' + n + '</b> offers ' + fmt(G.offer.give) + ' for ' + fmt(G.offer.get) + '. Waiting for answers…';
   if (G.phase === 'give') return 'Waiting for <b>' + esc(G.pl[G.rob.from].name) + '</b> to hand <b>' + n + '</b> a card…';
@@ -109,11 +110,13 @@ function message() {
   if (G.phase === 'storm') return '<b>' + n + '</b>: tap a land to send the bandit there. It gives nothing while the bandit is on it, and you rob someone who lives there.';
   if (MODE === 'road' && G.free > 0) return 'Free road: tap a glowing line (' + G.free + ' left).';
   if (MODE === 'upgrade') return 'Tap one of your glowing forts to upgrade it (fort → Keep → Citadel). Tap the button again to cancel.';
-  if (MODE === 'guard') return 'Tap a glowing ring on one of your roads to post a knight there. Tap the Knights button to cancel.';
-  if (MODE === 'train') return 'Tap one of your glowing knights to train them (strength 2). Tap the Knights button to cancel.';
+  if (MODE === 'guard') return 'Tap a glowing ring on a corner at the end of one of your roads to post a knight there. Tap the Knights button to cancel.';
+  if (MODE === 'train') return 'Tap one of your glowing knights to train them (+1 strength). Tap the Knights button to cancel.';
   if (MODE === 'activate') return 'Tap one of your resting knights to feed them 1 Grain and put them on duty. Tap the Knights button to cancel.';
-  if (MODE === 'gchase') return 'Tap one of your knights on duty to send them after the bandit. Tap the Knights button to cancel.';
+  if (MODE === 'gchase') return 'Tap one of your knights on duty next to the bandit\'s land to chase it away. Tap the Knights button to cancel.';
+  if (MODE === 'kmove') return KFROM == null ? 'Tap one of your knights on duty to move it along your roads. Tap the Knights button to cancel.' : 'Now tap the empty corner it should walk to (it rests when it gets there). Tap the Knights button to cancel.';
   if (MODE) return 'Tap a glowing ' + (MODE === 'road' ? 'line' : MODE === 'fort' ? 'town' : MODE === 'wall' ? 'town or fort' : 'corner') + ' to build. Tap the button again to cancel.';
+  if (G.decks && P.cards.length > PCMAX && G.phase === 'main') return '<b>' + n + '</b>: you hold ' + P.cards.length + ' progress cards. Play some, or throw extras away when you end your turn (' + PCMAX + ' is the most you can keep).';
   return '<b>' + n + '</b>: build, trade, or end your turn.';
 }
 function render() {
@@ -131,8 +134,10 @@ function render() {
   showDice();
   shipFx();
   chaseFx();
+  raidFx();
   robFx();      // (before the hand is redrawn: the stolen card starts from where it was)
   turnPop();
+  awardFx(); weatherFx();      // award banner, passing weather (js/flair.js)
   const H =(G.pl[VIEW] || {res: {}}).res;
   $('hand').innerHTML = handHTML(G.pl[VIEW] ? H : null);
   const main = human && G.phase === 'main' && !G.offer;     /* while an offer is open, only the offer panel works */
@@ -159,9 +164,11 @@ function render() {
     $('mycards').innerHTML = '<div class="pch">Progress</div><div class="pcrow">' + (!mine.length && !vp ? '<span class="none">None yet</span>' : '') + order.filter(c => mine.some(x => x.c === c)).map(c => {
       const all = mine.filter(x => x.c === c), ready = all.some(x => x.n < G.tn), A = CARDART[c], I = CINFO(c);
       const face = '<svg viewBox="' + A.vb + '" aria-hidden="true">' + A.svg(PCOL[G.pl[VIEW] ? VIEW : 0]) + '</svg>' + I.n + (all.length > 1 ? '<b>×' + all.length + '</b>' : '');
-      if (c === 'p') return '<button class="pc vp" disabled style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" title="' + I.d + '">' + face + '</button>';
-      const can = G.decks ? myTurn() && VIEW === p && !G.played && ready && fgCan(p, c) : main && VIEW === p && !G.played && ready;
-      return '<button class="pc" data-c="' + c + '" style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" title="' + I.d + (ready ? '' : ' (new this turn: play it next turn)') + '"' + (can ? '' : ' disabled') + '>' + face + (ready ? '' : '<em>NEW</em>') + '</button>';
+      // (data-tip/data-tn: the hover bubble, see cardTip in draw2d.js)
+      if (c === 'p') return '<button class="pc vp" disabled style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" data-tn="' + I.n + '" data-tip="' + I.d + '" aria-label="' + I.n + ': ' + I.d + '">' + face + '</button>';
+      // (before rolling too, both modes; Forts and Knights has no one-per-turn limit — Rick, 2026-11-19)
+      const can = G.decks ? myTurn() && VIEW === p && ready && fgCan(p, c) : (main || (human && G.phase === 'roll' && !G.offer)) && VIEW === p && !G.played && ready;
+      return '<button class="pc" data-c="' + c + '" style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" data-tn="' + I.n + '" data-tip="' + I.d + '" data-note="' + (ready ? (can ? 'Tap to play it.' : '') : 'New this turn: you can play it next turn.') + '" aria-label="' + I.n + ': ' + I.d + '"' + (can ? '' : ' disabled') + '>' + face + (ready ? '' : '<em>NEW</em>') + '</button>';
     }).join('') + (vp ? '<span class="none">Point cards scored: <b style="color:var(--accent)">' + vp + '</b></span>' : '') + '</div>';
   }
   $('rumble').hidden = !G.fire;
@@ -181,10 +188,11 @@ function render() {
   // the log over the map; its last line (gold) says what to do now
   const L = $('log'); L.innerHTML = G.log.map(t => '<div>' + esc(t) + '</div>').join('') + '<div class="now">' + message() + '</div>'; L.scrollTop = L.scrollHeight;
   const tide = human && G.phase === 'tide';
-  if (PICK && !main) PICK = null;
-  $('m-pick').hidden = !(tide || PICK);
-  $('p-title').textContent = PICK ? PICK.title : 'Low tide!';
-  $('p-text').textContent = PICK ? PICK.text : 'A 7 means nobody harvests, but the tide leaves something on the beach. Pick one free resource.';
+  if (PICK && !main && !(human && G.phase === 'roll')) PICK = null;      // (a card played before rolling can ask for a pick)
+  SWHO = tide || PICK ? -1 : sciWho();      // Forts and Knights: a Science level 3 pick waiting (js/ui.js)
+  $('m-pick').hidden = !(tide || PICK || SWHO >= 0);
+  $('p-title').textContent = PICK ? PICK.title : SWHO >= 0 ? G.pl[SWHO].name + ': Science bonus' : 'Low tide!';
+  $('p-text').textContent = PICK ? PICK.text : SWHO >= 0 ? 'That roll gave you nothing, but your Science (level ' + PERKAT + '+) pays off. Pick one free resource.' : 'A 7 means nobody harvests, but the tide leaves something on the beach. Pick one free resource.';
   $('p-cancel').hidden = !PICK;
   fillRob(human);
   fillChoose();
@@ -202,7 +210,7 @@ function render() {
   }
   if (G.phase !== 'over') { render.won = false; $('m-win').hidden = true; }
   clearTimeout(BOTT); BOTT = null;
-  if (G.phase !== 'over' && G.pl[p].bot && NET.role !== 'guest') BOTT = setTimeout(botStep, BOTPACE);
+  if (G.phase !== 'over' && G.pl[p].bot && NET.role !== 'guest') BOTT = setTimeout(botStep, BOTPACE + (D3.on && D3.introLeft ? D3.introLeft() : 0));      // (wait for the island to assemble)
   drawClock();      // turn timer (js/timer.js)
   tutDraw();        // How to play coach box (js/tutorial.js)
   if (NET.role === 'host') broadcast();

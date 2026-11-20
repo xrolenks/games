@@ -22,7 +22,7 @@ const WAITS = ['discard', 'give', 'sack', 'tpick'];
 const turnKey = () => G.phase === 'setup' ? 's' + G.su.k : 't' + G.tn;      // changes when the next turn (or setup placement) starts
 function clockKey() { return turnKey() + (G.pl[G.turn].bot && WAITS.includes(G.phase) ? G.phase : ''); }
 // is the clock running? (a person's turn, or a computer's turn waiting for people)
-function clockOn() { return !!(G && G.timer && !G.tut && G.phase !== 'over' && (!G.pl[G.turn].bot || WAITS.includes(G.phase))); }
+function clockOn() { return !!(G && G.timer && !G.tut && G.phase !== 'over' && (!G.pl[G.turn].bot || WAITS.includes(G.phase) || G.cdisc)); }
 // after every move: a new turn (or a new wait) gets a full clock
 function clockCheck() {
   if (!G || !G.timer) return;
@@ -42,9 +42,11 @@ function timeUp() {
   save(); render();
 }
 function timeStep(p) {      // one move made for them; false when there's nothing left to do
+  if (G.cdisc) { G.cdisc.forEach(i => { while (G.pl[i].cards.length > PCMAX) cardToss(i, botToss(i)); }); G.cdisc = null; return true; }      // (too many progress cards)
+  if (G.decks && G.pl[p].cards.length > PCMAX && !G.pl[p].bot && G.phase === 'main') { cardToss(p, botToss(p)); return true; }
   if (G.phase === 'discard') {
     for (const s in G.disc) autoDiscard(+s, G.disc[s]);
-    G.disc = {}; G.phase = 'storm'; return true;
+    G.disc = {}; G.phase = sevenPhase(); return true;
   }
   if (G.phase === 'give') return giveCard(G.rob.from, botGive(G.rob.from));
   if (G.phase === 'sack') { G.sack.slice().forEach(i => sackPick(i, sackable(i).sort((a, b) => vScore(a) - vScore(b))[0])); return true; }

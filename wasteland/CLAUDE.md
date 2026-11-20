@@ -1,4 +1,10 @@
-# Wild Wasteland (`wasteland/index.html`)
+# Wild Wasteland (`wasteland/`)
+
+## Files (split 2026-11-20, Rick's request; was one `index.html`)
+
+`index.html` = page HTML only, `css/style.css` = all styles, `js/` = the code, loaded by plain `<script>` tags at the end of `index.html` **in this order**: `core.js` (shared variables, `GEAR`, ammo, grid helpers, sight, `say`, localStorage `put`/`get`), `areas.js` (cave, exits, Scraptown `TSEC` + townsfolk, shops/drinks, `buildTown`, `newLevel`), `character.js` (attributes, XP, skills, traits, carry weight, `newGame`), `world.js` (`WMN`/`WMS`, clock, enter/leave area, paper map), `combat.js` (combat mode, provoke, loot + containers, `step`, `attack`, `enemyTurn`, intercom), `people.js` (talking, dialogue window, Michael, trading, body loot window, speech bubbles), `actions.js` (`after`/`busy`/`play`/`tap`, weapon effects, reload/equip, stims, `endTurn`), `sprites.js` (`SPR`, player look, `GUNS`/`POSE`, figures), `draw.js` (scenery, buildings, doors, roofs, cave, camera, `drawIso`, `render`), `saves.js` (`snap`/`restore`), `input.js` (grid mouse/touch, foe info, cursors), `ui.js` (wait, Skilldex, saves window, pause, settings, cheats, character, inventory, keyboard), `main.js` (start-up: `buildCursors()`, restore autosave or `newGame`, title menu, character creator).
+- The code used to sit inside one `(function(){ … })()`; now it's plain top-level code shared across the files (no `'use strict'`, same as before). Older notes below that say "near the end of the script" mean `main.js`.
+- **Load order matters:** a function is only hoisted inside its own file, so code that *runs while a file loads* (a `var x = f()`, a top-level call) can only use earlier files or its own. That's why `put`/`get` live in `core.js` and `buildCursors()` is called from `main.js`. Code inside functions (run later, during play) can use anything.
 
 ## Story and flow
 
@@ -8,7 +14,7 @@ You're a wanderer. In a cave you find sealed **Bunker 9**; a voice on the interc
 
 Compact code: many functions are one long line. **Never put a `//` comment mid-line inside a one-line function**: it comments out the rest of the line and breaks the whole game. Use `/* */` or a comment on its own line. Match the terse style.
 
-**Startup load:** `if(auto&&restore(auto))…else newGame()` near the end of the script. Anything `restore()` uses must be defined *above* it; if `restore()` throws, the game silently starts a **new game over the save**. After restoring a test backup, check the last log line is "Session restored." and the HUD is sane. **Old saves must keep loading:** new state gets a default in `restore()`, older shapes are migrated there.
+**Startup load:** `if(auto&&restore(auto))…else newGame()` at the top of `main.js`. Anything `restore()` uses must be defined *above* it; if `restore()` throws, the game silently starts a **new game over the save**. After restoring a test backup, check the last log line is "Session restored." and the HUD is sane. **Old saves must keep loading:** new state gets a default in `restore()`, older shapes are migrated there.
 
 ## Testing
 

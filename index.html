@@ -29,8 +29,9 @@ header p{color:var(--dim);margin:4px 0 0}
 .card{display:block;color:inherit;text-decoration:none}
 .card:focus-visible{outline:2px solid var(--accent);outline-offset:6px;border-radius:12px}
 .thumb{position:relative;aspect-ratio:16/10;border-radius:10px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-.thumb svg{display:block;width:100%;height:100%;transition:transform .3s ease}
-.card:hover .thumb svg{transform:scale(1.04)}
+.thumb svg,.thumb img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .3s ease}
+.card:hover .thumb svg,.card:hover .thumb img{transform:scale(1.04)}
+.thumb img+.label{text-shadow:0 0 8px rgba(255,207,90,.6),0 1px 3px #000,0 0 12px #000}
 .thumb .label{position:absolute;left:14px;bottom:12px;font-family:"Courier New",Courier,monospace;font-weight:bold;font-size:.95rem;letter-spacing:.12em;color:#6dff95;text-shadow:0 0 8px rgba(109,255,149,.6)}
 .card h3{font-size:1rem;font-weight:600;margin:12px 0 2px;transition:color .15s}
 .card:hover h3{color:var(--accent)}
@@ -66,17 +67,8 @@ footer{margin-top:72px;padding-top:16px;border-top:1px solid var(--line);color:v
     </a>
     <a class="card" href="hexisles/">
       <div class="thumb" aria-hidden="true">
-        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice">
-          <rect width="160" height="100" fill="#0b1620"/>
-          <g stroke="#0b1620" stroke-width="2">
-            <polygon points="80,22 96,31 96,49 80,58 64,49 64,31" fill="#3f8f3a"/>
-            <polygon points="62,49 78,58 78,76 62,85 46,76 46,58" fill="#d9b44a"/>
-            <polygon points="98,49 114,58 114,76 98,85 82,76 82,58" fill="#8a8f96"/>
-            <polygon points="116,22 132,31 132,49 116,58 100,49 100,31" fill="#b5532f"/>
-            <polygon points="44,22 60,31 60,49 44,58 28,49 28,31" fill="#6fa83c"/>
-          </g>
-        </svg>
-        <span class="label" style="color:#ffcf5a;text-shadow:0 0 8px rgba(255,207,90,.6)">HEX ISLES</span>
+        <img src="hexisles/thumb.jpg" alt="" width="960" height="600" loading="lazy">
+        <span class="label" style="color:#ffcf5a">HEX ISLES</span>
       </div>
       <h3>Hex Isles</h3>
       <p>Build roads, towns and forts on a hex island. First to 10 points wins.</p>
@@ -107,8 +99,8 @@ footer{margin-top:72px;padding-top:16px;border-top:1px solid var(--line);color:v
         <span class="label" style="color:#ff5a4d;text-shadow:0 0 8px rgba(255,90,77,.6)">FATAL FISTS</span>
       </div>
       <h3>Fatal Fists</h3>
-      <p>A one-on-one arcade fighting game.</p>
-      <div class="meta">Coming soon · 1 or 2 players</div>
+      <p>Punch, kick and blast your rival. Best of three rounds.</p>
+      <div class="meta">Fighting · 1 or 2 players · Desktop &amp; mobile</div>
     </a>
     <!-- To add a game: copy the <a class="card"> block above, change the link, text and thumbnail,
          and update the game count next to "Games". -->
