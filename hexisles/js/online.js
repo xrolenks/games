@@ -55,7 +55,7 @@ function fillLobby() {
 }
 function sendLobby() {
   NET.names = lobbyNames();
-  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, fire: FIRE, lvl: LEVEL}); });
+  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, fire: FIRE, lvl: LEVEL, tm: TIMER}); });
   fillLobby();
 }
 
@@ -184,12 +184,12 @@ function hostBegin() {
   const names = lobbyNames(), humans = 1 + NET.conns.length;
   if (!NET.ready || names.length < 2) return;
   NET.conns.forEach((c, i) => { c.seat = i + 1; });
-  newGame(names.map((n, i) => ({name: n, bot: i >= humans})), FIRE, LEVEL);
+  newGame(names.map((n, i) => ({name: n, bot: i >= humans})), FIRE, LEVEL, TIMER);
   NET.inGame = true; $('m-lobby').hidden = true; save(); render();
 }
 function broadcast() {
   if (!NET.inGame) return;
-  NET.conns.forEach(c => { if (c.open) c.send({t: 'state', g: G, seat: c.seat}); });
+  NET.conns.forEach(c => { if (c.open) c.send({t: 'state', g: G, seat: c.seat, now: Date.now()}); });      // (now: lets guests match the host's clock for the turn timer)
 }
 
 // --- guest ---
@@ -229,10 +229,11 @@ function guestData(d) {
   if (NET.role !== 'guest' || !d) return;
   if (d.t === 'you') NET.name = d.name;
   if (d.t === 'full') netFail('That game is full.');
-  if (d.t === 'lobby') { NET.names = d.names; FIRE = !!d.fire; if ([0, 1, 2].includes(d.lvl)) LEVEL = d.lvl; fillLobby(); }
+  if (d.t === 'lobby') { NET.names = d.names; FIRE = !!d.fire; if ([0, 1, 2].includes(d.lvl)) LEVEL = d.lvl; if (TIMES.includes(d.tm)) TIMER = d.tm; fillLobby(); }
   if (d.t === 'state') {
     const fresh = !NET.inGame || (G && G.phase === 'over' && d.g.phase !== 'over');
     G = d.g; NET.seat = d.seat; NET.inGame = true; NET.lost = false;
+    if (d.now) NET.skew = d.now - Date.now();
     if (fresh) { MODE = null; $('m-lobby').hidden = true; }
     render(); netMark();
   }

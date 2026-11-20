@@ -452,6 +452,7 @@ let G = null;        // the whole game (saved as JSON)
 let MODE = null;     // what the player is placing: 'road' | 'town' | 'fort' | null
 let VIEW = 0;        // whose hand is shown (last human to play)
 let BOTT = null;     // timer for computer players
+const BOTPACE = 1300;      // ms between a computer player's moves (was 700; slowed down on Rick's request, 2026-11-19)
 let TGIVE = null;    // trade window: resource being given
 const D3 = {on: false};   // the 3D board (see "3D board" near the end): on = it is showing instead of the flat map
 let NET = {role: null};   // wifi game: role 'host' | 'guest', seat = which player this screen is
@@ -461,21 +462,56 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i +
 const pips = n => n ? 6 - Math.abs(7 - n) : 0;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
-// fg: Forts and Guards mode (new games are Classic or Forts and Guards; Fire Mountain lives on only in older saves)
-function newGame(cfg, fg, level) {
-  let hex;
-  for (let tries = 0; tries < 200; tries++) {
-    const tiles = [], nums = shuffle(NUMS.slice());
-    for (const t in TILES) for (let i = 0; i < TILES[t]; i++) tiles.push(t);
-    shuffle(tiles);
-    hex = tiles.map(t => ({t, n: t === 'volcano' ? 0 : nums.pop()}));
-    // keep the best numbers (6 and 8) from sitting side by side
-    const hot = i => hex[i].n === 6 || hex[i].n === 8;
-    if (!VERT.some(v => v.h.filter(hot).length > 1)) break;
+// ---------- Fair board (always on, Rick's request 2026-11-19) ----------
+// Every new island is shuffled until it passes these checks (the counts below are "problems"; 0 = fair):
+// lands: no two of the same kind side by side. Numbers: no 6/8 next to another 6/8, no number next to the same number,
+// no 2 next to a 12, the four 6s and 8s on four different kinds of land, and every kind of land gets a fair share of
+// dice dots (its lands average 2.5 to 4 dots). If nothing perfect turns up in time, the least-bad island is used.
+const NEXTTO = HEX.map((_, i) => HEXN[i].filter(j => j > i));      // each pair of neighbouring hexes once
+function landProblems(t) { let n = 0; t.forEach((x, i) => NEXTTO[i].forEach(j => { if (x === t[j] && x !== 'volcano') n++; })); return n; }
+function numProblems(hex) {
+  let n = 0;
+  hex.forEach((h, i) => NEXTTO[i].forEach(j => {
+    const a = h.n, b = hex[j].n;
+    if (a && b && (a === b || (pips(a) === 5 && pips(b) === 5) || (pips(a) === 1 && pips(b) === 1))) n += 3;
+  }));
+  const hot = hex.filter(h => pips(h.n) === 5).map(h => h.t);
+  n += hot.length - new Set(hot).size;
+  for (const r of RES) {
+    const L = hex.filter(h => h.t === r), avg = L.reduce((s, h) => s + pips(h.n), 0) / L.length;
+    if (avg < 2.5 || avg > 4) n++;
   }
+  return n;
+}
+function dealIsland() {
+  const kinds = [];
+  for (const t in TILES) for (let i = 0; i < TILES[t]; i++) kinds.push(t);
+  // lands: shuffle, then keep swapping two lands at random whenever that doesn't make things worse, until none match
+  const lands = shuffle(kinds);
+  let best = landProblems(lands);
+  for (let k = 0; k < 4000 && best > 0; k++) {
+    const i = rnd(lands.length), j = rnd(lands.length);
+    [lands[i], lands[j]] = [lands[j], lands[i]];
+    const s = landProblems(lands);
+    if (s <= best) best = s; else [lands[i], lands[j]] = [lands[j], lands[i]];
+  }
+  let hex = null; best = 1e9;
+  for (let k = 0; k < 30000 && best > 0; k++) {
+    const nums = shuffle(NUMS.slice()), h = lands.map(t => ({t, n: t === 'volcano' ? 0 : nums.pop()})), s = numProblems(h);
+    if (s < best) { best = s; hex = h; }
+  }
+  return hex;
+}
+
+// fg: Forts and Guards mode (new games are Classic or Forts and Guards; Fire Mountain lives on only in older saves)
+// timer: seconds per turn (0 = no turn timer; see js/timer.js)
+function newGame(cfg, fg, level, timer) {
+  const hex = dealIsland();
   const fire = false;
   G = {
     ver: 1, id: Date.now() + '-' + rnd(1e6), hex, fire, fg: !!fg, rum: 0, lava: [], lvl: [0, 1, 2].includes(level) ? level : 1,
+    timer: TIMES.includes(timer) ? timer : 0,
+    st: {dice: Array(13).fill(0), tr: cfg.map(() => 0), got: cfg.map(() => 0), pts: [cfg.map(() => 0)]},      // end-of-game stats (js/stats.js)
     pl: cfg.map(c => ({name: c.name, bot: !!c.bot, res: {wood: 0, clay: 0, wool: 0, grain: 0, stone: 0}})),
     ports: makePorts(),
     b: {},            // buildings by corner: {p: player, l: 1 town | 2 fort}
@@ -496,6 +532,7 @@ function newGame(cfg, fg, level) {
   say('A new island appears. Everyone places two towns, each with a road.');
   if (fg) say('Forts and Knights: raiders are out at sea. Hire knights and put them on duty to defend the island\'s forts.');
   if (G.pl.some(P => P.bot)) say('Computer players: ' + LEVELS[G.lvl] + '.');
+  if (G.timer) { say('Turn timer: ' + timeName(G.timer) + ' a turn.'); clockCheck(); }
 }
 
 function say(t) { G.log.push(t); if (G.log.length > 40) G.log.shift(); G.said = (G.said || 0) + 1; }      // G.said counts lines ever said (sounds use it)
@@ -616,8 +653,11 @@ function spots(p, what) {
 // ---------- The one place the game changes ----------
 // who = the player doing it (wifi: the sender's seat). Left out = whoever's turn it is.
 function act(a, who) {
+  const had = a && a.t === 'roll' && G ? G.pl.map((_, i) => handSize(i)) : null;      // hands before a roll (for the harvest stat)
   if (!act1(a, who)) return false;
   if (G.phase !== 'over' && G.phase !== 'setup') { awards(); if (G.phase === 'main') checkWin(G.turn); }
+  stat(a, had);
+  clockCheck();
   return true;
 }
 // --- Trading between players ---

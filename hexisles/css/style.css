@@ -111,7 +111,7 @@ header button{padding:5px 10px;font-size:.85rem}
 .fly.back{background:repeating-linear-gradient(45deg,#2b4a6a 0 5px,#223b56 5px 10px);border-color:#e8d9a8}
 .fly.back::after{content:"?";font:800 1.3rem system-ui,sans-serif;color:#e8d9a8}
 /* "Your turn" pop-up: grows in over the map, stays a moment, fades away */
-#turnpop{position:fixed;left:50%;top:38%;z-index:45;pointer-events:none;transform:translate(-50%,-50%);text-align:center;font:900 clamp(2rem,7vw,3.6rem)/1 system-ui,sans-serif;color:#fff;letter-spacing:.02em;text-shadow:0 0 18px var(--c),0 3px 0 rgba(0,0,0,.6),0 6px 18px rgba(0,0,0,.7);-webkit-text-stroke:1.5px rgba(0,0,0,.35)}
+#turnpop{position:fixed;left:50%;top:50%;white-space:nowrap;z-index:45;pointer-events:none;transform:translate(-50%,-50%);text-align:center;font:900 clamp(2rem,7vw,3.6rem)/1 system-ui,sans-serif;color:#fff;letter-spacing:.02em;text-shadow:0 0 18px var(--c),0 3px 0 rgba(0,0,0,.6),0 6px 18px rgba(0,0,0,.7);-webkit-text-stroke:1.5px rgba(0,0,0,.35)}
 #turnpop small{display:block;margin-top:6px;font-size:.38em;font-weight:700;color:var(--c);-webkit-text-stroke:0;text-shadow:0 2px 6px rgba(0,0,0,.9)}.beach{fill:#ead9a4;stroke:#ead9a4;stroke-width:16;stroke-linejoin:round}
 .hex{stroke:rgba(0,0,0,.45);stroke-width:1.5;stroke-linejoin:round}
 .deco{pointer-events:none}
@@ -145,7 +145,9 @@ header button{padding:5px 10px;font-size:.85rem}
 .die.roll:nth-child(2){animation-duration:.22s;animation-direction:reverse}
 @keyframes tumble{0%{transform:translateY(0) rotate(0)}25%{transform:translateY(-9px) rotate(90deg)}50%{transform:translateY(0) rotate(180deg)}75%{transform:translateY(-5px) rotate(270deg)}100%{transform:translateY(0) rotate(360deg)}}
 /* the hand: one real-looking card per resource you hold, fanned out */
-#hand{position:relative;flex:1 1 100%;min-width:0;height:104px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+/* #handbox holds the resource fan (#hand) and, in modes with progress cards, a separate Progress section (#mycards) */
+#handbox{display:flex;flex:1 1 100%;min-width:0;height:104px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#hand{position:relative;flex:1 1 auto;min-width:0;height:100%}
 #hand .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:.85rem}
 .rc{position:absolute;bottom:12px;width:46px;height:66px;border-radius:7px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));box-shadow:-2px 2px 5px rgba(0,0,0,.5);transform-origin:50% 140%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:.58rem;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;transition:transform .15s}
 .rc .ico{width:26px;height:26px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5))}
@@ -194,15 +196,25 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
 .row i{flex:none;width:14px;height:14px;border-radius:50%;border:1px solid #000}
 .row.end{justify-content:flex-end;margin:14px 0 0}
 .row.wifi{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:.9rem;color:var(--dim)}
-#mycards{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px;align-content:center;align-items:center;font-size:.78rem;color:var(--dim)}
+#mycards{flex:0 1 auto;min-width:76px;max-width:60%;display:flex;flex-direction:column;border-left:2px dashed var(--line);padding:4px 8px 6px;font-size:.72rem;color:var(--dim)}
+#mycards[hidden]{display:none}
+#mycards .pch{font-size:.62rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:5px}
+#mycards .pcrow{flex:1;display:flex;gap:6px;align-items:center;overflow-x:auto;overflow-y:hidden;padding:6px 6px 0 0}
+#mycards .none{white-space:nowrap}
+/* phones: the Progress section goes under the resource cards instead of beside them */
+@media(max-width:600px){
+  #handbox{flex-direction:column;height:auto}
+  #hand{flex:none;height:104px}
+  #mycards{max-width:none;border-left:0;border-top:2px dashed var(--line);padding:4px 8px 8px}
+}
 /* progress cards (Rick, 2026-11-18): small illustrated cards, picture on top, name below; ×N badge for duplicates */
-#mycards .pc{position:relative;width:66px;height:94px;padding:5px 3px 4px;border-radius:8px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));box-shadow:0 3px 7px rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:space-between;color:#fff;font-size:.6rem;font-weight:800;line-height:1.1;text-align:center;text-shadow:0 1px 2px #000;cursor:pointer;transition:transform .15s,box-shadow .15s}
-#mycards .pc svg{width:52px;height:56px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+#mycards .pc{position:relative;flex:none;width:50px;height:68px;padding:3px 2px;border-radius:8px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));box-shadow:0 3px 7px rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:space-between;color:#fff;font-size:.6rem;font-weight:800;line-height:1.1;text-align:center;text-shadow:0 1px 2px #000;cursor:pointer;transition:transform .15s,box-shadow .15s}
+#mycards .pc svg{width:40px;height:42px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
 #mycards .pc:hover:not(:disabled){transform:translateY(-4px);box-shadow:0 0 12px rgba(255,207,90,.9)}
 #mycards .pc:disabled{opacity:.6;filter:saturate(.55);cursor:default}
 #mycards .pc.vp{opacity:1;filter:none;border-color:var(--accent)}
 #mycards .pc b{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 4px;border-radius:10px;background:var(--accent);color:#1a1405;font-size:.66rem;line-height:19px;text-shadow:none}
-#mycards .pc em{position:absolute;top:52px;left:-3px;right:-3px;background:rgba(0,0,0,.65);font-style:normal;font-size:.56rem;padding:1px 0;text-shadow:none}
+#mycards .pc em{position:absolute;top:36px;left:-3px;right:-3px;background:rgba(0,0,0,.65);font-style:normal;font-size:.56rem;padding:1px 0;text-shadow:none}
 /* build buttons with a picture, and the pop-up showing the cards they cost */
 .bw{display:grid;min-width:0}
 .bw button:disabled{pointer-events:none}
@@ -249,6 +261,56 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
 .pick{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
 .pick button{padding:6px 2px;font-size:.72rem}
 
+/* turn timer picker (6 choices on their own line) and the clock next to the dice (js/timer.js) */
+.timepick{flex-wrap:wrap}
+.timepick button{flex:1;padding:7px 2px;font-size:.8rem}
+#clock{position:relative;flex:none;width:44px;height:44px;display:grid;place-items:center;--c:var(--accent)}
+#clock svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+#clock .cb{fill:rgba(8,18,28,.8);stroke:rgba(255,255,255,.14);stroke-width:4}
+#clock .cf{fill:none;stroke:var(--c);stroke-width:4;stroke-linecap:round;transition:stroke-dasharray .25s linear}
+#clock b{position:relative;font-size:.85rem;font-variant-numeric:tabular-nums}
+#clock.low .cf{stroke:#ff5d5d}
+#clock.low b{color:#ff8a8a;animation:tick .5s ease-in-out infinite alternate}
+@keyframes tick{to{transform:scale(1.25)}}
+
+/* How to play: coach box over the map, and the glow on the button it talks about (js/tutorial.js) */
+.row.tutrow{padding:8px 10px;background:rgba(255,207,90,.08);border:1px solid rgba(255,207,90,.35);border-radius:10px;font-size:.9rem}
+#coach{position:absolute;left:0;right:0;margin:0 auto;top:8px;z-index:3;width:min(94%,380px);padding:10px 12px;background:rgba(8,18,28,.95);border:1px solid var(--accent);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.55);font-size:.85rem;animation:opop .25s ease-out}
+#coach .ch-top{display:flex;align-items:baseline;gap:8px}
+#coach .ch-top b{flex:1;color:var(--accent);font-size:1rem}
+#coach .ch-top span{color:var(--dim);font-size:.75rem}
+#coach p{margin:6px 0 0;line-height:1.4}
+#coach .row.end{margin:8px 0 0}
+#coach button{padding:6px 12px;font-size:.82rem}
+@media(max-width:1099px){#coach{position:static;width:auto;margin:8px 0 0}}      /* narrow screens: under the map, so the island stays clear to tap */
+#ch-skip{background:none;border-color:transparent;color:var(--dim)}
+.coach-hi{outline:3px solid var(--accent);outline-offset:3px;animation:coachglow .8s ease-in-out infinite alternate}
+@keyframes coachglow{from{outline-color:rgba(255,207,90,.35);box-shadow:0 0 0 rgba(255,207,90,0)}to{outline-color:var(--accent);box-shadow:0 0 18px rgba(255,207,90,.7)}}
+
+/* end-of-game stats in the win window (js/stats.js) */
+#m-win .box{width:min(560px,100%)}
+#w-stats h3{margin:14px 0 6px;font-size:.95rem}
+#w-stats h3 small{font-weight:400;color:var(--dim);font-size:.75rem}
+.wscroll{overflow-x:auto}
+.wst{border-collapse:collapse;width:100%;font-size:.8rem}
+.wst th{font-weight:600;color:var(--dim);font-size:.7rem;padding:4px;text-align:center;vertical-align:bottom}
+.wst td{padding:5px 4px;text-align:center;border-top:1px solid var(--line)}
+.wst td:first-child{text-align:left;white-space:nowrap}
+.wst td.z{color:#4a5d6a}
+.wst tr.win td{background:rgba(255,207,90,.1)}
+.wst tr.win td:first-child::after{content:" 🏆"}
+.wst .dot{display:inline-block;width:.75em;height:.75em;border-radius:50%;margin-right:.4em;border:1px solid rgba(0,0,0,.4)}
+.wdice{display:flex;gap:4px;height:110px;align-items:stretch}
+.wdice div{position:relative;flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:16px}
+.wdice .bar{position:relative;display:block;background:linear-gradient(#7fd0ff,#2f7fb8);border-radius:4px 4px 0 0;min-height:2px}
+.wdice .bar.seven{background:linear-gradient(#ff8a8a,#b83a3a)}
+.wdice .bar em{position:absolute;left:0;right:0;top:-15px;text-align:center;font-style:normal;font-size:.65rem;color:var(--ink)}
+.wdice .fair{position:absolute;left:-1px;right:-1px;height:0;border-top:2px dashed var(--accent)}
+.wdice b{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:.72rem;color:var(--dim)}
+.wgraph{width:100%;height:auto;display:block}
+.wgraph .goal{stroke:var(--accent);stroke-dasharray:4 3;stroke-width:1}
+.wgraph text{fill:var(--dim);font-size:9px;text-anchor:end}
+
 @media(min-width:1100px){
   /* wide screens: the whole page fits the window; the play window takes everything left of a slim column,
      and the bar lies over its bottom edge (the board's viewBox leaves empty sea there: see fitBoard) */
@@ -260,7 +322,8 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
   #side{min-height:0;overflow-y:auto}
   #players{align-self:end;grid-template-columns:1fr}
   #bar{position:absolute;left:0;right:0;bottom:0;margin:0;flex-wrap:nowrap;align-items:center;padding:8px 10px;background:linear-gradient(rgba(6,14,22,0),rgba(6,14,22,.82) 30%);border-radius:0 0 14px 14px}
-  #hand{flex:0 1 300px;background:rgba(8,18,28,.55)}
+  #handbox{flex:0 1 auto;width:auto;max-width:52%;background:rgba(8,18,28,.55)}
+  #hand{flex:0 1 300px;width:300px}
   #actions{flex:1 1 auto}
   #barend{flex:none}
   #dice{--d:36px}

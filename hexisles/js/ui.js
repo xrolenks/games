@@ -17,6 +17,7 @@ function load() {
     const OLDG = {goods: 'paper', carving: 'paper', rug: 'cloth', silver: 'coin'};
     if (g.fg) g.pl.forEach(P => { for (const k in OLDG) if (P.res[k] != null) { P.res[OLDG[k]] = (P.res[OLDG[k]] || 0) + P.res[k]; delete P.res[k]; } GOODS.forEach(k => { P.res[k] = P.res[k] || 0; }); });
     if (g.gd) for (const e in g.gd) if (g.gd[e].a == null) g.gd[e].a = 1;      // guards from before activation existed were always on duty
+    if (g.timer) g.tEnd = Date.now() + g.timer * 1000;      // after a reload the turn gets a fresh clock
     G = g; if (!G.ports) G.ports = makePorts();
     VIEW = Math.max(0, G.pl.findIndex(p => !p.bot)); return true;
   } catch (e) { return false; }
@@ -73,6 +74,7 @@ function fillMode(id, canPick) {
   el.innerHTML = '<span style="flex:1">Mode</span>' + ['Classic', 'Forts and Knights'].map((n, i) => '<button data-f="' + i + '"' + (!!i === FIRE ? ' class="on"' : '') + (canPick ? '' : ' disabled') + '>' + n + '</button>').join('');
   el.nextElementSibling.textContent = MODEHINT[+FIRE];
   fillLevel(id === 's-mode' ? 's-level' : 'l-level', canPick);
+  fillTimer(id === 's-mode' ? 's-timer' : 'l-timer', canPick);      // (js/timer.js)
 }
 // How well the computer players play (G.lvl): 0 Easy, 1 Normal, 2 Hard. Remembered for next time.
 const LEVELS = ['Easy', 'Normal', 'Hard'];
@@ -300,7 +302,7 @@ $('s-rows').addEventListener('input', e => { if (e.target.dataset.i != null) SCF
 $('s-rows').onclick = e => { const b = e.target.closest('button'); if (b) { const c = SCFG[+b.dataset.b]; c.bot = !c.bot; fillSetup(); } };
 $('s-go').onclick = () => {
   const cfg = SCFG.slice(0, SCOUNT).map((c, i) => ({name: c.name.trim() || DEFNAMES[i], bot: c.bot}));
-  netUnmark(); newGame(cfg, FIRE, LEVEL); $('m-setup').hidden = true; save(); render();
+  netUnmark(); newGame(cfg, FIRE, LEVEL, TIMER); $('m-setup').hidden = true; save(); render();
 };
 $('s-mode').onclick = e => { const b = e.target.closest('button'); if (b) { FIRE = b.dataset.f === '1'; fillSetup(); } };
 $('l-mode').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { FIRE = b.dataset.f === '1'; sendLobby(); } };

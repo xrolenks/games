@@ -96,7 +96,7 @@ function init3D(T, Water, Orbit, BU) {
     if (wrap !== false) t.wrapS = t.wrapT = T.RepeatWrapping;
     t.anisotropy = ANISO; if (color) t.colorSpace = T.SRGBColorSpace; return t;
   };
-  const PAL = {wood: ['#173f20', '#3e7b34'], clay: ['#8a4022', '#d4855a'], wool: ['#4a9134', '#98d05e'], grain: ['#a6781f', '#efc965'],
+  const PAL = {wood: ['#173f20', '#3e7b34'], clay: ['#8a4022', '#d4855a'], wool: ['#4a9134', '#98d05e'], grain: ['#6e4a1c', '#b8892e'],
     stone: ['#606268', '#b3b4b8'], volcano: ['#1d1816', '#4a3d37'], sand: ['#c9ad74', '#f0dfae']};
   const LTEX = {};
   Object.keys(PAL).forEach((t, n) => {
@@ -156,7 +156,8 @@ function init3D(T, Water, Orbit, BU) {
   }
   const M3 = {
     bark: std({roughness: 1}), pine: sway(std({roughness: .9}), .03, 1.1), leaf: sway(std({roughness: .8}), .03, 1.3),
-    rock: std({roughness: .92, flatShading: true}), snow: std({roughness: .55, flatShading: true}),
+    rock: std({roughness: .92, flatShading: true}), cut: std({roughness: .9}),
+    crystal: std({roughness: .15, metalness: .1, flatShading: true, emissive: 0x3a5cff, emissiveIntensity: 1}), snow: std({roughness: .55, flatShading: true}),
     wheat: sway(std({roughness: .6}), .2, 1.8), grass: sway(std({roughness: .9}), .14, 2.2), reed: sway(std({}), .15, 1.9),
     wood: std({roughness: .9}), fleece: std({roughness: 1}), dark: std({roughness: .8}),
     brick: std({roughness: .95}), puddle: std({roughness: .05, metalness: .2}), mud: std({roughness: 1}), metal: std({roughness: .4, metalness: .7}),
@@ -216,7 +217,10 @@ function init3D(T, Water, Orbit, BU) {
     trunk: cyl(.35, .5, 1, 6),
     pine: BU.mergeGeometries([[.5, .5, .3], [.4, .45, .58], [.28, .4, .84]].map(([r, h, y]) => new T.ConeGeometry(r, h, 9).translate(0, y, 0))),
     crown: lumpy(2, .14), rock: lumpy(1, .3, true),
-    stalk: BU.mergeGeometries([cyl(.06, .09, .78, 4), new T.ConeGeometry(.2, .32, 5).translate(0, .9, 0)]),
+    crystal: BU.mergeGeometries([cyl(.42, .5, 1.6, 6), new T.ConeGeometry(.42, .7, 6).translate(0, 1.95, 0)]),     // a six-sided crystal with a point
+    // a wheat stalk with a plump ear on top (made wide so the fields read as wheat from high up, Rick's request 2026-11-19)
+    stalk: BU.mergeGeometries([cyl(.06, .09, .74, 4).deleteAttribute('uv'),
+      new T.LatheGeometry([[0, 0], [.26, .05], [.36, .17], [.3, .3], [0, .42]].map(([x, y]) => new T.Vector2(x, y)), 6).translate(0, .7, 0).deleteAttribute('uv')]),
     tuft: new T.ConeGeometry(.5, 1, 4).translate(0, .5, 0), reed: new T.ConeGeometry(.15, 1, 4).translate(0, .5, 0),
     kiln: new T.LatheGeometry([[0, 0], [6.4, 0], [6.6, 1.5], [6.1, 4.5], [4.8, 7.2], [2.6, 8.9], [0, 9.4]].map(([x, y]) => new T.Vector2(x, y)), 20),
     rim: new T.TorusGeometry(1, .22, 6, 24).rotateX(Math.PI / 2),
@@ -229,7 +233,9 @@ function init3D(T, Water, Orbit, BU) {
     fleece: BU.mergeGeometries([sph(0, 3.4, 0, 2.5), sph(-1.7, 3.2, 1.1, 1.9), sph(1.7, 3.2, 1.1, 1.9), sph(-1.7, 3.2, -1.1, 1.9), sph(1.7, 3.2, -1.1, 1.9), sph(0, 4.6, 0, 1.9), sph(-2.6, 3.6, 0, 1.7)]),
     sheepd: BU.mergeGeometries([sph(3.6, 4.1, 0, 1.35), sph(3.2, 4.9, .9, .5, 6), sph(3.2, 4.9, -.9, .5, 6)].concat([[-1.6, .9], [1.6, .9], [-1.6, -.9], [1.6, -.9]].map(([x, z]) => cyl(.35, .3, 2.2, 6).translate(x, 0, z)))),
     disc: cyl(14.5, 15.2, 3, 40), face: new T.CircleGeometry(14.4, 48),
-    found: cyl(8, 9, TOP - 2, 6, (TOP + 2) / 2), found2: cyl(10.5, 11.5, TOP - 2, 6, (TOP + 2) / 2),
+    // the stone base under a town/fort: from y 2 up to TOP + 1, where the house starts (not TOP, or its top would
+    // flicker against the land tile's top: z-fighting)
+    found: cyl(8, 9, TOP - 1, 6, (TOP + 3) / 2), found2: cyl(10.5, 11.5, TOP - 1, 6, (TOP + 3) / 2),
     house: box(9, 7, 9), tower: box(13, 13, 13), cren: box(3, 3.2, 3), chim: box(1.6, 4, 1.6), door: box(2.4, 4, .4), gate: box(3.6, 6, .4), flag: box(6, 3.6, .25), mast: cyl(.3, .3, 9, 6, 0),
     roof: new T.ExtrudeGeometry(new T.Shape([new T.Vector2(-6.2, 0), new T.Vector2(6.2, 0), new T.Vector2(0, 5.5)]), {depth: 10.4, bevelEnabled: false}).translate(0, 0, -5.2),
     // a ring of stone wall (a thick band, 6 high) with battlements on top
@@ -317,29 +323,67 @@ function init3D(T, Water, Orbit, BU) {
   }
   function scenery(t, i, h, r, L) {
     const X = x => h.x + x, Z = z => h.y + z;
-    if (t === 'wood') for (let n = 0; n < 64; n++) {            // a thick forest: pines and round leafy trees
-      const x = (r() - .5) * 84, z = (r() - .5) * 84;
-      if (!inHex(x, z, 38) || Math.hypot(x, z) < 25) continue;
-      const s = .85 + r() * .35, k = .7 + r() * .45;
-      if (r() < .35) {
-        L.trunk.push({x: X(x), y: TOP, z: Z(z), sx: 1.6 * s, sy: 4 * s, c: '#5a3d22'});
-        L.pine.push({x: X(x), y: TOP + 2 * s, z: Z(z), sx: 12 * s, sy: 21 * s, ry: r() * 6, c: '#1d5a2e', k});
-      } else {
-        const th = 7 * s;
-        L.trunk.push({x: X(x), y: TOP, z: Z(z), sx: 1.8 * s, sy: th + 2, c: '#5a3d22'});
-        L.crown.push({x: X(x), y: TOP + th + 4 * s, z: Z(z), sx: 6.8 * s, sy: 5.8 * s, ry: r() * 6, c: n % 3 ? '#2f7a35' : '#3f8a30', k});
+    if (t === 'wood') {                                         // a forest: pines and round leafy trees
+      // (Rick's request, 2026-11-19: trees don't poke into each other. Each tree's widest part (pine: bottom tier,
+      // leafy: crown) is a circle of radius `w`; a spot is only used if it's clear of every tree already planted.)
+      const trees = [];
+      for (let n = 0; n < 400 && trees.length < 22; n++) {
+        const x = (r() - .5) * 84, z = (r() - .5) * 84;
+        if (!inHex(x, z, 38) || Math.hypot(x, z) < 24) continue;
+        const s = .8 + r() * .35, pine = r() < .35, w = (pine ? 5 : 6.3) * s;
+        if (trees.some(q => Math.hypot(q.x - x, q.z - z) < q.w + w + .4)) continue;
+        trees.push({x, z, w});
+        const k = .7 + r() * .45;
+        if (pine) {
+          L.trunk.push({x: X(x), y: TOP, z: Z(z), sx: 1.6 * s, sy: 4 * s, c: '#5a3d22'});
+          L.pine.push({x: X(x), y: TOP + 2 * s, z: Z(z), sx: 10 * s, sy: 21 * s, ry: r() * 6, c: '#1d5a2e', k});
+        } else {
+          const th = 7 * s;
+          L.trunk.push({x: X(x), y: TOP, z: Z(z), sx: 1.8 * s, sy: th + 2, c: '#5a3d22'});
+          L.crown.push({x: X(x), y: TOP + th + 4 * s, z: Z(z), sx: 5.5 * s, sy: 5.2 * s, ry: r() * 6, c: trees.length % 3 ? '#2f7a35' : '#3f8a30', k});
+        }
       }
     }
     if (t === 'stone') {                                        // grey peaks behind the number, boulders in front, a stone mine at one side
       const m = r() < .5 ? -1 : 1;                              // which front side the mine is on
       [[0, -27, 1.25], [-24, -14, 1], [24, -14, 1.05], [-28, 12, .7], [28, 12, .75], [-12, 31, .5], [13, 31, .45]].forEach(([x, z, s]) => {
         if ((z === 12 || z === 31) && Math.sign(x) === m) return;      // (the mine's hill takes this peak's place, and its track needs the front clear)
+        if (z === 12) return;      // (the quarry takes the other side's middle peak's place)
         x += (r() - .5) * 4; z += (r() - .5) * 4;
         L.rock.push({x: X(x), y: TOP + 2, z: Z(z), sx: 11 * s, sy: 20 * s, sz: 11 * s, ry: r() * 6, c: '#8f8a84', k: .8 + r() * .3});
         if (s > .9) L.snow.push({x: X(x), y: TOP + 2 + 17.5 * s, z: Z(z), sx: 4.3 * s, sy: 3.5 * s, ry: r() * 6, c: '#f2f4f8'});
       });
       // (boulders keep clear of the mine)
-      for (let n = 0; n < 16; n++) { const x = (r() - .5) * 80, z = (r() - .5) * 80; if (inHex(x, z, 40) && Math.hypot(x, z) > 21 && Math.hypot(x - m * 24, z - 20) > 14) L.rock.push({x: X(x), y: TOP + .5, z: Z(z), sx: 1.5 + r() * 2.5, ry: r() * 6, c: '#9a9ca2', k: .8 + r() * .3}); }
+      // the quarry (2026-11-19, Rick's request), on the other front side from the mine: a hill with stepped ledges cut
+      // into it in pale fresh stone, a crystal vein showing on the top ledge, a stack of cut blocks and a wooden crane
+      // lifting one. `u` runs outwards from the quarry's middle (qx); the ledges' sides all differ a little (no z-fighting).
+      const o = -m, qx = o * 23, qz = 10, QX = u => qx + o * u;
+      L.rock.push({x: X(QX(9)), y: TOP, z: Z(qz), sx: 6, sy: 15, sz: 10, ry: r() * 6, c: '#8f8a84', k: .9});      // the hill behind the ledges
+      // ledges: [u middle, width, height, depth, colour] (inner one lowest)
+      [[0, 10, 3, 16, '#cfc9bc'], [1.6, 7, 6.2, 15, '#bfb8aa'], [3.2, 3.9, 9.5, 14, '#dbd6ca']].forEach(([u, w, hgt, d, c], q) =>
+        L.cut.push({x: X(QX(u + q * .05)), y: TOP + hgt / 2, z: Z(qz), sx: w, sy: hgt, sz: d, ry: 0, c}));
+      // a stack of cut blocks in front of the quarry: [u, along z, level]
+      [[-3, 0, 0], [-3, 3.3, 0], [-3, 6.6, 0], [.3, 3.3, 0], [-3, 1.65, 1], [-3, 4.95, 1], [-3, 3.3, 2]].forEach(([u, w, lv], q) =>
+        L.cut.push({x: X(QX(u)), y: TOP + 1.5 + lv * 3.02, z: Z(qz + 10 + w), sx: 3, sy: 3, sz: 3, ry: (r() - .5) * .15, c: q % 2 ? '#d2ccbf' : '#c2bbad'}));
+      // the crane, behind the quarry: a post, a beam out over the ledges, a rope and a block hanging from it
+      const cz0 = qz - 8, bdx = o * 7, bdz = 6;      // the beam runs from the post's top (u -3) to over the top ledge (u 4)
+      L.post.push({x: X(QX(-3)), y: TOP, z: Z(cz0), sx: 1.3, sy: 19, sz: 1.3, c: '#6a4a2a'});
+      L.rail.push({x: X(QX(-3) + bdx / 2), y: TOP + 18.4, z: Z(cz0 + bdz / 2), sx: Math.hypot(bdx, bdz) + 1, sy: 1.1, sz: 1.1, ry: Math.atan2(-bdz, bdx), c: '#5e4024'});
+      L.post.push({x: X(QX(4)), y: TOP + 13.1, z: Z(cz0 + bdz), sx: .25, sy: 5, sz: .25, c: '#d8c79a'});
+      L.cut.push({x: X(QX(4)), y: TOP + 11.8, z: Z(cz0 + bdz), sx: 2.6, sy: 2.6, sz: 2.6, ry: .3, c: '#d0cabd'});
+      // crystal clusters (blue and violet, glowing softly, see frame()): at the foot of the side peaks, at the front,
+      // and in a vein on the quarry's top ledge
+      const cluster = (x, z, s, y) => {
+        const n = 4 + Math.floor(r() * 3);
+        for (let q = 0; q < n; q++) {
+          const a = q / n * Math.PI * 2 + r(), tilt = q ? .25 + r() * .45 : r() * .15, d = q ? .8 + r() * 1.2 : 0;
+          L.crystal.push({x: X(x + Math.cos(a) * d * s), y: (y || TOP) - .3, z: Z(z + Math.sin(a) * d * s), sx: (.9 + r() * .6) * s, sy: (q ? 2 + r() * 1.6 : 3.6 + r()) * s,
+            ry: -a, rz: -tilt, c: ['#4fb8ff', '#9a72ff', '#3fe4ff'][Math.floor(r() * 3)], k: .95 + r() * .15});
+        }
+      };
+      cluster(m * 19, -5, 2); cluster(o * 18, -6, 1.7); cluster(o * 7, 27, 1.6); cluster(0, 36, 1.2);
+      cluster(QX(3.2), qz + 4, 1.3, TOP + 9.5);
+      for (let n = 0; n < 16; n++) { const x = (r() - .5) * 80, z = (r() - .5) * 80; if (inHex(x, z, 40) && Math.hypot(x, z) > 21 && Math.hypot(x - m * 24, z - 20) > 14 && Math.hypot(x - qx, z - qz - 6) > 17) L.rock.push({x: X(x), y: TOP + .5, z: Z(z), sx: 1.5 + r() * 2.5, ry: r() * 6, c: '#9a9ca2', k: .8 + r() * .3}); }
       // the mine (2026-11-18, Rick's request): a rocky hill with a timber-framed shaft, a lamp, a rail track
       // running out towards the front, a cart full of stone on it, a heap of dug stone and a pickaxe
       const mx = m * 27;
@@ -364,10 +408,10 @@ function init3D(T, Water, Orbit, BU) {
       L.post.push({x: X(hx - m * 3), y: TOP, z: Z(hz + 1), sx: .5, sy: 7.5, rz: -m * .4, c: '#8a6236'});
       L.blade.push({x: X(hx - m * 3 + m * 7.5 * Math.sin(.4)), y: TOP + 7.5 * Math.cos(.4), z: Z(hz + 1), sx: 4.6, sy: .7, sz: .7, rz: -m * .4, c: '#8d9298'});
     }
-    if (t === 'grain') for (let z = -44; z <= 44; z += 2.6) for (let x = -44; x <= 44; x += 2.6) {     // wheat, stalk by stalk
-      const a = x + (r() - .5) * 2, b = z + (r() - .5) * 2;
+    if (t === 'grain') for (let z = -44; z <= 44; z += 2.3) for (let x = -44; x <= 44; x += 2.3) {     // wheat, stalk by stalk
+      const a = x + (r() - .5) * 1.6, b = z + (r() - .5) * 1.6;
       if (!inHex(a, b, 41.5) || Math.hypot(a, b) < 19) continue;
-      L.stalk.push({x: X(a), y: TOP, z: Z(b), sx: 1.7, sy: 7 + r() * 2.5, rx: (r() - .5) * .25, rz: (r() - .5) * .25, ry: r() * 6, c: r() < .5 ? '#e8c35a' : '#d9ab3e', k: .8 + r() * .35});
+      L.stalk.push({x: X(a), y: TOP, z: Z(b), sx: 1.7, sy: 7 + r() * 2.5, rx: (r() - .5) * .25, rz: (r() - .5) * .25, ry: r() * 6, c: r() < .5 ? '#ffd45e' : '#f0b83c', k: .9 + r() * .25});
     }
     if (t === 'wool') {                                         // grass, a fenced paddock and sheep
       for (let n = 0; n < 110; n++) { const x = (r() - .5) * 84, z = (r() - .5) * 84; if (inHex(x, z, 42) && Math.hypot(x, z) > 17) L.tuft.push({x: X(x), y: TOP, z: Z(z), sx: 1.4 + r(), sy: 2 + r() * 2.5, ry: r() * 6, c: '#3f8a2c', k: .75 + r() * .5}); }
@@ -480,7 +524,7 @@ function init3D(T, Water, Orbit, BU) {
   function build() {
     junk.forEach(o => o.dispose()); junk = []; stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CRATER = null;
     const L = {trunk: [], pine: [], crown: [], rock: [], snow: [], stalk: [], tuft: [], reed: [], post: [], rail: [], fleece: [], sheepd: [], brick: [], puddle: [], plank: [], pile: [],
-      kiln: [], mouth: [], hole: [], rim: [], blade: [], smoke: [], cave: [], fire: [], tent: [], gold: [], heap: [], coin: [], barrel: [], lamp: [], wheel: []};
+      kiln: [], mouth: [], hole: [], rim: [], blade: [], cut: [], crystal: [], smoke: [], cave: [], fire: [], tent: [], gold: [], heap: [], coin: [], barrel: [], lamp: [], wheel: []};
     HEX.forEach((h, i) => {
       const t = G.hex[i].t, r = rng(i * 97 + 13);
       const map = keep(LTEX[t].clone()); map.needsUpdate = true; map.repeat.set(1 / 55, 1 / 55); map.offset.set(r(), r());
@@ -528,6 +572,7 @@ function init3D(T, Water, Orbit, BU) {
     inst(G3.puddle, M3.puddle, L.puddle, false); inst(G3.cube, M3.wood, L.plank); inst(G3.pile, M3.wood, L.pile);
     inst(G3.kiln, M3.brick, L.kiln); inst(G3.cube, M3.lava, L.mouth, false); inst(G3.puddle, M3.mud, L.hole, false);
     inst(G3.rim, M3.mud, L.rim); inst(G3.cube, M3.metal, L.blade);
+    inst(G3.cube, M3.cut, L.cut); inst(G3.crystal, M3.crystal, L.crystal);
     inst(G3.ball, M3.dark, L.cave, false); inst(G3.flame, M3.fire, L.fire, false); inst(G3.tent, M3.cloth, L.tent);
     inst(G3.cube, M3.gold, L.gold); inst(G3.ball, M3.gold, L.heap); noRef(inst(G3.coin, M3.gold, L.coin)); inst(G3.barrel, M3.wood, L.barrel);
     inst(G3.cube, M3.glow, L.lamp, false); inst(G3.coin, M3.dark, L.wheel);
@@ -1025,6 +1070,7 @@ function init3D(T, Water, Orbit, BU) {
     if (FLEET.parent) FLEET.children.forEach(b => { const k = b.userData.k; b.position.y = Math.sin(t * 2 + k * 2) * .6; b.rotation.x = Math.sin(t * 1.6 + k) * .05; });      // the raiders rock on the waves
     M3.spot.opacity = .55 + .35 * Math.sin(t * 4.5);
     M3.lava.emissiveIntensity = 1.7 + .5 * Math.sin(t * 2.3);
+    M3.crystal.emissiveIntensity = .9 + .35 * Math.sin(t * 1.6);      // the crystals shimmer
     if (CRATER) CRATER.intensity = CRATER.userData.k * (.8 + .2 * Math.sin(t * 7) * Math.sin(t * 3.1));
     M3.fire.emissiveIntensity = 2.1 + .5 * Math.sin(t * 9) * Math.sin(t * 5.3);
     M3.glow.emissiveIntensity = 1.6 + .3 * Math.sin(t * 8) * Math.sin(t * 4.1);

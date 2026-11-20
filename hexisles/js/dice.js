@@ -156,13 +156,13 @@ function render() {
     $('b-buy').lastChild.lastChild.textContent = left + ' left';
     const mine = (G.pl[VIEW] || {cards: []}).cards;
     const order = G.decks ? Object.keys(FGCARDS) : Object.keys(CARDS), vp = G.decks && G.pl[VIEW] ? G.pl[VIEW].vp || 0 : 0;
-    $('mycards').innerHTML = (!mine.length && !vp ? 'No progress cards yet.' : '') + order.filter(c => mine.some(x => x.c === c)).map(c => {
+    $('mycards').innerHTML = '<div class="pch">Progress</div><div class="pcrow">' + (!mine.length && !vp ? '<span class="none">None yet</span>' : '') + order.filter(c => mine.some(x => x.c === c)).map(c => {
       const all = mine.filter(x => x.c === c), ready = all.some(x => x.n < G.tn), A = CARDART[c], I = CINFO(c);
       const face = '<svg viewBox="' + A.vb + '" aria-hidden="true">' + A.svg(PCOL[G.pl[VIEW] ? VIEW : 0]) + '</svg>' + I.n + (all.length > 1 ? '<b>×' + all.length + '</b>' : '');
       if (c === 'p') return '<button class="pc vp" disabled style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" title="' + I.d + '">' + face + '</button>';
       const can = G.decks ? myTurn() && VIEW === p && !G.played && ready && fgCan(p, c) : main && VIEW === p && !G.played && ready;
       return '<button class="pc" data-c="' + c + '" style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" title="' + I.d + (ready ? '' : ' (new this turn: play it next turn)') + '"' + (can ? '' : ' disabled') + '>' + face + (ready ? '' : '<em>NEW</em>') + '</button>';
-    }).join('') + (vp ? '<span style="margin-left:6px">Point cards scored: <b style="color:var(--accent)">' + vp + '</b></span>' : '');
+    }).join('') + (vp ? '<span class="none">Point cards scored: <b style="color:var(--accent)">' + vp + '</b></span>' : '') + '</div>';
   }
   $('rumble').hidden = !G.fire;
   $('b-wall').parentNode.hidden = !(G.fire || G.fg);
@@ -197,11 +197,14 @@ function render() {
     render.won = true;
     $('w-title').textContent = G.pl[G.win].name + ' won!';
     $('w-text').textContent = 'Final score: ' + G.pl.map((P, i) => P.name + ' ' + score(i)).join(', ') + '.';
+    fillStats();      // (js/stats.js)
     $('m-win').hidden = false;
   }
   if (G.phase !== 'over') { render.won = false; $('m-win').hidden = true; }
   clearTimeout(BOTT); BOTT = null;
-  if (G.phase !== 'over' && G.pl[p].bot && NET.role !== 'guest') BOTT = setTimeout(botStep, 700);
+  if (G.phase !== 'over' && G.pl[p].bot && NET.role !== 'guest') BOTT = setTimeout(botStep, BOTPACE);
+  drawClock();      // turn timer (js/timer.js)
+  tutDraw();        // How to play coach box (js/tutorial.js)
   if (NET.role === 'host') broadcast();
 }
 

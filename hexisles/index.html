@@ -28,9 +28,12 @@
     <div id="log" title="Click to open or close the log"></div>
     <!-- the trade offer on the table, top right of the map: what's offered and each player's answer -->
     <div id="offers" hidden></div>
+    <!-- How to play: the tutorial's coach box (js/tutorial.js) -->
+    <div id="coach" hidden><div class="ch-top"><b id="ch-title"></b><span id="ch-step"></span></div><p id="ch-text"></p><div class="row end"><button id="ch-skip">Skip tutorial</button><button id="ch-next" class="big">Next</button></div></div>
     <!-- the bar along the bottom of the play window: hand | trade and build buttons | dice | End turn -->
     <div id="bar">
-      <div id="hand"></div>
+      <!-- the hand: resource cards (#hand), then progress cards as their own section (#mycards, Rick's request 2026-11-19) -->
+      <div id="handbox"><div id="hand"></div><div id="mycards" hidden></div></div>
       <div id="actions">
         <button id="b-trade">Trade</button>
         <!-- build buttons: the .bw wrapper carries the hover pop-up (a disabled button gets no mouse events) -->
@@ -45,13 +48,13 @@
         <span class="bw" hidden><button id="b-imp" aria-haspopup="true"></button></span>
       </div>
       <div id="barend">
+        <div id="clock" hidden></div>
         <button id="dice" aria-label="Roll the dice"></button>
         <button id="b-end" class="big">End turn</button>
       </div>
     </div>
   </div>
   <div id="side">
-    <div id="mycards" hidden></div>
     <div id="rumble" hidden></div>
     <div id="raiders" hidden></div>
     <div id="tip" hidden></div>
@@ -63,12 +66,15 @@
 <div id="m-setup" class="modal" hidden>
   <div class="box">
     <h2>Hex Isles</h2>
-    <p>Settle the island. Build roads, towns and forts. First to 10 points wins.</p>
+    <p>Settle the island. Build roads, towns and forts. First to 10 points wins. Every island is dealt fair: no matching lands side by side, and the best numbers spread out.</p>
+    <div class="row tutrow"><span style="flex:1">New to Hex Isles?</span><button id="s-tut">How to play</button></div>
     <div class="row" id="s-count"></div>
     <div id="s-rows"></div>
     <div class="row modepick" id="s-mode"></div>
     <p class="modehint"></p>
     <div class="row modepick" id="s-level"></div>
+    <p class="modehint"></p>
+    <div class="row modepick timepick" id="s-timer"></div>
     <p class="modehint"></p>
     <div class="row end"><button id="s-cancel">Cancel</button><button id="s-go" class="big">Start game</button></div>
     <div class="row wifi"><span style="flex:1">Friends on their own phones or computers, anywhere?</span><button id="s-net">Play online</button></div>
@@ -97,6 +103,8 @@
     <div class="row modepick" id="l-mode"></div>
     <p class="modehint"></p>
     <div class="row modepick" id="l-level"></div>
+    <p class="modehint"></p>
+    <div class="row modepick timepick" id="l-timer"></div>
     <p class="modehint"></p>
     <div class="row end"><button id="l-leave">Leave</button><button id="l-cancel">Back to game</button><button id="l-rejoin" class="big">Rejoin</button><button id="l-start" class="big">Start game</button></div>
   </div>
@@ -159,6 +167,7 @@
   <div class="box">
     <h2 id="w-title"></h2>
     <p id="w-text"></p>
+    <div id="w-stats"></div>
     <div class="row end"><button id="w-look">Look at the board</button><button id="w-new" class="big">New game</button></div>
   </div>
 </div>
@@ -174,6 +183,9 @@
 <script src="js/board3d.js"></script>
 <script src="js/sound.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
