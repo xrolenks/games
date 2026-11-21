@@ -29,6 +29,11 @@ header button{padding:5px 10px;font-size:.85rem}
 #setpop[hidden]{display:none}
 #setpop label{display:flex;align-items:center;gap:8px;cursor:pointer}
 #setpop input{accent-color:var(--accent);width:18px;height:18px;flex:none}
+#set-gfx{display:flex;align-items:center;gap:6px}
+#set-gfx>span{flex:1}
+#set-gfx button{padding:4px 10px;font-size:.78rem}
+#set-gfx button.on{background:var(--accent);color:#1a1405;border-color:var(--accent);font-weight:700}
+#set-gfxhint{color:var(--muted,#9fb0c0);line-height:1.35;margin-top:-4px}
 @media (max-width:500px){#sndvol{width:105px}}
 #sndpct{min-width:2.6em;text-align:right;color:var(--accent);font-weight:700}
 

@@ -9,6 +9,11 @@
 const VIEWKEY = 'hexisles-view';      // localStorage: '2d' if the player switched the 3D view off
 const TOP = 9;                        // height of a land tile's top (sea level is 0, the beach 3)
 function want3D() { try { return localStorage.getItem(VIEWKEY) !== '2d'; } catch (e) { return true; } }
+// Graphics: Fast (the default) or Fancy (Rick's request, 2026-11-20). Fast = no shadows, the sea reflects only the sky,
+// and a less sharp picture (pixel ratio 1); Fancy = all of it (pixel ratio up to 1.5). Picked in Settings (settings.js),
+// localStorage GFXKEY = 'fancy' (anything else = Fast). D3.gfx(fancy) switches a running island.
+const GFXKEY = 'hexisles-gfx';
+function gfxFancy() { try { return localStorage.getItem(GFXKEY) === 'fancy'; } catch (e) { return false; } }
 // Is this screen's island still getting ready (3D still loading, or the new game's island still assembling)?
 // Online games wait for everyone's island before the first turn (online.js, G.boot).
 function islandBusy() { return !!(D3.loading || (D3.on && D3.introLeft && D3.introLeft() > 0)); }
@@ -86,7 +91,8 @@ function init3D(T, Water, Orbit, BU) {
   const view = $('view');
   const R = new T.WebGLRenderer({antialias: true});
   // (2026-11-20, Rick's laptop froze: sharpness is capped at 1.5x and lowered by frame() if the graphics chip can't keep up)
-  let PR = Math.min(devicePixelRatio || 1, 1.5);
+  let FANCY = gfxFancy();      // (Graphics setting: Fast or Fancy, see GFXKEY)
+  let PR = Math.min(devicePixelRatio || 1, FANCY ? 1.5 : 1);
   // ...and the canvas never draws more than MAXPX pixels (2026-11-20: Rick's big, sharp screen made a ~4 million
   // pixel canvas, 2.5x the test browser's, and all of Chrome froze on New game). usePR() applies both limits.
   const MAXPX = 3e6;      // (gentle: Rick's maximised window keeps ~1.45x of its 1.5x; the freeze turned out to be mostly the processor)
@@ -99,7 +105,7 @@ function init3D(T, Water, Orbit, BU) {
   R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = .95;
   // (PCF, not PCFSoft, since 2026-11-20: Rick prefers speed over fancy shadows; soft edges sample the shadow map many
   // more times on every pixel of every frame)
-  R.shadowMap.enabled = true; R.shadowMap.type = T.PCFShadowMap;
+  R.shadowMap.enabled = FANCY; R.shadowMap.type = T.PCFShadowMap;      // (no shadows at all on Fast)
   R.shadowMap.autoUpdate = false;      // shadows are only redrawn when something moves (see SHADOW)
   const cv = R.domElement; cv.id = 'board3d'; view.insertBefore(cv, $('roll'));
   // If the graphics chip resets (2026-11-20, Rick's laptop: "D3D11 device was removed", the map went blank), this 3D
@@ -141,7 +147,7 @@ function init3D(T, Water, Orbit, BU) {
   scene.environment = PMREM.fromScene(envScene).texture;
   scene.fog = new T.Fog(0x9db8ca, 2500, 9000);
   const sun = new T.DirectionalLight(0xfff0d8, 2.6);
-  sun.position.copy(SUN).multiplyScalar(800); sun.castShadow = true;
+  sun.position.copy(SUN).multiplyScalar(800); sun.castShadow = FANCY;
   sun.shadow.mapSize.set(1024, 1024);      // (was 2048 until 2026-11-20: a quarter of the work each time shadows are redrawn)
   const sc = sun.shadow.camera; sc.left = sc.bottom = -420; sc.right = sc.top = 420; sc.near = 200; sc.far = 1600;
   sun.shadow.bias = -.0004; sun.shadow.normalBias = .5; sun.shadow.radius = 3;
@@ -348,7 +354,15 @@ function init3D(T, Water, Orbit, BU) {
   water.rotation.x = -Math.PI / 2; water.material.uniforms.size.value = 1.4; scene.add(water);
   let RF = 0;
   const reflect = water.onBeforeRender;
-  water.onBeforeRender = function (...a) { if (RF % 3 === 0) reflect.apply(this, a); };      // (every 3rd frame since 2026-11-20: it costs the most)
+  // (every 3rd frame since 2026-11-20: it costs the most. On Fast graphics the island is hidden while it's drawn, so
+  // the sea only mirrors the sky: nearly free, and the ripples hid the island's reflection anyway.)
+  water.onBeforeRender = function (...a) {
+    if (RF % 3) return;
+    if (FANCY) { reflect.apply(this, a); return; }
+    const sv = stat.visible, dv = dyn.visible; stat.visible = dyn.visible = false;
+    reflect.apply(this, a);
+    stat.visible = sv; dyn.visible = dv;
+  };
   const noRef = o => { if (o) o.layers.set(1); return o; };
   cam.layers.enable(1);
   // shallow turquoise water and breaking foam round the island, painted onto see-through sheets
@@ -741,7 +755,8 @@ function init3D(T, Water, Orbit, BU) {
   function build() {
     // (2026-11-20: the last game's materials are thrown away a few seconds later, not now, so the new game's
     // identical materials reuse the graphics programs already prepared instead of making them again)
-    const old = junk; junk = []; setTimeout(() => old.forEach(o => o.dispose()), 3000);
+    const old = junk; junk = []; setTimeout(() => old.forEach(o => o.dispose()), 10000);      // (10 s: well after the new game's warm-up)
+    stat.visible = true;      // (prewarm's sample island was hidden)
     stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CRATER = null;
     const L = {trunk: [], pine: [], crown: [], rock: [], snow: [], stalk: [], tuft: [], reed: [], post: [], rail: [], fleece: [], sheepd: [], brick: [], puddle: [], plank: [], pile: [],
       kiln: [], mouth: [], hole: [], rim: [], blade: [], cut: [], crystal: [], smoke: [], cave: [], fire: [], tent: [], gold: [], heap: [], coin: [], barrel: [], lamp: [], wheel: []};
@@ -866,7 +881,8 @@ function init3D(T, Water, Orbit, BU) {
   let INTRO = null;
   const backOut = k => { const c = 1.9; k -= 1; return 1 + (c + 1) * k * k * k + c * k * k; };
   const m4 = new T.Matrix4(), v3 = new T.Vector3();
-  // one tile at a time (Rick, 2026-11-20): each starts falling as the one before it lands, so INTROTILE = INTROFALL
+  // one tile at a time (Rick, 2026-11-20): each starts falling as the one before it lands, so INTROTILE = INTROFALL.
+  // (Landing them in groups was tried the same day: shorter, but no lighter per frame, so Rick kept one at a time.)
   const INTROTILE = 340, INTROFALL = 340, INTROGROW = 380;
   function introStart() {
     // tiles land from the middle outwards, round and round
@@ -897,9 +913,10 @@ function init3D(T, Water, Orbit, BU) {
     });
     // (t0 is set on the first drawn frame, not now: the shader warm-up (HOLD) can pause drawing for a couple of
     // seconds first, and the intro used to carry on unseen during it)
-    INTRO = {t0: null, land, ports, end, insts, cam: true, f: 0};
-    dyn.visible = false;
+    // band: when the bandit drops onto its land (Rick, 2026-11-20): just after that land's number disc
+    INTRO = {t0: null, land, ports, end, insts, cam: true, f: 0, band: G.deck && HEX[G.storm] ? land[G.storm] + 800 : null};
   }
+  const BANDFALL = 450;
   function introStep(now) {
     const I = INTRO;
     if (I.t0 == null) I.t0 = now;
@@ -942,6 +959,13 @@ function init3D(T, Water, Orbit, BU) {
       o.position.y = u.y0 + fall(u.h);
     });
     SMOKE.forEach(p => { p.visible = false; });
+    // the pieces (dyn) stay hidden until the end, except the bandit, who drops from the sky onto his land and squashes
+    dyn.children.forEach(c => { c.visible = c === BANDIT3 && I.band != null && t >= I.band; });
+    if (BANDIT3.visible && BANDIT3.parent === dyn) {
+      const k = (t - I.band) / BANDFALL;
+      if (k < 1) { BANDIT3.position.y = TOP + 140 * (1 - k * k); BANDIT3.scale.set(1, 1, 1); }
+      else { const q = Math.min(1, (k - 1) * BANDFALL / 300), sq = Math.sin(q * Math.PI) * .25; BANDIT3.position.y = TOP; BANDIT3.scale.set(1 + sq * .6, 1 - sq, 1 + sq * .6); }
+    }
     if (I.cam) {      // the camera swings round and down to where it normally sits
       const k = Math.min(1, t / (I.end - 400)), e = 1 - Math.pow(1 - k, 3);
       const off = I.camEnd.clone().applyAxisAngle(new T.Vector3(0, 1, 0), -1.1 * (1 - e));
@@ -957,7 +981,9 @@ function init3D(T, Water, Orbit, BU) {
     I.insts.forEach(m => { const u = m.userData; m.instanceMatrix.array.set(u.base); m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); ['base', 'ia', 'ib', 'done', 'lo', 'fin'].forEach(k => delete u[k]); });
     stat.children.forEach(o => { const u = o.userData; if (u.y0 != null && !o.isInstancedMesh) { o.position.y = u.y0; o.scale.copy(u.s0); o.visible = true; delete u.y0; } });
     SMOKE.forEach(p => { p.visible = true; });
-    dyn.visible = true; SHADOW = true;
+    dyn.children.forEach(c => { c.visible = true; });
+    BANDIT3.position.y = TOP; BANDIT3.scale.set(1, 1, 1);
+    SHADOW = true;
   }
   cv.addEventListener('pointerdown', () => { if (INTRO) INTRO.cam = false; });      // (the player grabbed the camera: let them have it)
 
@@ -2211,7 +2237,7 @@ function init3D(T, Water, Orbit, BU) {
     });
     const run = ++WARMRUN, end = performance.now() + WARMMAX;
     HOLD = true;
-    (async () => {
+    return (async () => {      // (a promise: done when this warm-up is over)
       for (let i = 0; i < list.length && run === WARMRUN && !DEAD && performance.now() < end; i += WARMN) {
         try {
           await Promise.race([Promise.all(list.slice(i, i + WARMN).map(o => R.compileAsync(o, cam, scene))),
@@ -2329,13 +2355,26 @@ function init3D(T, Water, Orbit, BU) {
     R.render(scene, cam);
     RMS = RMS * .9 + (performance.now() - r0) * .1;      // (how long a frame costs the processor, averaged)
     D3.drawn = true;      // (the first frame is on screen: main.js can lift the loading screen)
+    if (!PREWARMED && !G) { PREWARMED = 1; setTimeout(() => { PREWARMED = false; prewarm(); }, 600); }      // (once, see prewarm)
     if (DICE3) diceStep(now);
     if (DICE3) { R.autoClear = false; R.clearDepth(); R.render(DSCENE, cam); R.autoClear = true; }      // the thrown dice, always on top
   }
   warm(true);      // (prepare the start-up scene's programs in the background; see warm())
   requestAnimationFrame(frame);
 
-  D3.perf =() => ({PR, LOWQ, SEEN, LATE, RMS: Math.round(RMS * 10) / 10});      // for testing the frame limit
+  D3.perf =() => ({PR, LOWQ, SEEN, LATE, RMS: Math.round(RMS * 10) / 10, FANCY});      // for testing the frame limit
+  // the Graphics setting changed (settings.js): shadows on/off and sharpness. Every material's program changes with the
+  // shadows, so they're all marked to be prepared again, a few at a time (warm), while drawing waits.
+  D3.gfx = fancy => {
+    if (DEAD || fancy === FANCY) return;
+    FANCY = fancy; LOWQ = false; SEEN = LATE = 0;
+    R.shadowMap.enabled = FANCY; sun.castShadow = FANCY; SHADOW = true;
+    [scene, DSCENE].forEach(s => s.traverse(o => [].concat(o.material || []).forEach(m => { m.needsUpdate = true; })));
+    // (true: doesn't count as the game's own warm-up. The new sharpness is applied after it: resizing the canvas
+    // wipes it, and nothing is drawn while warming, so the island would go blank for the whole wait.)
+    const p = warm(true), pr = () => { PR = Math.min(devicePixelRatio || 1, FANCY ? 1.5 : 1); usePR(); };
+    if (p) p.then(pr); else pr();
+  };
 
   // ----- what the rest of the game uses -----
   D3.update = () => {
@@ -2344,6 +2383,24 @@ function init3D(T, Water, Orbit, BU) {
     dynamic();
     if (!WARMED) warm();
   };
+  // Getting ready early (2026-11-20, Rick saw a pause when the island starts assembling): after Start, drawing waited
+  // ~3 s while the graphics chip prepared the new game's programs (warm). Every visit opens on the New game window, so
+  // while it's open a sample island (a dealt island, nothing built, no game) is built behind it and warmed then.
+  // Programs are shared by every material of the same kind, and build() keeps the old materials 3 s, so the real game
+  // finds them ready. Runs once, shortly after the first frame, only while there's no game (G null).
+  let PREWARMED = false;
+  function prewarm() {
+    if (PREWARMED || G || DEAD) return;
+    PREWARMED = true;
+    const hex = dealIsland();
+    G = {id: 'prewarm', hex, fire: false, ports: makePorts(), b: {}, r: {}, deck: [], storm: hex.findIndex(h => h.t === 'volcano'), pl: [], phase: 'main', lava: [], log: []};
+    try { build(); } catch (e) { console.warn('prewarm', e); }
+    G = null;
+    stat.visible = false;      // (never shown: just the sand base behind the window, as before; warm() covers hidden things)
+    SKEY = null;      // (the real game always builds its own island)
+    warm(true);       // (true: the real game still gets its own, now short, warm-up)
+  }
+  D3.prewarm = prewarm;
   D3.resize = () => fit(false);
   D3.reset = () => fit(true);
   D3.dolly = k => {

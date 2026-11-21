@@ -32,6 +32,20 @@ $('set-turn').checked = TURNON;
 $('set-turn').onchange = e => { TURNON = e.target.checked; try { localStorage.setItem(TURNKEY, TURNON ? '1' : '0'); } catch (x) {} if (!TURNON && $('turnpop')) $('turnpop').remove(); };
 // (The "Day and night" checkbox was replaced by the Day and Night visual packs, js/packs.js, 2026-11-20.)
 try { localStorage.removeItem('hexisles-daynight'); } catch (e) {}
+// Graphics: Fast (default) or Fancy (Rick's request, 2026-11-20). Stored in localStorage GFXKEY (board3d.js, which reads
+// it when the 3D island starts); D3.gfx switches a running island at once.
+function fillGfx() {
+  const fancy = gfxFancy();
+  $('set-gfx').querySelectorAll('button').forEach(b => { const on = (b.dataset.g === 'fancy') === fancy; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  $('set-gfxhint').textContent = fancy ? 'Shadows, sea reflections and a sharper picture. Needs a strong computer.' : 'Runs smoothly on most computers: no shadows or island reflections.';
+}
+$('set-gfx').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  try { localStorage.setItem(GFXKEY, b.dataset.g); } catch (x) {}
+  fillGfx();
+  if (D3.gfx) D3.gfx(b.dataset.g === 'fancy');
+};
+fillGfx();
 $('setbtn').onclick = () => { const p = $('setpop'); p.hidden = !p.hidden; $('setbtn').setAttribute('aria-expanded', String(!p.hidden)); };
 document.addEventListener('pointerdown', e => { if (!e.target.closest('#sets')) { $('setpop').hidden = true; $('setbtn').setAttribute('aria-expanded', 'false'); } }, true);
 
