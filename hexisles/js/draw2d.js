@@ -998,7 +998,9 @@ const BSHORT = {card: 'Card', train: 'Train'};      // shorter names for the nar
 // the cost as one little coloured chip per card (the full list shows in the hover pop-up and the tooltip)
 const costChips = w => Object.keys(COST[w]).map(r => ('<i style="--a:' + COL[r][0] + '"></i>').repeat(COST[w][r])).join('');
 function buildLabel(w, extra) {
-  return '<svg class="bi" viewBox="-12 -12 24 24" aria-hidden="true">' + BICON[w] + '</svg><span>' + (BSHORT[w] || BNAME[w]) + '<small class="cost" title="' + costText(w) + '">' + costChips(w) + '</small>' + (extra ? '<small>' + extra + '</small>' : '') + '</span>';
+  // (no cost chips on the button since 2026-11-20, Rick: smaller buttons, the cost shows in the #tip pop-up when you point
+  // at it, or tap it on a phone; screen readers still get it from the hidden .sr text)
+  return '<svg class="bi" viewBox="-12 -12 24 24" aria-hidden="true">' + BICON[w] + '</svg><span>' + (BSHORT[w] || BNAME[w]) + '<span class="sr">: ' + costText(w) + '</span>' + (extra ? '<small>' + extra + '</small>' : '') + '</span>';
 }
 let TIPW = null;
 function showTip(w, x, y) {
@@ -1039,19 +1041,21 @@ document.addEventListener('pointermove', e => { if (!CTIP.hidden || e.target.clo
 document.addEventListener('pointerdown', () => { CTIP.hidden = true; CTIPC = null; });
 // The hand: every resource is its own card, grouped by kind and fanned like cards held in a hand.
 const HANDFAN = 8;      // more cards than this: the hand shows one stack per kind
+const RCW = 46, FANPAD = 36;      // a resource card's width (matches .rc in style.css), and room for the tilt at the ends
 function handHTML(R) {
   if (!R) return '';
   const list = []; KINDS().forEach(r => { for (let i = 0; i < (R[r] || 0); i++) list.push(r); });
   if (!list.length) return '<div class="none">No resource cards.</div>';
   const W = $('hand').clientWidth || 320;
   // a big hand (Rick, 2026-11-19: "condense the hand of cards ... to save space"): one stacked card per kind with a ×N badge
-  if (list.length > HANDFAN || (W - 62) / Math.max(1, list.length - 1) < 16) {
-    const kinds = KINDS().filter(r => R[r] > 0), m = kinds.length, st = Math.min(54, (W - 62) / Math.max(1, m - 1)), x1 = (W - (46 + st * (m - 1))) / 2;
+  // (FANPAD: room left at the sides for the tilted end cards, 36 since 2026-11-20; was 16 and the last card poked out)
+  if (list.length > HANDFAN || (W - RCW - FANPAD) / Math.max(1, list.length - 1) < 16) {
+    const kinds = KINDS().filter(r => R[r] > 0), m = kinds.length, st = Math.min(54, (W - RCW - FANPAD) / Math.max(1, m - 1)), x1 = (W - (RCW + st * (m - 1))) / 2;
     return kinds.map((r, i) => '<div class="rc' + (R[r] > 1 ? ' stack' : '') + '" data-r="' + r + '" data-k="1" style="left:' + (x1 + i * st).toFixed(1) + 'px;--a:' + COL[r][0] + ';--b:' + COL[r][1] + ';transform:rotate(' + ((m > 1 ? i / (m - 1) - .5 : 0) * Math.min(24, m * 4)).toFixed(1) + 'deg)" title="' + R[r] + ' ' + RN[r] + '">' +
       ico(r) + RN[r] + (R[r] > 1 ? '<b class="cnt">×' + R[r] + '</b>' : '') + '</div>').join('');
   }
-  const n = list.length, step = Math.min(34, (W - 62) / Math.max(1, n - 1));
-  const x0 = (W - (46 + step * (n - 1))) / 2, spread = Math.min(30, n * 4);
+  const n = list.length, step = Math.min(34, (W - RCW - FANPAD) / Math.max(1, n - 1));
+  const x0 = (W - (RCW + step * (n - 1))) / 2, spread = Math.min(30, n * 4);
   let kth = 0;       /* which card of its kind this is (1 = first) */
   return list.map((r, i) => {
     const t = n > 1 ? i / (n - 1) - .5 : 0, first = i === 0 || list[i - 1] !== r;

@@ -140,8 +140,6 @@ function render() {
   robFx();      // (before the hand is redrawn: the stolen card starts from where it was)
   turnPop();
   awardFx(); weatherFx(); winFx(); takeFx();      // award banner, passing weather, the winner's celebration (js/flair.js)
-  const H =(G.pl[VIEW] || {res: {}}).res;
-  $('hand').innerHTML = handHTML(G.pl[VIEW] ? H : null);
   const main = human && G.phase === 'main' && !G.offer;     /* while an offer is open, only the offer panel works */
   if (G.offer) MODE = null;
   $('b-end').disabled = !main;
@@ -173,6 +171,20 @@ function render() {
       return '<button class="pc" data-c="' + c + '" style="--a:' + A.col[0] + ';--b:' + A.col[1] + '" data-tn="' + I.n + '" data-tip="' + I.d + '" data-note="' + (ready ? (can ? 'Tap to play it.' : '') : 'New this turn: you can play it next turn.') + '" aria-label="' + I.n + ': ' + I.d + '"' + (can ? '' : ' disabled') + '>' + face + (ready ? '' : '<em>NEW</em>') + '</button>';
     }).join('') + (vp ? '<span class="none">Point cards scored: <b style="color:var(--accent)">' + vp + '</b></span>' : '') + '</div>';
   }
+  // progress cards that don't fit overlap a little instead of scrolling (Rick, 2026-11-20)
+  if (deck) {
+    const row = $('mycards').querySelector('.pcrow'), n = row.querySelectorAll('.pc').length;
+    const mc = $('mycards');
+    row.style.removeProperty('--ov'); mc.style.flex = '';
+    const over = row.scrollWidth - row.clientWidth;
+    if (n > 1 && over > 0) {
+      // (keep the width the section got before overlapping: otherwise it shrinks with its cards and squeezes again)
+      if (getComputedStyle($('handbox')).flexDirection === 'row') mc.style.flex = '0 0 ' + mc.getBoundingClientRect().width + 'px';      // (side by side only; phones stack them)
+      row.style.setProperty('--ov', Math.min(38, over / (n - 1) + .5).toFixed(1) + 'px');
+    }
+  }
+  // the resource fan, after the progress cards: it spreads its cards over whatever width #hand has left (2026-11-20)
+  $('hand').innerHTML = handHTML(G.pl[VIEW] ? G.pl[VIEW].res : null);
   $('rumble').hidden = !G.fire;
   $('b-wall').parentNode.hidden = !(G.fire || G.fg);
   $('b-guards').parentNode.hidden = $('b-imp').parentNode.hidden = $('raiders').hidden = !G.fg;

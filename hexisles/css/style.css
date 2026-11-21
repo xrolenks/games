@@ -168,11 +168,13 @@ body[data-pack="night"] #view:not(.is3d)::before{content:"";position:absolute;in
 @keyframes tumble{0%{transform:translateY(0) rotate(0)}25%{transform:translateY(-9px) rotate(90deg)}50%{transform:translateY(0) rotate(180deg)}75%{transform:translateY(-5px) rotate(270deg)}100%{transform:translateY(0) rotate(360deg)}}
 /* the hand: one real-looking card per resource you hold, fanned out */
 /* #handbox holds the resource fan (#hand) and, in modes with progress cards, a separate Progress section (#mycards) */
+/* (RCW in draw2d.js = the card width) */
 #handbox{display:flex;flex:1 1 100%;min-width:0;height:104px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 #hand{position:relative;flex:1 1 auto;min-width:0;height:100%}
 #hand .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:.85rem}
 .rc{position:absolute;bottom:12px;width:46px;height:66px;border-radius:7px;border:2px solid #f7f1df;background:linear-gradient(160deg,var(--a),var(--b));box-shadow:-2px 2px 5px rgba(0,0,0,.5);transform-origin:50% 140%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:.58rem;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;transition:transform .15s}
 .rc .ico{width:26px;height:26px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5))}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}      /* read out, not shown */
 /* a condensed hand: one card per kind, with two more peeking out behind it and a count badge */
 .rc.stack{box-shadow:3px -3px 0 -1px var(--b),3px -3px 0 1px #f7f1df,6px -6px 0 -1px var(--b),6px -6px 0 1px #f7f1df,-2px 2px 5px rgba(0,0,0,.5)}
 .rc .cnt{position:absolute;top:-9px;right:-11px;min-width:22px;padding:1px 5px;border-radius:11px;background:#1b1408;border:2px solid #f7f1df;color:#fff;font-size:.72rem;line-height:1.2;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.6)}
@@ -181,8 +183,9 @@ body[data-pack="night"] #view:not(.is3d)::before{content:"";position:absolute;in
 #actions{flex:1 1 100%;display:flex;gap:5px;min-width:0}
 #actions>*{flex:1 1 0;min-width:0}
 #b-trade{font-weight:700}
-#b-trade,.bw button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 2px;min-width:0;font-size:.78rem;line-height:1.15}
-#actions small{display:block;font-size:.64rem;opacity:.75;font-weight:400}
+/* (smaller since 2026-11-20, Rick: no cost chips; the cost shows in #tip on hover or tap) */
+#b-trade,.bw button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 2px;min-width:0;font-size:.7rem;line-height:1.1}
+#actions small{display:block;font-size:.6rem;opacity:.75;font-weight:400}
 #actions small.cost{display:flex;justify-content:center;gap:2px;margin-top:3px;opacity:1}
 small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:1px solid #f7f1df}
 /* the trade offer on the table: top right of the map */
@@ -240,10 +243,13 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
 .cpal button:disabled{opacity:.25;cursor:not-allowed;background-image:linear-gradient(45deg,transparent 45%,#000 45%,#000 55%,transparent 55%)!important}
 .row.end{justify-content:flex-end;margin:14px 0 0}
 .row.wifi{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:.9rem;color:var(--dim)}
-#mycards{flex:0 1 auto;min-width:76px;max-width:60%;display:flex;flex-direction:column;border-left:2px dashed var(--line);padding:4px 8px 6px;font-size:.72rem;color:var(--dim)}
+#mycards{flex:0 1 auto;min-width:76px;max-width:62%;display:flex;flex-direction:column;border-left:2px dashed var(--line);padding:4px 8px 6px;font-size:.72rem;color:var(--dim)}
 #mycards[hidden]{display:none}
 #mycards .pch{font-size:.62rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:5px}
-#mycards .pcrow{flex:1;display:flex;gap:6px;align-items:center;overflow-x:auto;overflow-y:hidden;padding:6px 6px 0 0}
+/* (no scrollbar since 2026-11-20, Rick: when the cards don't fit they overlap, by --ov, set in render() via fitCards) */
+#mycards .pcrow{flex:1;display:flex;gap:6px;align-items:center;overflow:hidden;padding:6px 6px 0 0}
+#mycards .pc + .pc{margin-left:calc(0px - var(--ov, 0px))}
+#mycards .pc:hover{z-index:1}
 #mycards .none{white-space:nowrap}
 /* phones: the Progress section goes under the resource cards instead of beside them */
 @media(max-width:600px){
@@ -262,7 +268,7 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
 /* build buttons with a picture, and the pop-up showing the cards they cost */
 .bw{display:grid;min-width:0}
 .bw button:disabled{pointer-events:none}
-.bi{width:24px;height:24px;flex:none}
+.bi{width:20px;height:20px;flex:none}
 #tip{position:fixed;z-index:20;pointer-events:none;background:#0b1620;border:1px solid var(--accent);border-radius:10px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.6);font-size:.78rem;white-space:nowrap}
 #tip div{display:flex;gap:5px;margin-top:6px}
 /* progress card speech bubble, above the pointer (cardTip) */
@@ -404,9 +410,10 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
   #side{min-height:0;overflow-y:auto}
   #players{align-self:end;grid-template-columns:1fr}
   #bar{position:absolute;left:0;right:0;bottom:0;margin:0;flex-wrap:nowrap;align-items:center;padding:8px 10px;background:linear-gradient(rgba(6,14,22,0),rgba(6,14,22,.82) 30%);border-radius:0 0 14px 14px}
-  #handbox{flex:0 1 auto;width:auto;max-width:52%;background:rgba(8,18,28,.55)}
-  #hand{flex:0 1 300px;width:300px}
-  #actions{flex:1 1 auto}
+  #handbox{flex:1 1 auto;width:auto;max-width:66%;background:rgba(8,18,28,.55)}
+  #hand{flex:1 1 220px;width:220px;min-width:120px}      /* (the fan and the progress cards share the box; both squeeze their cards together when short) */
+  #actions{flex:0 1 auto}
+  #actions>*{flex:0 0 58px}      /* (small buttons; the hand gets the room) */
   #barend{flex:none}
   #dice{--d:36px}
   #b-end{align-self:center;padding:16px 18px;font-size:1.05rem}

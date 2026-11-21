@@ -260,6 +260,14 @@ $('b-buy').innerHTML = buildLabel('card', ' ');
 $('b-trade').innerHTML = '<svg class="bi" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M-8-4h13M2-8l4 4-4 4M8 4H-5M-2 0l-4 4 4 4" fill="none" stroke="#111" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8-4h13M2-8l4 4-4 4M8 4H-5M-2 0l-4 4 4 4" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Trade</span>';
 $('actions').addEventListener('mousemove', e => { const b = e.target.closest('[data-cost]'); if (b) showTip(b.dataset.cost, e.clientX, e.clientY); else hideTip(); });
 $('actions').addEventListener('mouseleave', hideTip);
+// phones have no hover: a tap on a build button shows its cost for a moment (the buttons have no cost chips since 2026-11-20)
+let TIPT = 0;
+$('actions').addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse') return;
+  const b = e.target.closest('[data-cost]'); if (!b) return;
+  const r = b.getBoundingClientRect(); TIPW = null; showTip(b.dataset.cost, r.left + r.width / 2, r.top);
+  clearTimeout(TIPT); TIPT = setTimeout(hideTip, 2000);
+});
 $('o-give').onclick = e => { const b = e.target.closest('button'); if (b) { OG[b.dataset.r] = (OG[b.dataset.r] || 0) + 1; fillTrade(); } };
 $('o-want').onclick = e => { const b = e.target.closest('button'); if (b) { OW[b.dataset.r] = (OW[b.dataset.r] || 0) + 1; fillTrade(); } };
 $('o-clear').onclick = () => { OG = {}; OW = {}; fillTrade(); };
