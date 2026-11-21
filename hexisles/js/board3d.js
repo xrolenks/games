@@ -415,7 +415,7 @@ function init3D(T, Water, Orbit, BU) {
   // ----- day and night (2026-11-19, Rick's pick) -----
   // The time of day moves on a little every turn: a full day (morning, noon, sunset, night) takes 4 rounds.
   // Each key: where the sun (or the moon, at night) is, the light, the sky's colours, the haze, the sea, stars,
-  // and `n`, how much it's night (town windows and torches light up, the lighthouse beam shows).
+  // and `n`, how much it's night (town windows and torches light up, the lighthouse lamp brightens).
   const DAYK = [
     {pol: 64, az: -112, sun: 0xffd9b4, si: 2.2, hemi: .42, hor: [.86, .75, .68], zen: [.2, .38, .64], glow: [1, .78, .55], fog: 0xc2b8b4, exp: .95, sea: 0x0d5a78, sunc: 0xffe0c0, stars: 0, n: 0},      // morning
     {pol: 52, az: -145, sun: 0xfff0d8, si: 2.6, hemi: .45, hor: [.55, .70, .80], zen: [.04, .17, .36], glow: [1, .85, .6], fog: 0x9db8ca, exp: .95, sea: 0x0a5878, sunc: 0xfff2dd, stars: 0, n: 0},      // noon (the old look)
@@ -808,14 +808,10 @@ function init3D(T, Water, Orbit, BU) {
 
   // ----- the lighthouse (2026-11-19, Rick's pick) -----
   // On a little rocky islet off the coast, away from the ports and the raiders' side: a white tower with red bands,
-  // a gallery, a glowing lamp room and a red cap. Its beam sweeps round; you only really see it at dusk and night.
-  const LH = {beam: null, glow: null};
+  // a gallery, a glowing lamp room and a red cap. Its lamp glows brighter at night. (The sweeping beam was removed
+  // 2026-11-20, Rick: too distracting.)
+  const LH = {glow: null};
   const LAMPMAT = std({color: 0x664400, emissive: 0xffe2a0, emissiveIntensity: 1.2});
-  const BEAMGEO = (() => {      // a long cone of light from the lamp outwards (+x), fading towards its far end
-    const g = new T.ConeGeometry(20, 300, 20, 6, true).translate(0, -150, 0).rotateZ(Math.PI / 2), p = g.attributes.position, c = [];
-    for (let k = 0; k < p.count; k++) { const f = Math.pow(1 - p.getX(k) / 300, 1.6); c.push(f, f * .93, f * .7); }
-    g.setAttribute('color', new T.Float32BufferAttribute(c, 3)); return g; })();
-  const BEAMMAT2 = new T.MeshBasicMaterial({vertexColors: true, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide});
   function lighthouse() {
     const portMid = (G.ports || []).map(o => edgeMid(o.e)), fl = fleetAt(FLEETMAX);
     let best = null, bs = -1e9;
@@ -843,9 +839,6 @@ function init3D(T, Water, Orbit, BU) {
     // a keeper's hut beside it
     part(g, G3.house, white, 10.5, 6.5, 4).scale.set(.75, .6, .7);
     part(g, G3.roof, red, 10.5, 8.6, 4).scale.set(.75, .6, .7);
-    LH.beam = new T.Group(); LH.beam.position.set(g.position.x, 41.8, g.position.z); stat.add(noRef(LH.beam));
-    [0, Math.PI].forEach(a => { const b = new T.Mesh(BEAMGEO, BEAMMAT2); b.rotation.y = a; LH.beam.add(b); });
-    LH.beam.userData.h = -1;
     LH.glow = new T.Sprite(new T.SpriteMaterial({map: glowTex, transparent: true, depthWrite: false})); keep(LH.glow.material);
     LH.glow.position.set(g.position.x, 41.8, g.position.z); LH.glow.scale.set(36, 36, 1); LH.glow.userData.h = -1; stat.add(noRef(LH.glow));
   }
@@ -2273,8 +2266,6 @@ function init3D(T, Water, Orbit, BU) {
     WINMAT.emissiveIntensity = N * 2.6;
     if (NIGHTGLOW) NIGHTGLOW.opacity = N * .55;
     LAMPMAT.emissiveIntensity = 1 + N * 2.5;
-    BEAMMAT2.opacity = .03 + N * .3;
-    if (LH.beam) LH.beam.rotation.y = t * .7;
     if (LH.glow) LH.glow.material.opacity = .25 + N * .7;
     caust.offset.set(t * .011 + Math.sin(t * .3) * .02, t * .007);
     CAUST.material.opacity = .22 * (1 - N * .8);

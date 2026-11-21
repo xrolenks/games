@@ -8,7 +8,7 @@
 // uses never download or slow the game.
 const PACKS = [
   {id: 'day', name: 'Day', time: .25, hint: 'Bright sunshine over the island.'},
-  {id: 'night', name: 'Night', time: .75, hint: 'Moonlight and stars: town windows and torches glow, and the lighthouse sweeps the sea.'}
+  {id: 'night', name: 'Night', time: .75, hint: 'Moonlight and stars: town windows and torches glow, and the lighthouse lamp shines.'}
 ];
 const PACKKEY = 'hexisles-pack';
 let PACK = 'day';
