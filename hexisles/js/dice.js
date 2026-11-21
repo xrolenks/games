@@ -86,6 +86,7 @@ function showDice() {
 function message() {
   const p = G.turn, P = G.pl[p], n = esc(P.name);
   if (G.phase === 'over') return '<b>' + esc(G.pl[G.win].name) + '</b> won the game!';
+  if (G.boot) return 'Waiting for everyone\'s island to load…';      // (online, before the first turn: online.js)
   if (G.cdisc) return 'Waiting for ' + G.cdisc.map(i => '<b>' + esc(G.pl[i].name) + '</b>').join(' and ') + ' to throw away a progress card (' + PCMAX + ' is the most you can keep)…';
   if (G.phase === 'discard') return 'A 7! Waiting for ' + Object.keys(G.disc).map(i => '<b>' + esc(G.pl[i].name) + '</b>').join(' and ') + ' to discard…';
   if (G.offer) return offerFix(G.offer).yes.length && mySeat(G.offer.from) ? '<b>' + n + '</b>: tap ✓ to trade with someone who accepted, or ✗ to turn them down.' : '<b>' + n + '</b> offers ' + fmt(G.offer.give) + ' for ' + fmt(G.offer.get) + '. Waiting for answers…';

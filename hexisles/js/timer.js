@@ -35,7 +35,7 @@ const WAITS = ['discard', 'give', 'sack', 'tpick'];
 const turnKey = () => G.phase === 'setup' ? 's' + G.su.k : 't' + G.tn;      // changes when the next turn (or setup placement) starts
 function clockKey() { return turnKey() + (G.pl[G.turn].bot && WAITS.includes(G.phase) ? G.phase : ''); }
 // is the clock running? (a person's turn, or a computer's turn waiting for people)
-function clockOn() { return !!(G && G.timer && !G.tut && G.phase !== 'over' && (!G.pl[G.turn].bot || WAITS.includes(G.phase) || G.cdisc)); }
+function clockOn() { return !!(G && G.timer && !G.tut && !G.boot && G.phase !== 'over' && (!G.pl[G.turn].bot || WAITS.includes(G.phase) || G.cdisc)); }
 // after every move: a new turn (or a new wait) gets a full clock
 function clockCheck() {
   if (!G || !G.timer) return;

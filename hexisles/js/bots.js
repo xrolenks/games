@@ -148,6 +148,7 @@ function botStep() {
   BOTT = null;
   if (!G || G.phase === 'over' || !G.pl[G.turn].bot) return;
   if (G.cdisc) return;      // (waiting for a person to throw away a progress card)
+  if (G.boot) return;       // (online: waiting for everyone's island; the host re-renders, and so restarts this, when it's over)
   const p = G.turn, P = G.pl[p];
   if (G.offer && G.offer.from === p) {      // a bot's own trade offer: take the first yes, or wait a bit for people, then take it back
     const o = offerFix(G.offer);

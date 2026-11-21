@@ -9,6 +9,9 @@
 const VIEWKEY = 'hexisles-view';      // localStorage: '2d' if the player switched the 3D view off
 const TOP = 9;                        // height of a land tile's top (sea level is 0, the beach 3)
 function want3D() { try { return localStorage.getItem(VIEWKEY) !== '2d'; } catch (e) { return true; } }
+// Is this screen's island still getting ready (3D still loading, or the new game's island still assembling)?
+// Online games wait for everyone's island before the first turn (online.js, G.boot).
+function islandBusy() { return !!(D3.loading || (D3.on && D3.introLeft && D3.introLeft() > 0)); }
 function set3D(on) {
   try { localStorage.setItem(VIEWKEY, on ? '3d' : '2d'); } catch (e) {}
   // (true: the player asked for 3D, so skip the slow-graphics check. 2026-11-20: it also tries again after a failed
@@ -94,7 +97,9 @@ function init3D(T, Water, Orbit, BU) {
   usePR();
   R.outputColorSpace = T.SRGBColorSpace;
   R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = .95;
-  R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap;
+  // (PCF, not PCFSoft, since 2026-11-20: Rick prefers speed over fancy shadows; soft edges sample the shadow map many
+  // more times on every pixel of every frame)
+  R.shadowMap.enabled = true; R.shadowMap.type = T.PCFShadowMap;
   R.shadowMap.autoUpdate = false;      // shadows are only redrawn when something moves (see SHADOW)
   const cv = R.domElement; cv.id = 'board3d'; view.insertBefore(cv, $('roll'));
   // If the graphics chip resets (2026-11-20, Rick's laptop: "D3D11 device was removed", the map went blank), this 3D
@@ -137,7 +142,7 @@ function init3D(T, Water, Orbit, BU) {
   scene.fog = new T.Fog(0x9db8ca, 2500, 9000);
   const sun = new T.DirectionalLight(0xfff0d8, 2.6);
   sun.position.copy(SUN).multiplyScalar(800); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);      // (was 2048 until 2026-11-20: a quarter of the work each time shadows are redrawn)
   const sc = sun.shadow.camera; sc.left = sc.bottom = -420; sc.right = sc.top = 420; sc.near = 200; sc.far = 1600;
   sun.shadow.bias = -.0004; sun.shadow.normalBias = .5; sun.shadow.radius = 3;
   const HEMI = new T.HemisphereLight(0xd6ecff, 0x3d3324, .45);
@@ -335,7 +340,7 @@ function init3D(T, Water, Orbit, BU) {
   const beach = new T.Mesh(BU.mergeGeometries(beachParts), M3.sand); beach.receiveShadow = true; scene.add(beach);
   // The sea's reflection means drawing the whole scene a second time, so it is kept cheap:
   // - a small reflection picture (256 x 256; the ripples blur it anyway),
-  // - redrawn only every other frame (see RF),
+  // - redrawn only every 3rd frame (see RF; was every other until 2026-11-20),
   // - things too small or see-through to notice in it (wheat, grass, reeds, smoke, the foam) go on layer 1,
   //   which the main camera sees but the reflection camera does not (see noRef).
   const water = new Water(new T.PlaneGeometry(40000, 40000), {textureWidth: 256, textureHeight: 256, waterNormals: waves, sunDirection: SUN.clone(),
@@ -343,7 +348,7 @@ function init3D(T, Water, Orbit, BU) {
   water.rotation.x = -Math.PI / 2; water.material.uniforms.size.value = 1.4; scene.add(water);
   let RF = 0;
   const reflect = water.onBeforeRender;
-  water.onBeforeRender = function (...a) { if (RF % 2 === 0) reflect.apply(this, a); };
+  water.onBeforeRender = function (...a) { if (RF % 3 === 0) reflect.apply(this, a); };      // (every 3rd frame since 2026-11-20: it costs the most)
   const noRef = o => { if (o) o.layers.set(1); return o; };
   cam.layers.enable(1);
   // shallow turquoise water and breaking foam round the island, painted onto see-through sheets
@@ -688,7 +693,16 @@ function init3D(T, Water, Orbit, BU) {
     const p = new T.Mesh(G3.ball, keep(std({color: 0x8a8580, transparent: true, opacity: .4, depthWrite: false, roughness: 1})));
     p.userData = {k, x, y, z, s}; stat.add(noRef(p)); SMOKE.push(p);
   }
-  function lair(h, L) {      // the bandits' lair (the middle land in Classic games): a cave in a rocky hill, a camp, a lookout and stolen gold
+  // Fire glow (2026-11-20, Rick: cheaper lighting is fine): the campfire and the volcano used to have a real flickering
+  // PointLight. Being the only extra light, it made the graphics chip re-prepare nearly every material's program when a
+  // game started (the start-up island has no such light), the heaviest moment for Rick's laptop, and it cost a bit on
+  // every pixel. Now it's a glowing sprite (CRATER, opacity flickered in frame(); userData.k = brightness).
+  function fireGlow(x, y, z, size, k, col, i) {
+    const s = new T.Sprite(keep(new T.SpriteMaterial({map: glowTex, color: col, transparent: true, depthWrite: false, blending: T.AdditiveBlending})));
+    s.position.set(x, y, z); s.scale.set(size, size, 1); s.userData.k = k; s.userData.h = i;
+    stat.add(noRef(s)); return s;
+  }
+  function lair(h, L, i) {      // the bandits' lair (the middle land in Classic games): a cave in a rocky hill, a camp, a lookout and stolen gold
     const X = x => h.x + x, Z = z => h.y + z;
     // the rocky hill at the back, with the cave mouth (a dark hollow framed with timbers) and a torch either side
     [[0, -31, 14, 17, 10, .4], [-16, -24, 10, 12, 10, 1.3], [16, -25, 10, 11, 10, 2.6], [-27, -13, 7, 6, 7, 4], [-7, -36, 9, 10, 8, 2], [8, -36, 9, 11, 8, 3.3]]
@@ -703,7 +717,7 @@ function init3D(T, Water, Orbit, BU) {
     [0, 2.1, 4.2].forEach(a => L.trunk.push({x: X(fx + Math.cos(a) * 3.8), y: TOP + .3, z: Z(fz - Math.sin(a) * 3.8), sx: 1.3, sy: 5.5, rz: Math.PI / 2 - .55, ry: a, c: '#5a3a20'}));
     L.fire.push({x: X(fx), y: TOP, z: Z(fz), sx: 2, sy: 1.6, c: '#fff'}, {x: X(fx + .8), y: TOP, z: Z(fz - .5), sx: 1.2, sy: 1.9, ry: 1, c: '#fff'});
     L.smoke.push({x: X(fx), y: TOP + 7, z: Z(fz), s: .45});
-    CRATER = new T.PointLight(0xff8a3a, 0, 80, 2); CRATER.userData.k = 700; CRATER.position.set(X(fx), TOP + 7, Z(fz)); stat.add(CRATER);
+    CRATER = fireGlow(X(fx), TOP + 4, Z(fz), 26, .6, 0xff8a3a, i);
     // two canvas tents
     L.tent.push({x: X(24), y: TOP, z: Z(10), sx: 12, sy: 5.5, sz: 5.5, ry: .6, c: '#b39a6c'}, {x: X(-27), y: TOP, z: Z(1), sx: 10, sy: 5, sz: 5, ry: 1.2, c: '#8f7a55'});
     // a lookout tower with a railing and a red flag
@@ -756,14 +770,14 @@ function init3D(T, Water, Orbit, BU) {
       const m = new T.Mesh(G3.tile, [top, side]); m.position.set(h.x, 0, h.y); m.castShadow = m.receiveShadow = true; stat.add(m);
       TILES3.push({top});
       scenery(t, i, h, r, L);
-      if (t === 'volcano' && !G.fire) { lair(h, L); return; }      // Classic: the bandits' lair
+      if (t === 'volcano' && !G.fire) { lair(h, L, i); return; }      // Classic: the bandits' lair
       if (t === 'volcano') {           // Fire Mountain: a smoking cone with glowing lava in its crater
         const prof = [[38, 0], [35, 3], [28, 10], [20, 20], [12.5, 29], [10, 30.5], [8.6, 28.5], [0, 27.5]].map(([x, y]) => new T.Vector2(x, y));
         const vm = keep(LTEX.volcano.clone()); vm.needsUpdate = true; vm.repeat.set(4, 1.5);
         const cone = new T.Mesh(keep(new T.LatheGeometry(prof, 40)), keep(std({map: vm, bumpMap: vm, bumpScale: 2, roughness: .95})));
         cone.position.set(h.x, TOP - .5, h.y); cone.castShadow = cone.receiveShadow = true; stat.add(cone);
         const pool = new T.Mesh(keep(new T.CircleGeometry(8.8, 28).rotateX(-Math.PI / 2)), M3.lava); pool.position.set(h.x, TOP + 28.2, h.y); stat.add(pool);
-        CRATER = new T.PointLight(0xff6a20, 1800, 140, 2); CRATER.userData.k = 1800; CRATER.position.set(h.x, TOP + 34, h.y); stat.add(CRATER);
+        CRATER = fireGlow(h.x, TOP + 32, h.y, 70, .8, 0xff6a20, i);
         for (let k = 0; k < 7; k++) puff(h.x, TOP + 31, h.y, 1, k / 7);
         return;
       }
@@ -848,8 +862,10 @@ function init3D(T, Water, Orbit, BU) {
   // its trees, wheat, rocks and buildings pop up piece by piece, its number disc drops on, and finally the
   // jetties are laid plank by plank and the lighthouse goes up. The camera swings round as it happens.
   // Pieces of scenery are InstancedMeshes shared by all tiles, so each copy remembers its tile (`hs`) and its
-  // finished matrix (`base`) and is redrawn every frame until the end (introStep).
+  // finished matrix (`base`); introStep moves only the copies growing right then (see introStart).
   let INTRO = null;
+  const backOut = k => { const c = 1.9; k -= 1; return 1 + (c + 1) * k * k * k + c * k * k; };
+  const m4 = new T.Matrix4(), v3 = new T.Vector3();
   // one tile at a time (Rick, 2026-11-20): each starts falling as the one before it lands, so INTROTILE = INTROFALL
   const INTROTILE = 340, INTROFALL = 340, INTROGROW = 380;
   function introStart() {
@@ -859,33 +875,58 @@ function init3D(T, Water, Orbit, BU) {
     const land = []; ord.forEach((i, k) => { land[i] = 500 + k * INTROTILE; });
     const ports = 500 + HEX.length * INTROTILE + 250, end = ports + 1700;
     const insts = [];
+    // Lighter intro (Rick, 2026-11-20): there are ~4000 scenery copies (wheat stalk by stalk...), and every frame used to
+    // work out all of them and send them all to the graphics chip again. Now each copy's start (ia) and finish (ib) are
+    // worked out once; a frame only touches the copies growing or bouncing right then, and a group nothing moved in
+    // isn't sent again. Every copy starts hidden (scale ~0) and is set to its finished place once when it's done.
     stat.children.forEach(o => {
-      if (o.isInstancedMesh && o.userData.hs) { o.userData.base = o.instanceMatrix.array.slice(); insts.push(o); }
-      else if (o.userData.h != null) { o.userData.y0 = o.position.y; o.userData.s0 = o.scale.clone(); }
+      const u = o.userData;
+      if (o.isInstancedMesh && u.hs) {
+        const hs = u.hs, n = hs.length, B = u.base = o.instanceMatrix.array.slice();
+        const A = u.ia = new Float32Array(n), E = u.ib = new Float32Array(n); u.done = new Uint8Array(n); u.lo = 1e9; u.fin = false;
+        for (let k = 0; k < n; k++) {
+          const h = hs[k];
+          A[k] = h >= 0 ? land[h] + 120 + hash(k * .37, o.id) * .999 * 650 : ports + (k / n) * 1100;      // (jetties: laid piece by piece in order)
+          E[k] = h >= 0 ? Math.max(A[k] + INTROGROW, land[h] + 260) : A[k] + INTROGROW;      // (grown, and its land's bounce over)
+          u.lo = Math.min(u.lo, A[k]);
+          m4.fromArray(B, k * 16); m4.scale(v3.setScalar(.0001)); o.setMatrixAt(k, m4);
+        }
+        o.instanceMatrix.needsUpdate = true; insts.push(o);
+      }
+      else if (u.h != null) { u.y0 = o.position.y; u.s0 = o.scale.clone(); }
     });
-    INTRO = {t0: Date.now(), land, ports, end, insts, cam: true};
+    // (t0 is set on the first drawn frame, not now: the shader warm-up (HOLD) can pause drawing for a couple of
+    // seconds first, and the intro used to carry on unseen during it)
+    INTRO = {t0: null, land, ports, end, insts, cam: true, f: 0};
     dyn.visible = false;
   }
-  const backOut = k => { const c = 1.9; k -= 1; return 1 + (c + 1) * k * k * k + c * k * k; };
-  const m4 = new T.Matrix4(), v3 = new T.Vector3();
   function introStep(now) {
-    const I = INTRO, t = now - I.t0;
-    SHADOW = true;
+    const I = INTRO;
+    if (I.t0 == null) I.t0 = now;
+    const t = now - I.t0;
+    if (I.f++ % 4 === 0) SHADOW = true;      // (shadows about every 4th frame during the intro, not every other: they cost the most)
     if (!I.camEnd) I.camEnd = cam.position.clone().sub(C.target);
     if (t >= I.end) { introEnd(); return; }
     const fall = i => { const k = Math.min(1, Math.max(0, (t - (I.land[i] - INTROFALL)) / INTROFALL)); return k < 1 ? 320 * (1 - k) * (1 - k) : Math.max(0, Math.sin((t - I.land[i]) / 260 * Math.PI)) * 3 * (t - I.land[i] < 260); };
-    const grow = (start, n) => { const k = (t - start) / INTROGROW; return k <= 0 ? 0 : k >= 1 ? 1 : Math.max(0, backOut(k)); };
+    const grow = start => { const k = (t - start) / INTROGROW; return k <= 0 ? 0 : k >= 1 ? 1 : Math.max(0, backOut(k)); };
+    I.n = 0;      // (how many copies moved this frame, for testing)
     I.insts.forEach(m => {
-      const B = m.userData.base, hs = m.userData.hs;
+      const u = m.userData;
+      if (u.fin || t < u.lo) return;
+      const B = u.base, hs = u.hs, A = u.ia, E = u.ib, D = u.done;
+      let moved = 0, left = 0;
       for (let k = 0; k < hs.length; k++) {
-        const h = hs[k], j = hash(k * .37, m.id) * .999;
-        let s, dy = 0;
-        if (h >= 0) { dy = fall(h); s = grow(I.land[h] + 120 + j * 650, k); }
-        else s = grow(I.ports + (k / hs.length) * 1100, k);           // jetties: laid piece by piece in order
-        m4.fromArray(B, k * 16); m4.scale(v3.setScalar(Math.max(.0001, s))); m4.elements[13] += dy;
-        m.setMatrixAt(k, m4);
+        if (D[k]) continue;
+        left++;
+        if (t < A[k]) continue;      // (not started: still hidden)
+        m4.fromArray(B, k * 16);
+        if (t >= E[k]) D[k] = 1;      // (done: its finished place, once)
+        else { m4.scale(v3.setScalar(Math.max(.0001, grow(A[k])))); if (hs[k] >= 0) m4.elements[13] += fall(hs[k]); }
+        m.setMatrixAt(k, m4); moved++;
       }
-      m.instanceMatrix.needsUpdate = true;
+      if (moved) m.instanceMatrix.needsUpdate = true;
+      if (!left) u.fin = true;
+      I.n += moved;
     });
     stat.children.forEach(o => {
       const u = o.userData;
@@ -913,7 +954,7 @@ function init3D(T, Water, Orbit, BU) {
     if (!I) return;
     // (computeBoundingSphere: three.js measured each group while it was shrunk to nothing, so zooming in made whole
     // groups of scenery vanish as "off screen"; Rick saw details disappear, 2026-11-20. Measure again at full size.)
-    I.insts.forEach(m => { m.instanceMatrix.array.set(m.userData.base); m.instanceMatrix.needsUpdate = true; delete m.userData.base; m.computeBoundingSphere(); });
+    I.insts.forEach(m => { const u = m.userData; m.instanceMatrix.array.set(u.base); m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); ['base', 'ia', 'ib', 'done', 'lo', 'fin'].forEach(k => delete u[k]); });
     stat.children.forEach(o => { const u = o.userData; if (u.y0 != null && !o.isInstancedMesh) { o.position.y = u.y0; o.scale.copy(u.s0); o.visible = true; delete u.y0; } });
     SMOKE.forEach(p => { p.visible = true; });
     dyn.visible = true; SHADOW = true;
@@ -2229,7 +2270,7 @@ function init3D(T, Water, Orbit, BU) {
     ROUTEMAT.emissiveIntensity = .9 + .5 * Math.sin(t * 2.6);      // the longest route's gold strip shimmers
     if (GHOST) GHOSTM[G.turn] && (GHOSTM[G.turn].opacity = .42 + .14 * Math.sin(t * 5));      // the preview breathes
     HALO.opacity = .65 + .35 * Math.sin(t * 3.2); BEAMMAT.opacity = .45 + .25 * Math.sin(t * 3.2); GOLDARM.emissiveIntensity = .3 + .2 * Math.sin(t * 3.2);      // a mighty knight's glow pulses
-    if (CRATER) CRATER.intensity = CRATER.userData.k * (.8 + .2 * Math.sin(t * 7) * Math.sin(t * 3.1));
+    if (CRATER) CRATER.material.opacity = CRATER.userData.k * (.8 + .2 * Math.sin(t * 7) * Math.sin(t * 3.1));      // (the fire's glow flickers)
     M3.fire.emissiveIntensity = 2.1 + .5 * Math.sin(t * 9) * Math.sin(t * 5.3);
     M3.glow.emissiveIntensity = 1.6 + .3 * Math.sin(t * 8) * Math.sin(t * 4.1);
     BLAZE.emissiveIntensity = M3.fire.emissiveIntensity * 1.1;
@@ -2323,7 +2364,7 @@ function init3D(T, Water, Orbit, BU) {
   D3.recolor = () => { for (const k in PM) { PM[k].dispose(); delete PM[k]; } for (const k in GHOSTM) { GHOSTM[k].dispose(); delete GHOSTM[k]; } };      // (for testing and pictures: a building model, not added to the board)
   D3.party = p => partyStart(p);      // the winner's fireworks and the camera circling (flair.js winFx)
   D3.clouds = ms => cloudsStart(ms);      // (weather: real clouds drifting over the island, see flair.js)      // (for testing and pictures: a knight model, not added to the board)
-  D3.introLeft = () => INTRO ? Math.max(0, INTRO.end - (Date.now() - INTRO.t0)) : 0;      // (computer players wait for the island)
+  D3.introLeft = () => !INTRO ? 0 : INTRO.t0 == null ? INTRO.end : Math.max(0, INTRO.end - (Date.now() - INTRO.t0));      // (computer players wait for the island)
   D3.day = d => { DAY.test = d; DAY.cur = null; };      // (null: back to normal)      // for testing: jump to a time of day (0 morning, .25 noon, .5 sunset, .75 night)
   D3.undice = endDice;
   D3.chase = c => {

@@ -129,7 +129,8 @@ function hostData(c, d) {
     if (NET.inGame) c.send({t: 'state', g: G, seat: -1});       // game already running: they watch until the next one
   }
   if (d.t === 'color' && NET.conns.includes(c) && COLORS.some(q => q[1] === d.c) && !humanColors(c).includes(d.c)) { c.color = d.c; sendLobby(); }      // a guest picks a colour in the lobby
-  if (d.t === 'act' && NET.inGame && c.seat >= 0 && d.a) {
+  if (d.t === 'ready' && NET.inGame && G && G.boot && d.id === G.id) { G.boot.s = G.boot.s.filter(s => s !== c.seat); bootCheck(); }      // (their island is ready)
+  if (d.t === 'act' && NET.inGame && c.seat >= 0 && d.a && !G.boot) {
     try { if (act(d.a, c.seat)) { save(); render(); } } catch (e) {}
   }
 }
@@ -200,8 +201,33 @@ function hostBegin() {
   NET.conns.forEach((c, i) => { c.seat = i + 1; });
   const cols = lobbyColors(names.length);
   newGame(names.map((n, i) => ({name: n, bot: i >= humans, c: cols[i]})), FIRE, LEVEL, TIMER);
+  if (NET.conns.length) G.boot = {s: [0].concat(NET.conns.map(c => c.seat)), until: Date.now() + BOOTMS};      // (wait for everyone's island)
   NET.inGame = true; $('m-lobby').hidden = true; save(); render();
 }
+// Waiting for everyone's island (Rick's request, 2026-11-20). Building a new game's 3D island and its ~9 s intro
+// happen on every screen when the host presses Start, and slower computers take longer. G.boot = {s: seats whose
+// island isn't ready yet, until: when we stop waiting}: while it's there nobody can move (myTurn, go), computer
+// players wait (botStep) and the turn timer doesn't run (clockOn). Each guest sends {t:'ready', id} once its island
+// has assembled (or at once on the flat map); the host checks its own. A player who drops out, or BOOTMS passing
+// (e.g. a guest's tab in the background, where the intro never plays), ends the wait too.
+const BOOTMS = 25000;
+function bootCheck() {
+  if (!G || !G.boot || !NET.inGame) return;
+  if (NET.role === 'guest') {
+    if (NET.readyId !== G.id && !islandBusy() && NET.conn && NET.conn.open) { NET.readyId = G.id; NET.conn.send({t: 'ready', id: G.id}); }
+    return;
+  }
+  if (NET.role !== 'host') return;
+  const B = G.boot, n = B.s.length;
+  B.s = B.s.filter(s => s === 0 ? islandBusy() : G.pl[s] && !G.pl[s].bot);      // (my own island; anyone who dropped out isn't waited for)
+  if (!B.s.length || Date.now() > B.until) bootDone();
+  else if (B.s.length !== n) { save(); render(); }
+}
+function bootDone() {
+  G.boot = null; G.tkey = null; clockCheck();      // (the first turn gets a full clock)
+  save(); render();
+}
+setInterval(bootCheck, 250);
 function broadcast() {
   if (!NET.inGame) return;
   NET.conns.forEach(c => { if (c.open) c.send({t: 'state', g: G, seat: c.seat, now: Date.now()}); });      // (now: lets guests match the host's clock for the turn timer)

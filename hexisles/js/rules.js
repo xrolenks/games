@@ -1082,11 +1082,12 @@ function checkWin(p) {
 }
 
 // Is it this screen's turn? (wifi game: my seat; same-screen game: any human)
-function myTurn() { return !!G && G.phase !== 'over' && (NET.role ? G.turn === NET.seat : !G.pl[G.turn].bot); }
+function myTurn() { return !!G && G.phase !== 'over' && !G.boot && (NET.role ? G.turn === NET.seat : !G.pl[G.turn].bot); }
 
 const OUTOFTURN = ['discard', 'accept', 'decline', 'give', 'sack', 'tpick', 'spick', 'cdisc'];     // moves a player can make when it isn't their turn
 // Do a move, then save and redraw. A wifi guest sends the move to the host instead.
 function go(a) {
+  if (G && G.boot) return false;      // (online: still waiting for everyone's island to load, see online.js)
   if (NET.role === 'guest') {
     if (!(myTurn() || OUTOFTURN.includes(a.t)) || !NET.conn || !NET.conn.open) return false;
     NET.conn.send({t: 'act', a});
