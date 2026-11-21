@@ -57,11 +57,11 @@ function dustFx(keys) {
 function harvestPop(hs) {
   const at = {};      // corner -> [{r, n}]
   hs.forEach(i => {
-    const t = G.hex[i].t, extra = fertile(i) ? 1 : 0;
+    const t = G.hex[i].t;
     HEX[i].v.forEach(v => {
       const b = G.b[v]; if (!b) return;
       const g = G.fg && b.l === 2 && GOODSOF[t];
-      (at[v] = at[v] || []).push({r: t, n: b.l + extra - (g ? 1 : 0)});
+      (at[v] = at[v] || []).push({r: t, n: b.l - (g ? 1 : 0)});
       if (g) at[v].push({r: g, n: 1});
     });
     // sparkles: little gold stars twinkling up over the land (3D only)

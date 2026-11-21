@@ -1,8 +1,8 @@
 'use strict';
 // Hex Isles - The 3D board (Three.js): lands, scenery, pieces, sea, sky, 3D dice and animations.
 // ---------- 3D board (Three.js) ----------
-// A real 3D island drawn with WebGL: raised land tiles with textures, trees, wheat, sheep, rocks and a
-// smoking volcano, a sky with the sun, reflecting sea, shadows. It only draws: every click still becomes
+// A real 3D island drawn with WebGL: raised land tiles with textures, trees, wheat, sheep, rocks and the
+// bandits' lair, a sky with the sun, reflecting sea, shadows. It only draws: every click still becomes
 // the same go(action) as on the flat map. The flat SVG board keeps being drawn underneath (hidden), so
 // switching back is instant and the window keeps its size. Three.js comes from the internet (jsDelivr,
 // pinned version, see the import map in <head>); without it the flat map is used.
@@ -186,7 +186,7 @@ function init3D(T, Water, Orbit, BU) {
     t.anisotropy = ANISO; if (color) t.colorSpace = T.SRGBColorSpace; return t;
   };
   const PAL = {wood: ['#173f20', '#3e7b34'], clay: ['#8a4022', '#d4855a'], wool: ['#4a9134', '#98d05e'], grain: ['#6e4a1c', '#b8892e'],
-    stone: ['#606268', '#b3b4b8'], volcano: ['#1d1816', '#4a3d37'], sand: ['#c9ad74', '#f0dfae']};
+    stone: ['#606268', '#b3b4b8'], lair: ['#1d1816', '#4a3d37'], sand: ['#c9ad74', '#f0dfae']};
   const LTEX = {};
   Object.keys(PAL).forEach((t, n) => {
     const a = hx(PAL[t][0]), b = hx(PAL[t][1]), big = fbm(4, n * 10 + 1), fine = fbm(16, n * 10 + 5), crack = fbm(6, n * 10 + 9);
@@ -195,7 +195,7 @@ function init3D(T, Water, Orbit, BU) {
       let k = big(x, y) * .8 + f * .55 - .2;
       if (t === 'grain') k = k * .55 + .45 * (.5 + .5 * Math.sin((y * 16 + big(x, y) * 1.5) * Math.PI * 2));      // furrows
       let col = mix(a, b, k);
-      if ((t === 'clay' || t === 'stone' || t === 'volcano') && Math.abs(crack(x, y) - .5) < .013) col = col.map(v => v * .5);     // cracks
+      if ((t === 'clay' || t === 'stone' || t === 'lair') && Math.abs(crack(x, y) - .5) < .013) col = col.map(v => v * .5);     // cracks
       if (t === 'wood' && f > .66) col = mix(col, [107, 90, 42], .5);          // leaf litter on the forest floor
       if (t === 'wool' && f > .72) col = mix(col, [236, 226, 140], .4);        // little flowers
       return col;
@@ -226,10 +226,9 @@ function init3D(T, Water, Orbit, BU) {
     return svgTex('n' + n, s + '</svg>', 256);
   };
   const signTex = r => svgTex('s' + r, '<svg viewBox="-11 -11 22 22"><circle r="10" fill="' + (r === 'any' ? '#f6ecd0' : COL[r][0]) + '" stroke="#3a2a14" stroke-width="1.6"/>' +
-    (r === 'any' ? '<text y="0" style="font:700 8.5px system-ui,sans-serif;text-anchor:middle;fill:#2a2212">3:1</text><text y="6.5" style="font:600 5px system-ui,sans-serif;text-anchor:middle;fill:#5b4a2a">ANY</text>'
+    (r === 'any' ? '<text y="3.4" style="font:700 9.5px system-ui,sans-serif;text-anchor:middle;fill:#2a2212">3:1</text>'
       : '<g transform="translate(0 -3) scale(.48)">' + cardGlyph(r) + '</g><text y="7.8" style="font:700 7px system-ui,sans-serif;text-anchor:middle;fill:#111;stroke:#fff;stroke-width:2;paint-order:stroke">2:1</text>') + '</svg>', 128);
   const crateTex = (r, k) => svgTex('c' + r + k, '<svg viewBox="-6.5 -12 13 12">' + crate(r, k) + '</svg>', 128);
-  const plusTex = () => svgTex('plus', '<svg viewBox="-12 -8 24 16"><text y="5" style="font:800 13px system-ui,sans-serif;fill:#fff;stroke:#111;stroke-width:3;paint-order:stroke;text-anchor:middle">+1</text></svg>', 96, 64);
 
   // ----- materials -----
   const std = o => new T.MeshStandardMaterial(Object.assign({roughness: .85}, o));
@@ -264,8 +263,7 @@ function init3D(T, Water, Orbit, BU) {
     ring: std({color: 0xd8cfb8, roughness: .95}), hull: std({color: 0x7a4a22}), deck: std({color: 0xc9a46a}),
     sail: std({color: 0xf4ecd6, side: T.DoubleSide, roughness: .9}), flag: std({color: 0xd94a3a, side: T.DoubleSide}),
     disc: std({color: 0x8d7b4d, roughness: .8}), sand: std({map: LTEX.sand, roughness: 1}),
-    lava: std({color: 0x2a0a00, emissive: 0xff5a14, emissiveIntensity: 2}),
-    rumOn: std({color: 0x400000, emissive: 0xff5a2f, emissiveIntensity: 2}), rumOff: std({color: 0x2a1a14}),
+    ember: std({color: 0x2a0a00, emissive: 0xff5a14, emissiveIntensity: 2}),      // the kiln's glowing mouth
     spot: new T.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: .85, depthWrite: false}),
     hit: new T.MeshBasicMaterial({transparent: true, opacity: 0, depthWrite: false}),
     stormFill: new T.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: .14, depthWrite: false})
@@ -493,10 +491,10 @@ function init3D(T, Water, Orbit, BU) {
   }
   new ResizeObserver(() => { if (D3.on) fit(false); }).observe(view);
 
-  // ----- what stays put for a whole game: lands and their scenery, number discs, ports, the volcano -----
+  // ----- what stays put for a whole game: lands and their scenery, number discs, ports, the lair -----
   const stat = new T.Group(), dyn = new T.Group(), hits = new T.Group();
   scene.add(stat, dyn, hits);
-  let SKEY = null, TILES3 = [], DISCS = [], SMOKE = [], CRATER = null, junk = [];
+  let SKEY = null, TILES3 = [], DISCS = [], SMOKE = [], CAMPGLOW = null, junk = [];
   const SNOOZE = [];      // resting knights' floating Z sprites (see snooze(), moved in frame())
   const DSMOKE = [], DFLAGS = [];      // busy towns (2026-11-19): chimney smoke puffs and fluttering fort flags, rebuilt in dynamic()
   const ROUTEMAT = new T.MeshStandardMaterial({color: 0xffe08a, emissive: 0xffb52e, emissiveIntensity: 1, roughness: .3, metalness: .4});      // longest route strip
@@ -703,14 +701,14 @@ function init3D(T, Water, Orbit, BU) {
       }
     }
   }
-  function puff(x, y, z, s, k) {      // one puff of smoke rising from (x, y, z); s = size (1 for the volcano), k = where in its rise it starts
+  function puff(x, y, z, s, k) {      // one puff of smoke rising from (x, y, z); s = size, k = where in its rise it starts
     const p = new T.Mesh(G3.ball, keep(std({color: 0x8a8580, transparent: true, opacity: .4, depthWrite: false, roughness: 1})));
     p.userData = {k, x, y, z, s}; stat.add(noRef(p)); SMOKE.push(p);
   }
-  // Fire glow (2026-11-20, Rick: cheaper lighting is fine): the campfire and the volcano used to have a real flickering
+  // Fire glow (2026-11-20, Rick: cheaper lighting is fine): the lair's campfire used to have a real flickering
   // PointLight. Being the only extra light, it made the graphics chip re-prepare nearly every material's program when a
   // game started (the start-up island has no such light), the heaviest moment for Rick's laptop, and it cost a bit on
-  // every pixel. Now it's a glowing sprite (CRATER, opacity flickered in frame(); userData.k = brightness).
+  // every pixel. Now it's a glowing sprite (CAMPGLOW, opacity flickered in frame(); userData.k = brightness).
   function fireGlow(x, y, z, size, k, col, i) {
     const s = new T.Sprite(keep(new T.SpriteMaterial({map: glowTex, color: col, transparent: true, depthWrite: false, blending: T.AdditiveBlending})));
     s.position.set(x, y, z); s.scale.set(size, size, 1); s.userData.k = k; s.userData.h = i;
@@ -731,7 +729,7 @@ function init3D(T, Water, Orbit, BU) {
     [0, 2.1, 4.2].forEach(a => L.trunk.push({x: X(fx + Math.cos(a) * 3.8), y: TOP + .3, z: Z(fz - Math.sin(a) * 3.8), sx: 1.3, sy: 5.5, rz: Math.PI / 2 - .55, ry: a, c: '#5a3a20'}));
     L.fire.push({x: X(fx), y: TOP, z: Z(fz), sx: 2, sy: 1.6, c: '#fff'}, {x: X(fx + .8), y: TOP, z: Z(fz - .5), sx: 1.2, sy: 1.9, ry: 1, c: '#fff'});
     L.smoke.push({x: X(fx), y: TOP + 7, z: Z(fz), s: .45});
-    CRATER = fireGlow(X(fx), TOP + 4, Z(fz), 26, .6, 0xff8a3a, i);
+    CAMPGLOW = fireGlow(X(fx), TOP + 4, Z(fz), 26, .6, 0xff8a3a, i);
     // two canvas tents
     L.tent.push({x: X(24), y: TOP, z: Z(10), sx: 12, sy: 5.5, sz: 5.5, ry: .6, c: '#b39a6c'}, {x: X(-27), y: TOP, z: Z(1), sx: 10, sy: 5, sz: 5, ry: 1.2, c: '#8f7a55'});
     // a lookout tower with a railing and a red flag
@@ -757,7 +755,7 @@ function init3D(T, Water, Orbit, BU) {
     // identical materials reuse the graphics programs already prepared instead of making them again)
     const old = junk; junk = []; setTimeout(() => old.forEach(o => o.dispose()), 10000);      // (10 s: well after the new game's warm-up)
     stat.visible = true;      // (prewarm's sample island was hidden)
-    stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CRATER = null;
+    stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CAMPGLOW = null;
     const L = {trunk: [], pine: [], crown: [], rock: [], snow: [], stalk: [], tuft: [], reed: [], post: [], rail: [], fleece: [], sheepd: [], brick: [], puddle: [], plank: [], pile: [],
       kiln: [], mouth: [], hole: [], rim: [], blade: [], cut: [], crystal: [], smoke: [], cave: [], fire: [], tent: [], gold: [], heap: [], coin: [], barrel: [], lamp: [], wheel: []};
     HEX.forEach((h, i) => {      // (everything made for a tile remembers which tile it is, for the intro)
@@ -785,23 +783,12 @@ function init3D(T, Water, Orbit, BU) {
       const m = new T.Mesh(G3.tile, [top, side]); m.position.set(h.x, 0, h.y); m.castShadow = m.receiveShadow = true; stat.add(m);
       TILES3.push({top});
       scenery(t, i, h, r, L);
-      if (t === 'volcano' && !G.fire) { lair(h, L, i); return; }      // Classic: the bandits' lair
-      if (t === 'volcano') {           // Fire Mountain: a smoking cone with glowing lava in its crater
-        const prof = [[38, 0], [35, 3], [28, 10], [20, 20], [12.5, 29], [10, 30.5], [8.6, 28.5], [0, 27.5]].map(([x, y]) => new T.Vector2(x, y));
-        const vm = keep(LTEX.volcano.clone()); vm.needsUpdate = true; vm.repeat.set(4, 1.5);
-        const cone = new T.Mesh(keep(new T.LatheGeometry(prof, 40)), keep(std({map: vm, bumpMap: vm, bumpScale: 2, roughness: .95})));
-        cone.position.set(h.x, TOP - .5, h.y); cone.castShadow = cone.receiveShadow = true; stat.add(cone);
-        const pool = new T.Mesh(keep(new T.CircleGeometry(8.8, 28).rotateX(-Math.PI / 2)), M3.lava); pool.position.set(h.x, TOP + 28.2, h.y); stat.add(pool);
-        CRATER = fireGlow(h.x, TOP + 32, h.y, 70, .8, 0xff6a20, i);
-        for (let k = 0; k < 7; k++) puff(h.x, TOP + 31, h.y, 1, k / 7);
-        return;
-      }
+      if (t === 'lair') { lair(h, L, i); return; }      // the bandits' lair
       if (G.hex[i].n) {                // the number disc: a wooden token that always turns to face you
         const g = new T.Group(), base = new T.Mesh(G3.disc, M3.disc), face = new T.Mesh(G3.face, std({map: tokTex(G.hex[i].n), roughness: .6}));
         base.castShadow = base.receiveShadow = true; face.rotation.x = -Math.PI / 2; face.position.y = 3.05; face.receiveShadow = true;
         keep(face.material); g.add(base, face); g.position.set(h.x, TOP, h.y); g.userData.disc = true; stat.add(g); DISCS.push(g);
       }
-      if (fertile(i)) { const p = new T.Sprite(keep(new T.SpriteMaterial({map: plusTex()}))); p.position.set(h.x, TOP + 6, h.y + 24); p.scale.set(15, 10, 1); stat.add(p); }
     }
   }
   function ports(L) {
@@ -826,7 +813,7 @@ function init3D(T, Water, Orbit, BU) {
     noRef(inst(G3.tuft, M3.grass, L.tuft)); noRef(inst(G3.reed, M3.reed, L.reed)); inst(G3.post, M3.wood, L.post); inst(G3.cube, M3.wood, L.rail);
     inst(G3.fleece, M3.fleece, L.fleece); inst(G3.sheepd, M3.dark, L.sheepd); inst(G3.cube, M3.brick, L.brick);
     inst(G3.puddle, M3.puddle, L.puddle, false); inst(G3.cube, M3.wood, L.plank); inst(G3.pile, M3.wood, L.pile);
-    inst(G3.kiln, M3.brick, L.kiln); inst(G3.cube, M3.lava, L.mouth, false); inst(G3.puddle, M3.mud, L.hole, false);
+    inst(G3.kiln, M3.brick, L.kiln); inst(G3.cube, M3.ember, L.mouth, false); inst(G3.puddle, M3.mud, L.hole, false);
     inst(G3.rim, M3.mud, L.rim); inst(G3.cube, M3.metal, L.blade);
     inst(G3.cube, M3.cut, L.cut); inst(G3.crystal, M3.crystal, L.crystal);
     inst(G3.ball, M3.dark, L.cave, false); inst(G3.flame, M3.fire, L.fire, false); inst(G3.tent, M3.cloth, L.tent);
@@ -950,7 +937,8 @@ function init3D(T, Water, Orbit, BU) {
       if (o.isInstancedMesh || u.h == null || u.y0 == null) return;
       if (u.h < 0) {      // the lighthouse rises from the sea after the jetties; its glow and the port signs pop in
         const s = grow(I.ports + 1000, 0);
-        if (o.isSprite) o.visible = t > I.ports + 1300; else o.scale.set(u.s0.x, u.s0.y * Math.max(.0001, s), u.s0.z);
+        // (hidden until it starts rising: squashed flat it lay right on the sea's surface and flickered there, Rick 2026-11-21)
+        if (o.isSprite) o.visible = t > I.ports + 1300; else { o.visible = s > 0; o.scale.set(u.s0.x, u.s0.y * Math.max(.0001, s), u.s0.z); }
         return;
       }
       if (o.isSprite) { o.visible = t > I.land[u.h] + 700; return; }
@@ -987,7 +975,7 @@ function init3D(T, Water, Orbit, BU) {
   }
   cv.addEventListener('pointerdown', () => { if (INTRO) INTRO.cam = false; });      // (the player grabbed the camera: let them have it)
 
-  // ----- what changes during play: roads, towns, forts, walls, the bandit, lava, where you can build -----
+  // ----- what changes during play: roads, towns, forts, walls, the bandit, where you can build -----
   const part = (g, geo, mat, x, y, z) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
   const TRACKMAT = {};      // castle roof materials, one per track (made when first needed)
   // windows: dark by day, glowing warm at night (WINMAT's glow is set by the time of day in frame()), and a soft
@@ -1180,7 +1168,7 @@ function init3D(T, Water, Orbit, BU) {
     f.position.set(0, 3, -10.5); g.add(f);
     return g;
   })();
-  const banditOff = i => { const home = G.hex[i].t === 'volcano'; return [home ? (G.fire ? 15.5 : 0) : 3, home ? (G.fire ? 22 : -7) : -10.5]; };      // [height, back] of the figure on land i
+  const banditOff = i => { const home = G.hex[i].t === 'lair'; return [home ? 0 : 3, home ? -7 : -10.5]; };      // [height, back] of the figure on land i
 
   // ----- the Guard: a knight in the player's colours who lands, scares the bandit off to its new land, then vanishes -----
   const KNIGHT = (() => {
@@ -1508,7 +1496,7 @@ function init3D(T, Water, Orbit, BU) {
   function dynamic() {
     dynJunk.forEach(o => o.dispose()); dynJunk = []; DROPS = []; TK = {};
     dyn.clear(); hits.clear();
-    TILES3.forEach((o, i) => o.top.color.setScalar(scorched(i) ? .35 : G.deck && i === G.storm ? .5 : 1));
+    TILES3.forEach((o, i) => o.top.color.setScalar(i === G.storm ? .5 : 1));
     for (const e in G.r) {
       const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b], m = new T.Mesh(G3.cube, pm3(G.r[e], 'flag'));
       m.position.set((A.x + B.x) / 2, (2.5 + TOP + 2.4) / 2, (A.y + B.y) / 2);
@@ -1567,19 +1555,10 @@ function init3D(T, Water, Orbit, BU) {
       }
     }
     if (G.deck && HEX[G.storm]) {
-      // the bandit stands behind the number disc; in the lair, in front of the cave; on the volcano, partway up its slope
+      // the bandit stands behind the number disc; in the lair, in front of the cave
       BANDIT3.children[0].position.set(0, ...banditOff(G.storm));
       BANDIT3.position.set(HEX[G.storm].x, TOP, HEX[G.storm].y); dyn.add(BANDIT3);
       if (!(D3.chasing && D3.chasing())) dropIn('storm', BANDIT3);      // (a Guard's chase moves the bandit itself, see chaseStep)
-    }
-    if (G.fire && G.lava && G.lava.length) {        // a glowing river of lava from the volcano
-      const path = new T.CurvePath(), pts = [HEX[volcano()]].concat(G.lava.map(i => HEX[i])).map(h => new T.Vector3(h.x, TOP + 1.2, h.y));
-      for (let k = 1; k < pts.length; k++) path.add(new T.LineCurve3(pts[k - 1], pts[k]));
-      const tube = new T.Mesh(new T.TubeGeometry(path, 24 * pts.length, 3, 8), M3.lava); dynJunk.push(tube.geometry); dyn.add(tube);
-    }
-    if (G.fire) {      // rumble dots in front of the volcano
-      const h = HEX[volcano()];
-      for (let k = 0; k < RUMMAX; k++) { const d = new T.Mesh(G3.ball, k < G.rum ? M3.rumOn : M3.rumOff); d.scale.setScalar(2.6); d.position.set(h.x + (k - (RUMMAX - 1) / 2) * 11, TOP + 2, h.y + 34); dyn.add(d); }
     }
     SNOOZE.length = 0;
     // the knights who were on duty when the raiders came (G.raidfx.k) fight on the beach and only lie down to rest
@@ -2182,7 +2161,8 @@ function init3D(T, Water, Orbit, BU) {
       const age = k - RISE;
       if (age > SPARKLIFE) { if (b.pts) { P.g.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); b.pts = null; b.done = true; } return; }
       if (b.done) return;
-      if (!b.pts) {      // burst: sparks fly out in every direction
+      if (!b.pts) {      // burst: sparks fly out in every direction, with its own crackle (firework.wav)
+        SFX.firework(0);
         const pos = new Float32Array(SPARKN * 3), dir = [];
         for (let q = 0; q < SPARKN; q++) {
           const u = Math.random() * 2 - 1, w = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = (150 + Math.random() * 30) * b.big;
@@ -2288,7 +2268,7 @@ function init3D(T, Water, Orbit, BU) {
     }
     if (FLEET.parent) FLEET.children.forEach(b => { const k = b.userData.k; b.position.y = Math.sin(t * 2 + k * 2) * .6; b.rotation.x = Math.sin(t * 1.6 + k) * .05; });      // the raiders rock on the waves
     M3.spot.opacity = .55 + .35 * Math.sin(t * 4.5);
-    M3.lava.emissiveIntensity = 1.7 + .5 * Math.sin(t * 2.3);
+    M3.ember.emissiveIntensity = 1.7 + .5 * Math.sin(t * 2.3);
     M3.crystal.emissiveIntensity = .9 + .35 * Math.sin(t * 1.6);      // the crystals shimmer
     // resting knights' Z's: each rises, drifts and fades, one after another, then starts again
     ZMAT.forEach((m, k) => { const f = (t * .45 + k / 3) % 1; m.opacity = Math.min(1, f * 5) * (1 - f); });
@@ -2296,7 +2276,7 @@ function init3D(T, Water, Orbit, BU) {
     ROUTEMAT.emissiveIntensity = .9 + .5 * Math.sin(t * 2.6);      // the longest route's gold strip shimmers
     if (GHOST) GHOSTM[G.turn] && (GHOSTM[G.turn].opacity = .42 + .14 * Math.sin(t * 5));      // the preview breathes
     HALO.opacity = .65 + .35 * Math.sin(t * 3.2); BEAMMAT.opacity = .45 + .25 * Math.sin(t * 3.2); GOLDARM.emissiveIntensity = .3 + .2 * Math.sin(t * 3.2);      // a mighty knight's glow pulses
-    if (CRATER) CRATER.material.opacity = CRATER.userData.k * (.8 + .2 * Math.sin(t * 7) * Math.sin(t * 3.1));      // (the fire's glow flickers)
+    if (CAMPGLOW) CAMPGLOW.material.opacity = CAMPGLOW.userData.k * (.8 + .2 * Math.sin(t * 7) * Math.sin(t * 3.1));      // (the fire's glow flickers)
     M3.fire.emissiveIntensity = 2.1 + .5 * Math.sin(t * 9) * Math.sin(t * 5.3);
     M3.glow.emissiveIntensity = 1.6 + .3 * Math.sin(t * 8) * Math.sin(t * 4.1);
     BLAZE.emissiveIntensity = M3.fire.emissiveIntensity * 1.1;
@@ -2378,7 +2358,7 @@ function init3D(T, Water, Orbit, BU) {
 
   // ----- what the rest of the game uses -----
   D3.update = () => {
-    const key = G.id + '|' + G.hex.map(h => h.t + h.n).join() + '|' + JSON.stringify(G.ports || []) + '|' + !!G.fire;
+    const key = G.id + '|' + G.hex.map(h => h.t + h.n).join() + '|' + JSON.stringify(G.ports || []);
     if (key !== SKEY) { SKEY = key; build(); }
     dynamic();
     if (!WARMED) warm();
@@ -2393,7 +2373,7 @@ function init3D(T, Water, Orbit, BU) {
     if (PREWARMED || G || DEAD) return;
     PREWARMED = true;
     const hex = dealIsland();
-    G = {id: 'prewarm', hex, fire: false, ports: makePorts(), b: {}, r: {}, deck: [], storm: hex.findIndex(h => h.t === 'volcano'), pl: [], phase: 'main', lava: [], log: []};
+    G = {id: 'prewarm', hex, ports: makePorts(), b: {}, r: {}, deck: [], storm: hex.findIndex(h => h.t === 'lair'), pl: [], phase: 'main', log: []};
     try { build(); } catch (e) { console.warn('prewarm', e); }
     G = null;
     stat.visible = false;      // (never shown: just the sand base behind the window, as before; warm() covers hidden things)

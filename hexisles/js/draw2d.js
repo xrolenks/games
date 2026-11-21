@@ -464,7 +464,7 @@ const BANDIT = '<ellipse cx="2" cy="17" rx="14" ry="4.5" fill="rgba(0,0,0,.45)"/
   '<path d="M5-20c4-4 8-5 10-4c-3 1-6 3-9 5z" fill="#e9dcb4" stroke="#7a6a44" stroke-width=".7"/>' +                                                                 // feather
   '<path d="M-6-17.5C-6-24-4.5-26 0-26S6-24 6-17.5Z" fill="#3a2a1c" stroke="#120c08" stroke-width="1.3"/><rect x="-6" y="-20" width="12" height="2.2" fill="#8a1f1f"/>' +
   '<ellipse cx="0" cy="-17.5" rx="13.5" ry="2.8" fill="#3a2a1c" stroke="#120c08" stroke-width="1.3"/>';
-// The bandits' lair (the middle land in Classic games; Fire Mountain keeps the volcano), drawn round the tile's middle.
+// The bandits' lair (the middle land, with no number), drawn round the tile's middle.
 // Back to front: a rocky hill with a timber-framed cave, torches, barrels, a tent, a campfire with smoke, a chest of gold.
 const LAIR = (() => {
   const flame = (x, y, k) => '<path class="flick" style="animation-delay:-' + k + 's" d="M' + x + ' ' + y + 'c-3-2-3-6 0-10c1 3 3 4 3 7s-1 3-3 3z" fill="#ff8a2a"/><path class="flick" style="animation-delay:-' + (k + .2) + 's" d="M' + x + ' ' + y + 'c-1.4-1-1.4-3.5 0-5.5c.6 2 1.6 2.5 1.6 4s-.6 1.5-1.6 1.5z" fill="#ffe08a"/>';
@@ -521,7 +521,7 @@ function port(o) {
   let s = '<g transform="translate(' + f(g.mx + g.nx * JETTY) + ' ' + f(g.my + g.ny * JETTY) + ') rotate(' + f(g.ang) + ')">' + j + '</g>';
   // the sign stands upright on the platform
   s += '<g transform="translate(' + f(g.mx + g.nx * DOCK) + ' ' + f(g.my + g.ny * DOCK) + ')"><ellipse cx="1.5" cy="3" rx="11" ry="10" fill="rgba(0,0,0,.35)"/><circle r="10" fill="' + (any ? '#f6ecd0' : COL[o.r][0]) + '" stroke="#3a2a14" stroke-width="1.6"/>';
-  s += any ? '<text y="0" style="font:700 8.5px system-ui,sans-serif;text-anchor:middle;fill:#2a2212">3:1</text><text y="6.5" style="font:600 5px system-ui,sans-serif;text-anchor:middle;fill:#5b4a2a">ANY</text>'
+  s += any ? '<text y="3.4" style="font:700 9.5px system-ui,sans-serif;text-anchor:middle;fill:#2a2212">3:1</text>'
     : '<g transform="translate(0 -3) scale(.48)">' + cardGlyph(o.r) + '</g><text y="7.8" style="font:700 7px system-ui,sans-serif;text-anchor:middle;fill:#111;stroke:#fff;stroke-width:2;paint-order:stroke">2:1</text>';
   return '<g class="deco">' + s + '</g><title>' + (any ? 'Port: 3 of anything for 1' : 'Port: 2 ' + RN[o.r] + ' for 1') + '</title></g>';
 }
@@ -563,7 +563,7 @@ function harvestFx() {
   const sum = G.dice[0] + G.dice[1];
   if (sum === 7) return;
   const hs = [];
-  G.hex.forEach((h, i) => { if (h.n === sum && !scorched(i) && !(G.deck && i === G.storm)) hs.push(i); });
+  G.hex.forEach((h, i) => { if (h.n === sum && i !== G.storm) hs.push(i); });
   // the bandit blocks its land (Rick, 2026-11-20): when its number comes up and a town or fort there misses out, the
   // land glows red instead of gold, the bandit hops on the spot, and a "Blocked" chip rises (BLOCK; both maps)
   const sb = G.deck && G.hex[G.storm] && G.hex[G.storm].n === sum && HEX[G.storm].v.some(v => G.b[v]) ? G.storm : -1;
@@ -581,7 +581,7 @@ function harvestFx() {
     const lands = document.querySelectorAll('#board .hex');
     let k = 0;
     hs.forEach(i => {
-      const r = G.hex[i].t, A = D3.on ? D3.rect(i) : lands[i] && lands[i].getBoundingClientRect(), extra = fertile(i) ? 1 : 0;
+      const r = G.hex[i].t, A = D3.on ? D3.rect(i) : lands[i] && lands[i].getBoundingClientRect();
       if (!A) return;
       HEX[i].v.forEach(v => {
         const b = G.b[v]; if (!b) return;
@@ -589,7 +589,7 @@ function harvestFx() {
         const to = (mine ? hand : document.querySelector('#players .pl:nth-child(' + (b.p + 1) + ')'));
         if (!to) return;
         const B = to.getBoundingClientRect(), x0 = A.left + A.width / 2, y0 = A.top + A.height / 2, x1 = B.left + B.width / 2, y1 = B.top + B.height / 2;
-        for (let n = 0; n < Math.min(3, b.l + extra); n++) {
+        for (let n = 0; n < Math.min(3, b.l); n++) {
           const c = document.createElement('div');
           c.className = 'fly'; c.style.cssText = '--a:' + COL[r][0] + ';--b:' + COL[r][1];
           c.innerHTML = ico(r);
@@ -882,19 +882,12 @@ function drawBoard() {
   (G.ports || []).forEach(o => { s += port(o); });
   HEX.forEach((h, i) => {
     const t = G.hex[i];
-    const burnt = scorched(i), rich = fertile(i);
     // each land is a raised tile: its dark side shows below the lit top
     s += '<polygon class="deco" transform="translate(0 5)" points="' + corners(h, TILE) + '" fill="' + COL[t.t][2] + '"/>';
-    s += '<polygon class="hex" points="' + corners(h, TILE) + '" fill="url(#g-' + t.t + ')"><title>' + landName(t.t) + (t.n ? ': gives ' + RN[t.t] + ' on a roll of ' + t.n + (burnt ? ' (covered in lava: nothing for now)' : rich ? ' (rich soil: +1 each)' : '') : ': gives nothing') + '</title></polygon>';
+    s += '<polygon class="hex" points="' + corners(h, TILE) + '" fill="url(#g-' + t.t + ')"><title>' + landName(t.t) + (t.n ? ': gives ' + RN[t.t] + ' on a roll of ' + t.n : ': gives nothing') + '</title></polygon>';
     s += '<polygon class="deco" points="' + corners(h, TILE - .06) + '" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>';
-    if (!t.n && !G.fire) { s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + h.y.toFixed(1) + ')">' + LAIR + '</g>'; return; }
-    if (!t.n) {
-      s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + (h.y + 4).toFixed(1) + ')"><ellipse cx="0" cy="22" rx="30" ry="7" fill="rgba(0,0,0,.3)"/><g transform="scale(1.9)">' + glyph(t.t) + '</g></g>';
-      if (G.fire) for (let k = 0; k < RUMMAX; k++) s += '<circle class="deco" cx="' + (h.x + (k - (RUMMAX - 1) / 2) * 12).toFixed(1) + '" cy="' + (h.y + 34) + '" r="4" fill="' + (k < G.rum ? '#ff5a2f' : 'none') + '" stroke="#ff5a2f" stroke-width="1.5"/>';
-      return;
-    }
+    if (!t.n) { s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + h.y.toFixed(1) + ')">' + LAIR + '</g>'; return; }
     s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + h.y.toFixed(1) + ')">' + scene(t.t, i) + '</g>';
-    if (rich) s += '<text class="deco" x="' + h.x.toFixed(1) + '" y="' + (h.y + 28) + '" style="font:700 12px system-ui,sans-serif;fill:#fff;stroke:#111;stroke-width:3;paint-order:stroke;text-anchor:middle">+1</text>';
     // the number disc sits in the exact middle of the tile
     s += '<ellipse class="deco" cx="' + (h.x + 2).toFixed(1) + '" cy="' + (h.y + 4) + '" rx="16" ry="15" fill="rgba(0,0,0,.35)"/><circle class="deco" cx="' + h.x.toFixed(1) + '" cy="' + (h.y + 2.5) + '" r="15" fill="#8d7b4d"/>';
     s += '<circle class="deco tok" cx="' + h.x.toFixed(1) + '" cy="' + h.y + '" r="15"/>';
@@ -905,11 +898,6 @@ function drawBoard() {
   if (HARV && Date.now() < HARV.t + 1600) HARV.h.forEach(i => {      // lands that just paid out glow
     s += '<polygon class="deco hglow" style="animation-delay:' + (HARV.t - Date.now()) + 'ms" points="' + corners(HEX[i], TILE) + '"/>';
   });
-  if (G.fire && G.lava && G.lava.length) {     // lava: darkened lands with a glowing stream from the volcano
-    const V = HEX[volcano()], path = [V].concat(G.lava.map(i => HEX[i])).map(h => h.x.toFixed(1) + ',' + h.y.toFixed(1)).join(' ');
-    G.lava.forEach(i => { s += '<polygon class="deco" points="' + corners(HEX[i], TILE) + '" fill="rgba(25,10,6,.62)"/>'; });
-    s += '<polyline class="deco" points="' + path + '" fill="none" stroke="#7a1d0a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/><polyline class="deco" points="' + path + '" fill="none" stroke="#ff7a2f" stroke-width="4" stroke-linecap="round" stroke-dasharray="14 9" opacity=".95"/>';
-  }
   if (G.deck && HEX[G.storm]) {       // the bandit, standing on the land they block
     const h = HEX[G.storm];
     s += '<polygon class="deco" points="' + corners(h, TILE) + '" fill="rgba(12,18,34,.45)"/>';

@@ -285,9 +285,6 @@ small.cost i{width:7px;height:10px;border-radius:2px;background:var(--a);border:
 .rc.need{border-color:var(--accent);box-shadow:0 0 12px rgba(255,207,90,.95);translate:0 -8px}
 .modehint{font-size:.82rem!important;margin:0!important;min-height:2.6em}
 .pick .dot{display:inline-block;width:.8em;height:.8em;border-radius:50%;margin-right:.35em;vertical-align:-.05em;border:1px solid rgba(0,0,0,.4)}
-#rumble{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:.85rem;color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:8px}
-#rumble i{width:13px;height:13px;border-radius:50%;border:2px solid #ff5a2f}
-#rumble i.on{background:#ff5a2f;box-shadow:0 0 8px #ff5a2f}
 #raiders{padding:8px 10px;font-size:.82rem;color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:5px}
 #raiders .rt{display:flex;align-items:center;gap:3px}
 #raiders .rt b{color:var(--ink);margin-right:auto}

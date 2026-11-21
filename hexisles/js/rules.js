@@ -11,17 +11,17 @@ const RN = {wood: 'Wood', clay: 'Clay', wool: 'Wool', grain: 'Grain', stone: 'St
 const GOODS = ['paper', 'cloth', 'coin'], GOODSOF = {wood: 'paper', wool: 'cloth', stone: 'coin'};
 // the kinds of card in a hand: Forts and Guards adds the goods, which aren't a land's resource
 const KINDS = () => G && G.fg ? RES.concat(GOODS) : RES;
-const LAND = {wood: 'Jungle', clay: 'Mudflat', wool: 'Pasture', grain: 'Fields', stone: 'Cliffs', volcano: 'Volcano'};
-const landName = t => t === 'volcano' && !G.fire ? "Bandits' Lair" : LAND[t];      // the middle land is the lair in Classic games
+const LAND = {wood: 'Jungle', clay: 'Mudflat', wool: 'Pasture', grain: 'Fields', stone: 'Cliffs', lair: "Bandits' Lair"};
+const landName = t => LAND[t];      // (the middle land, 'lair', is the bandit's home)
 // Each land's colours: [top (light), top (dark), side of the tile]
-const COL = {paper: ['#f3ead2', '#c9b88e', '#7a6a44'], cloth: ['#7aa7e0', '#3d6bb0', '#1f3a66'], coin: ['#f2cf5b', '#c08a1e', '#6a4a0e'], wood: ['#46a565', '#27703f', '#16442a'], clay: ['#d98458', '#a5532d', '#6a3117'], wool: ['#a6d86f', '#6aa83f', '#3e6b22'], grain: ['#f5db72', '#d9ab33', '#8f6c1a'], stone: ['#b3bac6', '#7b8392', '#4a515e'], volcano: ['#66504a', '#392823', '#1d1310']};
-const TILES = {wood: 4, clay: 3, wool: 4, grain: 4, stone: 3, volcano: 1};
+const COL = {paper: ['#f3ead2', '#c9b88e', '#7a6a44'], cloth: ['#7aa7e0', '#3d6bb0', '#1f3a66'], coin: ['#f2cf5b', '#c08a1e', '#6a4a0e'], wood: ['#46a565', '#27703f', '#16442a'], clay: ['#d98458', '#a5532d', '#6a3117'], wool: ['#a6d86f', '#6aa83f', '#3e6b22'], grain: ['#f5db72', '#d9ab33', '#8f6c1a'], stone: ['#b3bac6', '#7b8392', '#4a515e'], lair: ['#66504a', '#392823', '#1d1310']};
+const TILES = {wood: 4, clay: 3, wool: 4, grain: 4, stone: 3, lair: 1};
 const NUMS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];      // one per land except the middle one
 const COST = {road: {wood: 1, clay: 1}, town: {wood: 1, clay: 1, wool: 1, grain: 1}, fort: {stone: 3, grain: 2}, card: {wool: 1, grain: 1, stone: 1}, guard: {wool: 1, stone: 1}, train: {grain: 1, stone: 1}, activate: {grain: 1}, gchase: {}, kmove: {},
   // Forts and Guards: upgrading a fort with goods
   keep: {paper: 1, cloth: 1, stone: 2}, citadel: {coin: 2, paper: 1, cloth: 1, grain: 1},
-  // a wall: Clay + Stone in Fire Mountain; 2 Clay in Forts and Guards (Rick's rule, 2026-11-18)
-  get wall() { return G && G.fg ? {clay: 2} : {clay: 1, stone: 1}; }};
+  // a wall (Forts and Guards): 2 Clay (Rick's rule, 2026-11-18)
+  wall: {clay: 2}};
 // Progress cards (Classic mode): how many of each are in the deck, and what they do.
 // (In the code the bandit is still called "storm": G.storm, phase 'storm', {t:'storm'}.)
 const CARDS = {
@@ -90,7 +90,6 @@ const HEXN = HEX.map(h => [0, 1, 2, 3, 4, 5].map(k => {
   const a = Math.PI / 3 * k, x = h.x + HW * Math.cos(a), y = h.y + HW * Math.sin(a);
   return HEX.findIndex(o => Math.abs(o.x - x) < 2 && Math.abs(o.y - y) < 2);
 }));
-const DIRN = ['east', 'south-east', 'south-west', 'west', 'north-west', 'north-east'];
 
 // ---------- Ports ----------
 // COAST = the edges on the outside of the island, in order around it (each with its one hex)
@@ -132,33 +131,10 @@ function usedPort(p, r, n) {
   return null;
 }
 
-// ---------- Fire Mountain mode (G.fire) ----------
-// Doubles make the volcano rumble (G.rum). At RUMMAX it erupts: lava runs in a straight line
-// of hexes (G.lava) to the sea. Lava lands give nothing, and forts touching them fall back to
-// towns unless walled (G.b[v].w). Lands beside the volcano are fertile: +1 per building.
-const RUMMAX = 3;
-function volcano() { return G.hex.findIndex(h => h.t === 'volcano'); }
-function lavaLine(k) { const out = []; for (let i = HEXN[volcano()][k]; i >= 0; i = HEXN[i][k]) out.push(i); return out; }
-function fertile(i) { return !!G.fire && HEXN[volcano()].includes(i); }
-function scorched(i) { return !!G.fire && (G.lava || []).includes(i); }
-function danger(v) { return [0, 1, 2, 3, 4, 5].some(k => lavaLine(k).some(i => HEX[i].v.includes(+v))); }
-// a wall goes on your own town or fort (Fire Mountain), or once on your own fort (Forts and Guards)
-function okWall(p, v) { return !!(G.fire || G.fg) && !!G.b[v] && G.b[v].p === p && !G.b[v].w && (!G.fg || G.b[v].l === 2); }
-function erupt() {
-  const k = rnd(6), line = lavaLine(k);
-  G.rum = 0; G.lava = line;
-  if (!line.length) { say('The volcano erupted! The lava poured ' + DIRN[k] + ', straight into the sea.'); return; }
-  say('The volcano erupted! Lava ran ' + DIRN[k] + ' across ' + line.length + (line.length > 1 ? ' lands.' : ' land.'));
-  for (const v in G.b) {
-    const b = G.b[v];
-    if (!line.some(i => HEX[i].v.includes(+v))) continue;
-    if (b.w) say('A wall held back the lava (' + G.pl[b.p].name + ').');
-    else if (b.l === 2) { b.l = 1; say('Lava knocked a fort down to a town (' + G.pl[b.p].name + ').'); }
-  }
-}
-
 // ---------- Forts and Guards mode (G.fg) ----------
-// Hex Isles' own advanced mode (Rick's request, 2026-11-18; it replaced Fire Mountain for new games).
+// Hex Isles' own advanced mode (Rick's request, 2026-11-18).
+// a wall goes once on your own fort
+function okWall(p, v) { return !!G.fg && !!G.b[v] && G.b[v].p === p && !G.b[v].w && G.b[v].l === 2; }
 // It is Classic (bandit, progress cards) plus a third die, the blue Sea die (G.sea = its face 1-6, SEAFACE says
 // what each face is): 3 raider faces move the raider fleet one step closer (G.fleet, 0 to FLEETMAX), 2 calm
 // faces do nothing, 1 treasure face gives everyone with a fort 1 resource from a land beside one of their forts.
@@ -582,7 +558,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', 
 // no 2 next to a 12, the four 6s and 8s on four different kinds of land, and every kind of land gets a fair share of
 // dice dots (its lands average 2.5 to 4 dots). If nothing perfect turns up in time, the least-bad island is used.
 const NEXTTO = HEX.map((_, i) => HEXN[i].filter(j => j > i));      // each pair of neighbouring hexes once
-function landProblems(t) { let n = 0; t.forEach((x, i) => NEXTTO[i].forEach(j => { if (x === t[j] && x !== 'volcano') n++; })); return n; }
+function landProblems(t) { let n = 0; t.forEach((x, i) => NEXTTO[i].forEach(j => { if (x === t[j] && x !== 'lair') n++; })); return n; }
 function numProblems(hex) {
   let n = 0;
   hex.forEach((h, i) => NEXTTO[i].forEach(j => {
@@ -611,19 +587,18 @@ function dealIsland() {
   }
   let hex = null; best = 1e9;
   for (let k = 0; k < 30000 && best > 0; k++) {
-    const nums = shuffle(NUMS.slice()), h = lands.map(t => ({t, n: t === 'volcano' ? 0 : nums.pop()})), s = numProblems(h);
+    const nums = shuffle(NUMS.slice()), h = lands.map(t => ({t, n: t === 'lair' ? 0 : nums.pop()})), s = numProblems(h);
     if (s < best) { best = s; hex = h; }
   }
   return hex;
 }
 
-// fg: Forts and Guards mode (new games are Classic or Forts and Guards; Fire Mountain lives on only in older saves)
+// fg: Forts and Guards mode (false = Classic)
 // timer: seconds per turn (0 = no turn timer; see js/timer.js)
 function newGame(cfg, fg, level, timer) {
   const hex = dealIsland();
-  const fire = false;
   G = {
-    ver: 1, id: Date.now() + '-' + rnd(1e6), hex, fire, fg: !!fg, rum: 0, lava: [], lvl: [0, 1, 2].includes(level) ? level : 1,
+    ver: 1, id: Date.now() + '-' + rnd(1e6), hex, fg: !!fg, lvl: [0, 1, 2].includes(level) ? level : 1,
     timer: TIMES.includes(timer) ? timer : 0,
     st: {dice: Array(13).fill(0), tr: cfg.map(() => 0), got: cfg.map(() => 0), pts: [cfg.map(() => 0)]},      // end-of-game stats (js/stats.js)
     pl: cfg.map(c => ({name: c.name, bot: !!c.bot, res: {wood: 0, clay: 0, wool: 0, grain: 0, stone: 0}})),
@@ -634,10 +609,10 @@ function newGame(cfg, fg, level, timer) {
     turn: 0, phase: 'setup', su: {k: 0, step: 'town', v: -1},
     dice: null, win: -1, log: []
   };
-  if (!fire) {        // Classic: the storm and the island card deck
+  {        // the bandit (G.storm, starting in its lair) and the progress card deck
     const deck = [];
     for (const c in CARDS) for (let i = 0; i < CARDS[c].q; i++) deck.push(c);
-    G.deck = shuffle(deck); G.storm = hex.findIndex(h => h.t === 'volcano');
+    G.deck = shuffle(deck); G.storm = hex.findIndex(h => h.t === 'lair');
     G.tn = 0; G.played = false; G.free = 0; G.disc = {};
     G.pl.forEach(P => { P.cards = []; });
   }
@@ -873,7 +848,7 @@ function act1(a, who) {
       const second = G.su.k >= G.pl.length, fort = second && !!G.fg;
       G.b[a.v] = {p, l: fort ? 2 : 1}; G.su.v = a.v; G.su.step = 'road';
       // (Forts and Knights: the starting fort also gives its lands' goods, as a fort does on a roll; Rick, 2026-11-19)
-      if (second) VERT[a.v].h.forEach(h => { const t = G.hex[h].t; if (t === 'volcano') return; P.res[t]++; if (fort && GOODSOF[t]) P.res[GOODSOF[t]] = (P.res[GOODSOF[t]] || 0) + 1; });
+      if (second) VERT[a.v].h.forEach(h => { const t = G.hex[h].t; if (t === 'lair') return; P.res[t]++; if (fort && GOODSOF[t]) P.res[GOODSOF[t]] = (P.res[GOODSOF[t]] || 0) + 1; });
       say(P.name + ' founded a ' + (fort ? 'fort' : 'town') + (second ? ' and collected its first resources.' : '.'));
       return true;
     }
@@ -890,7 +865,7 @@ function act1(a, who) {
     const d = G.fix || [1 + rnd(6), 1 + rnd(6)], sum = d[0] + d[1];      // (G.fix: chosen with a Stargazer card)
     G.fix = null; G.back = null;
     G.dice = d; G.rolls = (G.rolls || 0) + 1;
-    if (sum === 7 && G.deck) {      // Classic: big hands discard half, then the roller moves the storm
+    if (sum === 7) {      // big hands discard half, then the roller moves the bandit
       say(P.name + ' rolled 7.' + (banditAwake() ? ' The bandit is on the move!' : ''));
       G.disc = {};
       G.pl.forEach((Q, i) => {
@@ -901,14 +876,12 @@ function act1(a, who) {
       if (G.fg) seaDie();
       return true;
     }
-    if (sum === 7) { G.phase = 'tide'; say(P.name + ' rolled 7. Low tide: no harvest, but one free pick.'); return true; }
     const got = G.pl.map(() => ({}));
     G.hex.forEach((h, i) => {
-      if (h.n !== sum || scorched(i) || (G.deck && i === G.storm)) return;
-      const extra = fertile(i) ? 1 : 0;
+      if (h.n !== sum || i === G.storm) return;
       HEX[i].v.forEach(v => {
         const b = G.b[v]; if (!b) return;
-        const k = G.fg && b.l === 2 && GOODSOF[h.t], n = b.l + extra - (k ? 1 : 0);      // Forts and Guards: a fort makes 1 resource + 1 goods
+        const k = G.fg && b.l === 2 && GOODSOF[h.t], n = b.l - (k ? 1 : 0);      // Forts and Guards: a fort makes 1 resource + 1 goods
         G.pl[b.p].res[h.t] += n; got[b.p][h.t] = (got[b.p][h.t] || 0) + n;
         if (k) { G.pl[b.p].res[k] = (G.pl[b.p].res[k] || 0) + 1; got[b.p][k] = (got[b.p][k] || 0) + 1; }
       });
@@ -924,14 +897,6 @@ function act1(a, who) {
       if (Q.bot) sciPick(i, RES.slice().sort((x, y) => Q.res[x] - Q.res[y])[0]);
     });
     if (G.fg) seaDie();
-    if (G.fire && d[0] === d[1]) {
-      G.rum = (G.rum || 0) + 1;
-      if (G.rum >= RUMMAX) erupt(); else say('Doubles! The volcano rumbles (' + G.rum + ' of ' + RUMMAX + ').');
-    }
-    return true;
-  }
-  if (a.t === 'pick' && G.phase === 'tide' && RES.includes(a.r)) {
-    P.res[a.r]++; G.phase = 'main'; say(P.name + ' found 1 ' + RN[a.r] + ' on the beach.');
     return true;
   }
   if (a.t === 'storm' && G.phase === 'storm' && Number.isInteger(a.h) && G.hex[a.h] && a.h !== G.storm) {
@@ -946,7 +911,7 @@ function act1(a, who) {
       say(vs.length ? P.name + ' took a card from ' + vs.map(i => G.pl[i].name).join(' and ') + '.' : 'Nobody there to take from.');
       return true;
     }
-    say(P.name + ' sent the bandit ' + (G.hex[a.h].t === 'volcano' && !G.fire ? 'back to' : 'to') + ' the ' + landName(G.hex[a.h].t) + (G.hex[a.h].n ? ' (' + G.hex[a.h].n + ').' : '.'));
+    say(P.name + ' sent the bandit ' + (G.hex[a.h].t === 'lair' ? 'back to' : 'to') + ' the ' + landName(G.hex[a.h].t) + (G.hex[a.h].n ? ' (' + G.hex[a.h].n + ').' : '.'));
     // robbing: the mover picks one of the players with a town or fort on that land (and cards in hand)
     const opts = robOpts(p, a.h);
     if (opts.length === 1) startGive(p, opts[0]);

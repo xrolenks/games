@@ -2,7 +2,7 @@
 // Hex Isles - The dice: thrown dice on the board and the dice in the bar.
 // ---------- Dice ----------
 // Two dice drawn with dots. G.rolls counts rolls; when it changes the dice tumble for DICEMS, then show the result.
-const DOTS = [[], [4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]], DICEMS = 2600;
+const DOTS = [[], [4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]], DICEMS = 2500;      // (2500 since 2026-11-21: matches dice.wav)
 let SEENROLL = null, DICET = null;
 // --- Dice thrown onto the board ---
 // Each die is a CSS 3D cube (#roll .d3: shadow, .lift for the bounce, .cube for the spin). It flies in from the
@@ -107,7 +107,6 @@ function message() {
     ? '<b>' + n + '</b>: tap a glowing corner to place your ' + (G.su.k < G.pl.length ? 'first town.' : (G.fg ? 'fort' : 'second town') + '. It gives you one of each resource its lands make.')
     : '<b>' + n + '</b>: now tap a glowing line to add a road.';
   if (G.phase === 'roll') return '<b>' + n + '</b>: tap the dice on the map to roll.';
-  if (G.phase === 'tide') return '<b>' + n + '</b>: pick a free resource.';
   if (G.phase === 'storm') return '<b>' + n + '</b>: tap a land to send the bandit there. It gives nothing while the bandit is on it, and you rob someone who lives there.';
   if (MODE === 'road' && G.free > 0) return 'Free road: tap a glowing line (' + G.free + ' left).';
   if (MODE === 'upgrade') return 'Tap one of your glowing forts to upgrade it (fort → Keep → Citadel). Tap the button again to cancel.';
@@ -116,7 +115,7 @@ function message() {
   if (MODE === 'activate') return 'Tap one of your resting knights to feed them 1 Grain and put them on duty. Tap the Knights button to cancel.';
   if (MODE === 'gchase') return 'Tap one of your knights on duty next to the bandit\'s land to chase it away. Tap the Knights button to cancel.';
   if (MODE === 'kmove') return KFROM == null ? 'Tap one of your knights on duty to move it along your roads. Tap the Knights button to cancel.' : 'Now tap the empty corner it should walk to (it rests when it gets there). Tap the Knights button to cancel.';
-  if (MODE) return 'Tap a glowing ' + (MODE === 'road' ? 'line' : MODE === 'fort' ? 'town' : MODE === 'wall' ? 'town or fort' : 'corner') + ' to build. Tap the button again to cancel.';
+  if (MODE) return 'Tap a glowing ' + (MODE === 'road' ? 'line' : MODE === 'fort' ? 'town' : MODE === 'wall' ? 'fort' : 'corner') + ' to build. Tap the button again to cancel.';
   if (G.decks && P.cards.length > PCMAX && G.phase === 'main') return '<b>' + n + '</b>: you hold ' + P.cards.length + ' progress cards. Play some, or throw extras away when you end your turn (' + PCMAX + ' is the most you can keep).';
   return '<b>' + n + '</b>: build, trade, or end your turn.';
 }
@@ -185,28 +184,24 @@ function render() {
   }
   // the resource fan, after the progress cards: it spreads its cards over whatever width #hand has left (2026-11-20)
   $('hand').innerHTML = handHTML(G.pl[VIEW] ? G.pl[VIEW].res : null);
-  $('rumble').hidden = !G.fire;
-  $('b-wall').parentNode.hidden = !(G.fire || G.fg);
+  $('b-wall').parentNode.hidden = !G.fg;
   $('b-guards').parentNode.hidden = $('b-imp').parentNode.hidden = $('raiders').hidden = !G.fg;
   if (G.fg) { fillGuards(p, main); fillImprove(p, main); } else $('gmenu').hidden = $('imenu').hidden = true;
-  // the wall's cost depends on the mode
-  const wl = buildLabel('wall');
-  if ($('b-wall').dataset.l !== wl) { $('b-wall').innerHTML = wl; $('b-wall').dataset.l = wl; }
   if (G.fg) {      // the raider track: how close the fleet is, and forts (what they'd raid) against the island's defence
     const def = islandDefence(), str = fortCount(), f = G.fleet || 0;
     $('raiders').innerHTML = '<div class="rt"><b>Raiders</b>' + Array.from({length: FLEETMAX}, (_, k) => '<svg viewBox="-12 -12 24 24"' + (k < f ? ' class="on"' : '') + '>' + SEAICON.raid + '</svg>').join('') + '</div>' +
       '<div class="rv"><span title="Raid strength = forts on the island">Raiders <em>' + str + '</em></span><span title="Knights on duty">Defence <em class="' + (def >= str ? 'safe' : 'risk') + '">' + def + '</em></span></div>' +
       '<div>' + (f >= FLEETMAX - 1 ? 'They land on the next raider roll!' : (FLEETMAX - f) + ' raider rolls until they land.') + '</div>';
   }
-  if (G.fire) $('rumble').innerHTML = 'Volcano ' + [0, 1, 2].map(k => '<i' + (k < G.rum ? ' class="on"' : '') + '></i>').join('') + '<span>rumbles on doubles</span>';
   // the log over the map; its last line (gold) says what to do now
   const L = $('log'); L.innerHTML = G.log.map(t => '<div>' + esc(t) + '</div>').join('') + '<div class="now">' + message() + '</div>'; L.scrollTop = L.scrollHeight;
-  const tide = human && G.phase === 'tide';
   if (PICK && !main && !(human && G.phase === 'roll')) PICK = null;      // (a card played before rolling can ask for a pick)
-  SWHO = tide || PICK ? -1 : sciWho();      // Forts and Knights: a Science level 3 pick waiting (js/ui.js)
-  $('m-pick').hidden = !(tide || PICK || SWHO >= 0);
-  $('p-title').textContent = PICK ? PICK.title : SWHO >= 0 ? G.pl[SWHO].name + ': Science bonus' : 'Low tide!';
-  $('p-text').textContent = PICK ? PICK.text : SWHO >= 0 ? 'That roll gave you nothing, but your Science (level ' + PERKAT + '+) pays off. Pick one free resource.' : 'A 7 means nobody harvests, but the tide leaves something on the beach. Pick one free resource.';
+  SWHO = PICK ? -1 : sciWho();      // Forts and Knights: a Science level 3 pick waiting (js/ui.js)
+  $('m-pick').hidden = !(PICK || SWHO >= 0);
+  if (PICK || SWHO >= 0) {
+    $('p-title').textContent = PICK ? PICK.title : G.pl[SWHO].name + ': Science bonus';
+    $('p-text').textContent = PICK ? PICK.text : 'That roll gave you nothing, but your Science (level ' + PERKAT + '+) pays off. Pick one free resource.';
+  }
   $('p-cancel').hidden = !PICK;
   fillRob(human);
   fillChoose();

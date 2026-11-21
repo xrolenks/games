@@ -10,8 +10,10 @@
 // Browsers only allow sound after the first tap or key press, so the files are loaded and played after that.
 const VOLKEY = 'hexisles-vol', SFXDIR = 'sound-effects/';
 const SOUNDS = ['click', 'dice', 'road', 'town', 'fort', 'wall', 'harvest', 'coins', 'bell', 'card', 'sparkle', 'play',
-  'bandit', 'stomp', 'tide', 'swipe', 'pop', 'yes', 'no', 'blip', 'award', 'win', 'turn',
-  'horn', 'warhorn', 'guard', 'train', 'sack', 'knight'];      // horn to knight: Forts and Knights
+  'bandit', 'stomp', 'swipe', 'pop', 'yes', 'no', 'blip', 'award', 'win', 'turn', 'firework',
+  'raiders', 'warhorn', 'guard', 'duty', 'train', 'mighty', 'sack', 'knight'];      // raiders to knight: Forts and Knights
+// building sounds wait for the piece to land (pieces drop in over DROPMS and touch down at ~68% of it)
+const LANDS = {road: 1, town: 1, fort: 1, wall: 1}, LANDAT = .44;
 let VOL = 60;
 try { const v = localStorage.getItem(VOLKEY); if (v !== null && v !== '' && !isNaN(+v)) VOL = Math.max(0, Math.min(100, +v)); } catch (e) {}
 let AC = null, OUT = null;
@@ -42,14 +44,13 @@ const SFX = {};
 SOUNDS.forEach(n => { SFX[n] = at => playSound(n, at); });
 // Log line -> sound (the first match wins)
 const SFXLINES = [
-  [/ rolled 7\. The bandit/, 'bandit'], [/ rolled 7\. Low tide/, 'tide'], [/ rolled \d+\. (?!Nobody)/, 'harvest'],
+  [/ rolled 7\. The bandit/, 'bandit'], [/ rolled \d+\. (?!Nobody)/, 'harvest'],
   [/ built a road\./, 'road'], [/ founded a town| built a town\./, 'town'], [/ raised a fort\./, 'fort'], [/ built a wall\./, 'wall'],
-  // the volcano (rumble, eruption) is silent for now: Rick's choice, 2026-11-18
-  [/raiders sail closer/, 'horn'], [/raiders landed/, 'warhorn'], [/drove them off/, 'award'], [/sacked a fort/, 'sack'], [/treasure washed ashore! (?!Nobody)/, 'coins'],
-  [/ hired a knight/, 'guard'], [/ trained a knight/, 'train'], [/ to a Keep| raised a Citadel| founded a fort/, 'fort'],
+  [/raiders sail closer/, 'raiders'], [/raiders landed/, 'warhorn'], [/drove them off/, 'award'], [/sacked a fort/, 'sack'], [/treasure washed ashore! (?!Nobody)/, 'coins'],
+  [/ hired a knight/, 'guard'], [/ trained a mighty knight/, 'mighty'], [/ trained a knight/, 'train'], [/ put them on duty| now on duty/, 'duty'], [/ to a Keep| raised a Citadel| founded a fort/, 'fort'],
   [/ banner: | castle: | the .* castle from |castle is now permanent| (built|took) the (Grand Library|Grand Market|Mighty Castle)| is now permanent/, 'award'], [/ to level \d/, 'sparkle'], [/ draws? a progress card/, 'card'],
   [/ sent the bandit /, 'stomp'], [/ robbed /, 'swipe'], [/ handed .* a card\.| discarded /, 'card'],
-  [/ bought a progress card/, 'card'], [/ played /, 'play'], [/ found 1 /, 'sparkle'],
+  [/ bought a progress card/, 'card'], [/ played /, 'play'], [/\(Science bonus\)/, 'sparkle'],
   [/ offers /, 'pop'], [/ accepted the trade/, 'yes'], [/ said no to | turned down |Nobody wanted| took the offer back/, 'no'],
   [/ gave .* to .* for | traded \d+ /, 'coins'],
   [/ goes to /, 'award'], [/ won the game!/, 'win'], [/ is back\.| lost connection|reconnect/, 'blip']
@@ -66,7 +67,7 @@ function sfx() {
     if (s.said <= was.said) return;
     const m = SFXLINES.find(([re]) => re.test(t));
     if (!m || (m[1] === 'stomp' && chased)) return;      // the knight's chase has its own sounds
-    SFX[m[1]](late + (m[1] === 'harvest' ? 1 : 0));      // harvest: as the cards arrive
+    SFX[m[1]](late + (m[1] === 'harvest' ? 1 : 0) + (LANDS[m[1]] ? LANDAT : 0));      // harvest: as the cards arrive; buildings: as they land
   });
   if (s.ship !== was.ship && G.ship) SFX.bell(0);
   if (chased) SFX.knight(0);

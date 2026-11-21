@@ -66,7 +66,7 @@ function fillLobby() {
 }
 function sendLobby() {
   NET.names = lobbyNames(); NET.cols = lobbyColors(NET.names.length);
-  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, cols: NET.cols, hu: 1 + NET.conns.length, fire: FIRE, lvl: LEVEL, tm: TIMER}); });
+  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, cols: NET.cols, hu: 1 + NET.conns.length, fg: FGMODE, lvl: LEVEL, tm: TIMER}); });
   fillLobby();
 }
 
@@ -200,7 +200,7 @@ function hostBegin() {
   if (!NET.ready || names.length < 2) return;
   NET.conns.forEach((c, i) => { c.seat = i + 1; });
   const cols = lobbyColors(names.length);
-  newGame(names.map((n, i) => ({name: n, bot: i >= humans, c: cols[i]})), FIRE, LEVEL, TIMER);
+  newGame(names.map((n, i) => ({name: n, bot: i >= humans, c: cols[i]})), FGMODE, LEVEL, TIMER);
   if (NET.conns.length) G.boot = {s: [0].concat(NET.conns.map(c => c.seat)), until: Date.now() + BOOTMS};      // (wait for everyone's island)
   NET.inGame = true; $('m-lobby').hidden = true; save(); render();
 }
@@ -270,7 +270,7 @@ function guestData(d) {
   if (NET.role !== 'guest' || !d) return;
   if (d.t === 'you') NET.name = d.name;
   if (d.t === 'full') netFail('That game is full.');
-  if (d.t === 'lobby') { NET.names = d.names; NET.cols = Array.isArray(d.cols) ? d.cols : []; NET.hu = d.hu; FIRE = !!d.fire; if ([0, 1, 2].includes(d.lvl)) LEVEL = d.lvl; if (TIMES.includes(d.tm)) TIMER = d.tm; fillLobby(); }
+  if (d.t === 'lobby') { NET.names = d.names; NET.cols = Array.isArray(d.cols) ? d.cols : []; NET.hu = d.hu; FGMODE = !!d.fg; if ([0, 1, 2].includes(d.lvl)) LEVEL = d.lvl; if (TIMES.includes(d.tm)) TIMER = d.tm; fillLobby(); }
   if (d.t === 'state') {
     const fresh = !NET.inGame || (G && G.phase === 'over' && d.g.phase !== 'over');
     G = d.g; NET.seat = d.seat; NET.inGame = true; NET.lost = false;

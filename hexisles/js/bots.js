@@ -70,10 +70,6 @@ function botMain(p) {
     if (can('m') && (L === 0 || others(rich) >= 3)) return {t: 'card', c: 'm', r: rich};
   }
   if (G.free > 0 && roads.length) return {t: 'road', e: L === 2 ? routeRoad(p, roads) ?? bestRoad(p, roads, false) : bestRoad(p, roads, false)};
-  if (G.fire && canPay(p, 'wall')) {       // wall in forts that lava could reach
-    const w = spots(p, 'wall').find(v => G.b[v].l === 2 && danger(v));
-    if (w != null) return {t: 'wall', v: w};
-  }
   if (G.fg && (L > 0 || Math.random() < .4)) {      // Forts and Guards: get ready for the raiders
     const myForts = Object.keys(G.b).filter(v => G.b[v].p === p && G.b[v].l === 2), near = (G.fleet || 0) >= FLEETMAX - 3;
     const short = fortCount() > islandDefence(), weak = myForts.length && defence(p) <= Math.min(...G.pl.map((_, i) => defence(i)));
@@ -167,7 +163,6 @@ function botStep() {
   else if (G.phase === 'castle') a = {t: 'castle', v: freeForts(p).sort((x, y) => vScore(y) - vScore(x))[0]};
   else if (G.phase === 'give') return;              /* waiting for the robbed person to pick a card */
   else if (G.phase === 'roll') a = {t: 'roll'};
-  else if (G.phase === 'tide') a = {t: 'pick', r: RES.slice().sort((x, y) => P.res[x] - P.res[y])[0]};
   else a = botMain(p) || {t: 'end'};
   if (!go(a)) go({t: 'end'});
 }

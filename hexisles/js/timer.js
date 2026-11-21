@@ -69,7 +69,6 @@ function timeStep(p) {      // one move made for them; false when there's nothin
   let a;
   if (G.phase === 'setup') a = G.su.step === 'town' ? {t: 'town', v: bestOf(spots(p, 'town'), p)} : {t: 'road', e: bestRoad(p, spots(p, 'road'), true)};
   else if (G.phase === 'roll') a = {t: 'roll'};
-  else if (G.phase === 'tide') a = {t: 'pick', r: RES[rnd(RES.length)]};
   else if (G.phase === 'storm') a = {t: 'storm', h: botStorm(p)};
   else if (G.phase === 'rob') a = {t: 'rob', p: botRob(p)};
   else if (G.phase === 'castle') a = {t: 'castle', v: freeForts(p).sort((x, y) => vScore(y) - vScore(x))[0]};

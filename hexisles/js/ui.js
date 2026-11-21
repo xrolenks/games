@@ -6,8 +6,10 @@ function load() {
   try {
     const g = JSON.parse(localStorage.getItem(SAVEKEY));
     if (!g || g.ver !== 1 || !Array.isArray(g.hex) || g.hex.length !== HEX.length || !Array.isArray(g.pl)) return false;
-    // older saves: Fruit became Grain, Fish became Wool (2026-11-17), and there were no ports
-    const OLD = {fruit: 'grain', fish: 'wool'};
+    if (g.fire || !g.deck) return false;      // (a game from the old removed volcano mode: start fresh)
+    // older saves: Fruit became Grain, Fish became Wool (2026-11-17), the middle land was called 'volcano' (until 2026-11-21),
+    // and there were no ports
+    const OLD = {fruit: 'grain', fish: 'wool', volcano: 'lair'};
     const fix = o => { for (const k in OLD) if (o && k in o) { o[OLD[k]] = (o[OLD[k]] || 0) + o[k]; delete o[k]; } };
     g.hex.forEach(h => { if (OLD[h.t]) h.t = OLD[h.t]; });
     g.pl.forEach(P => fix(P.res));
@@ -26,9 +28,8 @@ function load() {
 
 // ---------- Windows and buttons ----------
 const RULES = "<b>Town</b> = 1 point. <b>Fort</b> (upgrades a town) = 2 points. First to <b>10 points</b> wins. Towns can't sit right next to each other. <b>Trade:</b> 4 for 1 with the bank; build on a <b>port</b> for 3 for 1, or 2 for 1 for the resource on its sign.";
-const FIRERULES = '<b>Fire Mountain:</b> every doubles roll makes the volcano rumble. On the third it erupts and lava runs in a straight line to the sea. Lava lands give nothing until the next eruption, and a fort touching them falls back to a town unless it has a <b>wall</b>. Lands beside the volcano give <b>+1</b>.';
 const CARDRULES = 'A <b>7</b> moves the <b>bandit</b>: anyone holding more than 7 resources discards half, then the roller puts the bandit on a land, which gives nothing while he is there. <b>Progress cards</b>: play one per turn (before or after rolling), but not on the turn you buy it.';
-// Picking a resource for a card (PICK = {title, text, cb}); the low-tide pick uses the same window
+// Picking a resource for a card (PICK = {title, text, cb}); the Science bonus pick uses the same window
 let PICK = null;
 function openPick(title, text, cb) { PICK = {title, text, cb}; render(); }
 // Discarding after a 7: whose discard this screen is choosing (DWHO) and what they picked so far (DSEL)
@@ -78,11 +79,11 @@ function fillDisc(p) {
   $('d-ok').disabled = got !== need;
 }
 const MODEHINT = ['A 7 moves the bandit, who robs a player there, and progress cards bring surprises.', 'Classic plus a third die: raiders sail in, and when they land, the knights on duty must match the number of forts or a fort gets sacked, so more forts means more knights. Forts make Paper, Cloth and Coin to improve Science, Trade and Politics, which win progress cards when the Sea die shows their face. First to 13 points wins.'];
-let FIRE = false;     // mode picked for the next game: true = Forts and Guards (the name is left over from Fire Mountain)
+let FGMODE = false;     // mode picked for the next game: true = Forts and Guards, false = Classic
 function fillMode(id, canPick) {
   const el = $(id);
-  el.innerHTML = '<span style="flex:1">Mode</span>' + ['Classic', 'Forts and Knights'].map((n, i) => '<button data-f="' + i + '"' + (!!i === FIRE ? ' class="on"' : '') + (canPick ? '' : ' disabled') + '>' + n + '</button>').join('');
-  el.nextElementSibling.textContent = MODEHINT[+FIRE];
+  el.innerHTML = '<span style="flex:1">Mode</span>' + ['Classic', 'Forts and Knights'].map((n, i) => '<button data-f="' + i + '"' + (!!i === FGMODE ? ' class="on"' : '') + (canPick ? '' : ' disabled') + '>' + n + '</button>').join('');
+  el.nextElementSibling.textContent = MODEHINT[+FGMODE];
   fillLevel(id === 's-mode' ? 's-level' : 'l-level', canPick);
   fillTimer(id === 's-mode' ? 's-timer' : 'l-timer', canPick);      // (js/timer.js)
   fillPack(id === 's-mode' ? 's-pack' : 'l-pack');                  // (js/packs.js: everyone picks their own look)
@@ -289,7 +290,6 @@ $('p-res').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   if (PICK) { const cb = PICK.cb; PICK = null; render(); cb(b.dataset.r); }
   else if (SWHO >= 0) go({t: 'spick', p: SWHO, r: b.dataset.r});
-  else go({t: 'pick', r: b.dataset.r});
 };
 $('p-cancel').onclick = () => { PICK = null; render(); };
 $('d-res').onclick = e => { const b = e.target.closest('button'); if (b && DWHO >= 0) { DSEL[b.dataset.r] = (DSEL[b.dataset.r] || 0) + 1; fillDisc(DWHO); } };
@@ -375,10 +375,10 @@ $('s-rows').onclick = e => {
 };
 $('s-go').onclick = () => {
   const cfg = SCFG.slice(0, SCOUNT).map((c, i) => ({name: c.name.trim() || DEFNAMES[i], bot: c.bot, c: c.c}));
-  netUnmark(); newGame(cfg, FIRE, LEVEL, TIMER); $('m-setup').hidden = true; save(); render();
+  netUnmark(); newGame(cfg, FGMODE, LEVEL, TIMER); $('m-setup').hidden = true; save(); render();
 };
-$('s-mode').onclick = e => { const b = e.target.closest('button'); if (b) { FIRE = b.dataset.f === '1'; fillSetup(); } };
-$('l-mode').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { FIRE = b.dataset.f === '1'; sendLobby(); } };
+$('s-mode').onclick = e => { const b = e.target.closest('button'); if (b) { FGMODE = b.dataset.f === '1'; fillSetup(); } };
+$('l-mode').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { FGMODE = b.dataset.f === '1'; sendLobby(); } };
 $('s-level').onclick = e => { const b = e.target.closest('button'); if (b) { setLevel(+b.dataset.l); fillSetup(); } };
 $('l-level').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { setLevel(+b.dataset.l); sendLobby(); } };
 
