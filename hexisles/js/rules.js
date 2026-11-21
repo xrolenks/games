@@ -35,7 +35,28 @@ const CARDS = {
 const HANDMAX = 7;    // on a 7, players holding more than this discard half (rounded down)
 const WIN = 10, FGWIN = 13, BANK = 4, MAXROADS = 15;     // BANK: resources the bank wants for 1 (ports are cheaper)
 const winAt = () => G && G.fg ? FGWIN : WIN;      // points needed to win: 13 in Forts and Guards (Rick's rule, 2026-11-18)
-const PCOL = ['#ff5d5d', '#4da3ff', '#f2f2f2', '#c58cff'];
+// Player colours. PCOL[seat] is the colour in use; since 2026-11-20 (Rick's request) players pick their own from COLORS
+// in the new-game window or the online lobby (no two the same), stored per game in G.col, and useColors() copies them
+// into PCOL whenever the game changes (render). Older saves without G.col keep DEFCOL.
+const COLORS = [['Red', '#ff5d5d'], ['Blue', '#4da3ff'], ['White', '#f2f2f2'], ['Purple', '#c58cff'], ['Green', '#4fcf6a'], ['Orange', '#ff9a3c'],
+  ['Yellow', '#ffd84a'], ['Black', '#34343c'], ['Pink', '#ff7ac6'], ['Teal', '#2ec4b6'], ['Brown', '#a8683a']];
+const DEFCOL = ['#ff5d5d', '#4da3ff', '#f2f2f2', '#c58cff'];
+const PCOL = DEFCOL.slice();
+const colorName = c => (COLORS.find(k => k[1] === c) || ['Colour'])[0];
+// a list of colours for the seats: keep each wanted one if it's on the palette and not taken, else the first free one
+function fixColors(want, n) {
+  const out = [];
+  for (let i = 0; i < n; i++) { const c = want && want[i]; out.push(COLORS.some(k => k[1] === c) && !out.includes(c) ? c : null); }
+  for (let i = 0; i < n; i++) if (!out[i]) out[i] = [DEFCOL[i]].concat(COLORS.map(k => k[1])).find(x => !out.includes(x));
+  return out;
+}
+function useColors() {
+  const want = G && G.col ? G.col : DEFCOL;
+  let changed = false;
+  for (let i = 0; i < 4; i++) { const c = want[i] || DEFCOL[i]; if (PCOL[i] !== c) { PCOL[i] = c; changed = true; } }
+  if (changed && D3.recolor) D3.recolor();      // (3D: player materials are made again in the new colours)
+  return changed;
+}
 const DEFNAMES = ['You', 'Coral', 'Drift', 'Marlo'];
 const SAVEKEY = 'hexisles-auto';
 
@@ -182,18 +203,22 @@ function castleDue(p) {
   G.castle = G.castle || {};
   for (const k in TRACKS) {
     const lv = imp(p, k), C = G.castle[k];
-    if (C && C.p === p) { if (lv >= TRACKMAX && !C.perm) { C.perm = true; say(G.pl[p].name + "'s " + TRACKS[k].n + ' castle is now permanent.'); } continue; }
+    if (C && C.p === p) { if (lv >= TRACKMAX && !C.perm) { C.perm = true; say(G.pl[p].name + "'s " + TRACKBLD[k] + ' is now permanent.'); } continue; }
     if ((!C && lv >= CASTLEAT) || (C && !C.perm && lv >= TRACKMAX)) return k;
   }
   return null;
 }
 // put track k's castle on fort v of player p (moving it from whoever had it)
+// (2026-11-20: each track's castle looks like its own building: TRACKBLD names it in messages)
+const TRACKBLD = {sci: 'Grand Library', trd: 'Grand Market', pol: 'Mighty Castle'};
 function placeCastle(p, k, v) {
   const C = G.castle[k];
   if (C && G.b[C.v]) delete G.b[C.v].c;
   G.b[v].c = k;
   G.castle[k] = {p, v, perm: imp(p, k) >= TRACKMAX};
-  say(C ? G.pl[p].name + ' took the ' + TRACKS[k].n + ' castle from ' + G.pl[C.p].name + '!' : G.pl[p].name + ' built the ' + TRACKS[k].n + ' castle: +' + CASTLEPTS + ' points!');
+  // taken from someone (Rick, 2026-11-20): every screen plays the takeover (G.takefx, js/flair.js takeFx)
+  if (C && G.b[C.v]) G.takefx = {n: (G.takefx ? G.takefx.n : 0) + 1, k, from: C.v, fp: C.p, to: v, p};
+  say(C ? G.pl[p].name + ' took the ' + TRACKBLD[k] + ' from ' + G.pl[C.p].name + '!' : G.pl[p].name + ' built the ' + TRACKBLD[k] + ' (' + TRACKS[k].n + '): +' + CASTLEPTS + ' points!');
 }
 // after improving or building a fort: claim any castle that's due. One free fort, or a computer player: placed at once;
 // otherwise the player picks the fort (phase 'castle', G.cpick = k, then {t:'castle', v}).
@@ -602,6 +627,7 @@ function newGame(cfg, fg, level, timer) {
     timer: TIMES.includes(timer) ? timer : 0,
     st: {dice: Array(13).fill(0), tr: cfg.map(() => 0), got: cfg.map(() => 0), pts: [cfg.map(() => 0)]},      // end-of-game stats (js/stats.js)
     pl: cfg.map(c => ({name: c.name, bot: !!c.bot, res: {wood: 0, clay: 0, wool: 0, grain: 0, stone: 0}})),
+    col: fixColors(cfg.map(c => c.c), cfg.length),      // each player's colour (picked in the new-game window or lobby)
     ports: makePorts(),
     b: {},            // buildings by corner: {p: player, l: 1 town | 2 fort}
     r: {},            // roads by edge: player

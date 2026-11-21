@@ -121,6 +121,7 @@ function message() {
 }
 function render() {
   if (!G) return;
+  useColors();      // (the players' picked colours, js/rules.js)
   const p = G.turn, human = myTurn();
   if (NET.role) VIEW = NET.seat; else if (human) VIEW = p;
   drawBoard();
@@ -137,7 +138,7 @@ function render() {
   raidFx();
   robFx();      // (before the hand is redrawn: the stolen card starts from where it was)
   turnPop();
-  awardFx(); weatherFx();      // award banner, passing weather (js/flair.js)
+  awardFx(); weatherFx(); winFx(); takeFx();      // award banner, passing weather, the winner's celebration (js/flair.js)
   const H =(G.pl[VIEW] || {res: {}}).res;
   $('hand').innerHTML = handHTML(G.pl[VIEW] ? H : null);
   const main = human && G.phase === 'main' && !G.offer;     /* while an offer is open, only the offer panel works */
@@ -201,7 +202,10 @@ function render() {
   if (dw >= 0) fillDisc(dw); else DWHO = -1;
   if (G.phase !== 'main' || !human) $('m-trade').hidden = true;
   if (!$('m-trade').hidden) fillTrade();
-  if (G.phase === 'over' && !render.won) {
+  if (G.phase === 'over' && !render.won && Date.now() < WINUNTIL) {      // (the celebration plays first, then the window)
+    clearTimeout(render.wt); render.wt = setTimeout(() => { if (G && G.phase === 'over') render(); }, WINUNTIL - Date.now() + 50);
+  } else if (G.phase === 'over' && !render.won) {
+    $('winpop') && $('winpop').remove();
     render.won = true;
     $('w-title').textContent = G.pl[G.win].name + ' won!';
     $('w-text').textContent = 'Final score: ' + G.pl.map((P, i) => P.name + ' ' + score(i)).join(', ') + '.';

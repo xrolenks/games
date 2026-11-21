@@ -101,10 +101,22 @@ function fillLevel(id, canPick) {
 }
 function setLevel(v) { LEVEL = v; try { localStorage.setItem('hexisles-level', v); } catch (e) {} }
 let SCOUNT = 3;
-const SCFG = DEFNAMES.map((n, i) => ({name: n, bot: i > 0}));
+const SCFG = DEFNAMES.map((n, i) => ({name: n, bot: i > 0, c: DEFCOL[i]}));
+// colours picked last time (Rick, 2026-11-20: players choose their colour), remembered in localStorage
+const COLKEY = 'hexisles-colors';
+try { const s = JSON.parse(localStorage.getItem(COLKEY)); if (Array.isArray(s)) fixColors(s, 4).forEach((c, i) => { SCFG[i].c = c; }); } catch (e) {}
+// The colour picker: a round colour button on a player's row opens a row of swatches under it; colours another
+// player already has are crossed out. CPICK = the row whose swatches are open (-1: none). Shared with the lobby.
+let CPICK = -1;
+const cdot = (i, c, can) => '<button class="cdot" data-cp="' + i + '" style="background:' + c + '" title="' + colorName(c) + (can ? ': tap to change' : '') + '" aria-label="Colour: ' + colorName(c) + '"' + (can ? '' : ' disabled') + '></button>';
+const cpal = (i, mine, taken) => '<div class="cpal">' + COLORS.map(([n, c]) => '<button data-pc="' + c + '" data-pi="' + i + '" style="background:' + c + '" title="' + n + (taken.includes(c) ? ' (taken)' : '') + '" aria-label="' + n + '"' +
+  (c === mine ? ' class="on"' : '') + (taken.includes(c) ? ' disabled' : '') + '></button>').join('') + '</div>';
 function fillSetup() {
   $('s-count').innerHTML = '<span style="flex:1">Players</span>' + [2, 3, 4].map(n => '<button data-n="' + n + '"' + (n === SCOUNT ? ' class="on"' : '') + '>' + n + '</button>').join('');
-  $('s-rows').innerHTML = SCFG.slice(0, SCOUNT).map((c, i) => '<div class="row"><i style="background:' + PCOL[i] + '"></i><input data-i="' + i + '" maxlength="12" value="' + esc(c.name) + '" aria-label="Player ' + (i + 1) + ' name"><button data-b="' + i + '">' + (c.bot ? 'Computer' : 'Human') + '</button></div>').join('');
+  const used = fixColors(SCFG.slice(0, SCOUNT).map(c => c.c), SCOUNT);
+  used.forEach((c, i) => { SCFG[i].c = c; });
+  $('s-rows').innerHTML = SCFG.slice(0, SCOUNT).map((c, i) => '<div class="row">' + cdot(i, c.c, true) + '<input data-i="' + i + '" maxlength="12" value="' + esc(c.name) + '" aria-label="Player ' + (i + 1) + ' name"><button data-b="' + i + '">' + (c.bot ? 'Computer' : 'Human') + '</button></div>' +
+    (CPICK === i ? cpal(i, c.c, used.filter((u, k) => k !== i)) : '')).join('');
   $('s-cancel').hidden = !G;
   fillMode('s-mode', true);
 }
@@ -343,9 +355,18 @@ $('w-look').onclick = () => { $('m-win').hidden = true; };
 $('s-cancel').onclick = () => { $('m-setup').hidden = true; };
 $('s-count').onclick = e => { const b = e.target.closest('button'); if (b) { SCOUNT = +b.dataset.n; fillSetup(); } };
 $('s-rows').addEventListener('input', e => { if (e.target.dataset.i != null) SCFG[+e.target.dataset.i].name = e.target.value; });
-$('s-rows').onclick = e => { const b = e.target.closest('button'); if (b) { const c = SCFG[+b.dataset.b]; c.bot = !c.bot; fillSetup(); } };
+$('s-rows').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.cp != null) { CPICK = CPICK === +b.dataset.cp ? -1 : +b.dataset.cp; fillSetup(); return; }      // open/close that row's colours
+  if (b.dataset.pc) {      // a colour picked
+    SCFG[+b.dataset.pi].c = b.dataset.pc; CPICK = -1;
+    try { localStorage.setItem(COLKEY, JSON.stringify(SCFG.map(c => c.c))); } catch (x) {}
+    fillSetup(); return;
+  }
+  if (b.dataset.b != null) { const c = SCFG[+b.dataset.b]; c.bot = !c.bot; fillSetup(); }
+};
 $('s-go').onclick = () => {
-  const cfg = SCFG.slice(0, SCOUNT).map((c, i) => ({name: c.name.trim() || DEFNAMES[i], bot: c.bot}));
+  const cfg = SCFG.slice(0, SCOUNT).map((c, i) => ({name: c.name.trim() || DEFNAMES[i], bot: c.bot, c: c.c}));
   netUnmark(); newGame(cfg, FIRE, LEVEL, TIMER); $('m-setup').hidden = true; save(); render();
 };
 $('s-mode').onclick = e => { const b = e.target.closest('button'); if (b) { FIRE = b.dataset.f === '1'; fillSetup(); } };

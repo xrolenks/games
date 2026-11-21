@@ -9,13 +9,26 @@ const timeName = s => !s ? 'Off' : s < 60 ? s + ' sec' : s === 90 ? '1½ min' : 
 let TIMER = 0;
 try { const v = +localStorage.getItem('hexisles-timer'); if (TIMES.includes(v)) TIMER = v; } catch (e) {}
 function setTimer(v) { TIMER = v; try { localStorage.setItem('hexisles-timer', v); } catch (e) {} }
+// A slider (Rick, 2026-11-20; were buttons): its steps are the places in TIMES, Off at the far left.
+// No description line under it (Rick removed it, 2026-11-20).
 function fillTimer(id, canPick) {
-  const el = $(id);
-  el.innerHTML = '<span style="flex:1 0 100%">Turn timer</span>' + TIMES.map(s => '<button data-s="' + s + '"' + (s === TIMER ? ' class="on"' : '') + (canPick ? '' : ' disabled') + '>' + timeName(s) + '</button>').join('');
-  // (no description line under the timer: Rick removed it, 2026-11-20)
+  const el = $(id), i = Math.max(0, TIMES.indexOf(TIMER));
+  let r = el.querySelector('input');
+  if (!r) {      // (built once, so dragging isn't interrupted when the window is refilled)
+    el.innerHTML = '<span>Turn timer</span><input type="range" min="0" max="' + (TIMES.length - 1) + '" step="1" aria-label="Turn timer"><b class="tval"></b>';
+    r = el.querySelector('input');
+  }
+  r.value = i; r.disabled = !canPick;
+  el.querySelector('.tval').textContent = timeName(TIMER);
+  r.setAttribute('aria-valuetext', timeName(TIMER));
 }
-$('s-timer').onclick = e => { const b = e.target.closest('button'); if (b) { setTimer(+b.dataset.s); fillSetup(); } };
-$('l-timer').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { setTimer(+b.dataset.s); sendLobby(); } };
+['s-timer', 'l-timer'].forEach(id => {
+  $(id).oninput = e => {
+    if (e.target.tagName !== 'INPUT' || (id === 'l-timer' && NET.role !== 'host')) return;
+    setTimer(TIMES[+e.target.value]);
+    if (id === 's-timer') fillTimer(id, true); else sendLobby();
+  };
+});
 
 // moves that wait for people who aren't the player whose turn it is
 const WAITS = ['discard', 'give', 'sack', 'tpick'];

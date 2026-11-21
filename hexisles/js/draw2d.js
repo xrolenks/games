@@ -247,6 +247,50 @@ const CITADEL2D = c => TURRET2D(-12.5, c, -22) + TURRET2D(3.5, c, -22) +
   '<polygon points="-13.5,-22 -8,-32 -2.5,-22" fill="#e8b84a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/><polygon points="2.5,-22 8,-32 13.5,-22" fill="#e8b84a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>' +
   '<path d="M-8-32v-3M8-32v-3" stroke="#111" stroke-width="1.2"/><path d="M0-9V-38" stroke="#111" stroke-width="1.5"/><path d="M0-38h11l-3 4 3 4H0z" fill="' + c + '" stroke="#111" stroke-width="1"/><circle cx="4.5" cy="-34" r="1.6" fill="#e8b84a"/>' +
   '<g transform="scale(1.15 1)">' + FORT2D(c) + '</g>';
+// The track buildings (Rick, 2026-11-20), feet at y 9 like a fort: walls in the player's colour (c), roofs in the
+// track's colour (r); permanent (owner at level 5) = grander, with gold trim.
+const S2 = 'stroke="#111" stroke-linejoin="round"';
+function LIBRARY2D(c, r, perm) {      // Science: a grand library with columns, a pediment and a dome
+  const trim = perm ? '#e8b84a' : '#f4efe3';
+  return (perm ? [-1, 1].map(s => '<rect x="' + (s < 0 ? -19 : 11) + '" y="-5" width="8" height="12" fill="' + c + '" ' + S2 + ' stroke-width="1.2"/><path d="M' + (s < 0 ? -19 : 11) + '-5a4 4 0 0 1 8 0z" fill="' + r + '" ' + S2 + ' stroke-width="1"/><rect x="' + (s < 0 ? -16.2 : 13.8) + '" y="-1" width="2.4" height="4" fill="rgba(0,0,0,.55)"/>').join('') : '') +
+    '<rect x="-4.4" y="-22" width="8.8" height="4" fill="' + c + '" ' + S2 + ' stroke-width="1"/><path d="M-5.4-22a5.4 5.4 0 0 1 10.8 0z" fill="' + (perm ? '#e8b84a' : r) + '" ' + S2 + ' stroke-width="1.1"/>' +
+    '<path d="M0-27.4v-3" stroke="#7a5410" stroke-width="1"/><circle cy="-31" r="1.1" fill="#e8b84a" stroke="#7a5410" stroke-width=".5"/>' +
+    (perm ? '<path d="M5-19l6-5" stroke="#7a5410" stroke-width="2.4" stroke-linecap="round"/><path d="M5-19l6-5" stroke="#e8b84a" stroke-width="1.5" stroke-linecap="round"/>' : '') +
+    '<rect x="-11" y="-10" width="22" height="15" fill="' + c + '" ' + S2 + ' stroke-width="1.4"/><rect x="2" y="-10" width="9" height="15" fill="rgba(0,0,0,.2)"/>' +
+    '<polygon points="-13,-11 0,-18 13,-11" fill="' + r + '" ' + S2 + ' stroke-width="1.3"/><rect x="-12.5" y="-11.5" width="25" height="2.6" fill="' + trim + '" ' + S2 + ' stroke-width=".9"/>' +
+    [-10, -5.6, -1.2, 3.2, 7.6].map(x => '<rect x="' + x + '" y="-8.9" width="2.2" height="13.6" fill="#f4efe3" ' + S2 + ' stroke-width=".6"/>').join('') +
+    '<rect x="-1" y="-1" width="2" height="6" fill="rgba(0,0,0,.6)"/>' +
+    '<rect x="-14" y="4.5" width="28" height="4.5" fill="#efe8da" ' + S2 + ' stroke-width="1.2"/><path d="M-14 6.7h28" stroke="rgba(0,0,0,.2)" stroke-width=".8"/>';
+}
+function MARKET2D(c, r, perm) {      // Trade: a busy market: a hall, striped stalls with goods, shoppers
+  const stall = (x, aw, k) => '<rect x="' + (x - 4) + '" y="2" width="8" height="5" fill="#8a5a32" ' + S2 + ' stroke-width=".8"/>' +
+    '<path d="M' + (x - 3.4) + ' 2v-6M' + (x + 3.4) + ' 2v-6" stroke="#5a3a1c" stroke-width=".9"/>' +
+    '<path d="M' + (x - 5) + '-4h10l-1.2 3h-7.6z" fill="' + aw + '" ' + S2 + ' stroke-width=".8"/><path d="M' + (x - 2.5) + '-4l-.6 3M' + x + '-4v3M' + (x + 2.5) + '-4l.6 3" stroke="#fff" stroke-width="1.1" opacity=".8"/>' +
+    ['#c0392b', '#f39c12', '#7fb03a', '#8e5bc8'].map((g, q) => '<circle cx="' + (x - 2.7 + q * 1.8) + '" cy="1.4" r=".95" fill="' + g + '" stroke="#111" stroke-width=".3"/>').join('');
+  const folk = (x, y, col) => '<rect x="' + (x - 1) + '" y="' + (y - 3) + '" width="2" height="3.4" rx=".8" fill="' + col + '" stroke="#111" stroke-width=".4"/><circle cx="' + x + '" cy="' + (y - 4.1) + '" r="1.1" fill="#d9a877" stroke="#111" stroke-width=".4"/>';
+  return '<ellipse cx="0" cy="6" rx="16" ry="5" fill="#cfc4ad" stroke="#8f8470" stroke-width=".8"/>' +
+    (perm ? '<rect x="-15" y="-26" width="5" height="22" fill="' + c + '" ' + S2 + ' stroke-width="1.1"/><polygon points="-16,-26 -12.5,-31 -9,-26" fill="' + r + '" ' + S2 + ' stroke-width="1"/><path d="M-14.2-20h3.4l.4 3h-4.2z" fill="#e8b84a" stroke="#7a5410" stroke-width=".5"/>' : '') +
+    '<rect x="-8" y="-10" width="16" height="10" fill="' + c + '" ' + S2 + ' stroke-width="1.3"/><polygon points="-10,-10 0,-17 10,-10" fill="' + r + '" ' + S2 + ' stroke-width="1.2"/>' +
+    '<rect x="-1.5" y="-6" width="3" height="6" fill="rgba(0,0,0,.6)"/><rect x="-6" y="-7" width="2.4" height="2.4" fill="rgba(0,0,0,.5)"/><rect x="3.6" y="-7" width="2.4" height="2.4" fill="rgba(0,0,0,.5)"/>' +
+    stall(-9.5, r) + stall(9.5, c) + (perm ? stall(0, r) : '') +
+    folk(-3.5, 8, '#2e86c1') + folk(4, 7.6, '#8e44ad') + (perm ? folk(-13.5, 8.4, '#27ae60') + folk(13.4, 8.2, '#d68910') : '') +
+    '<path d="M13.5 3.5h3.4v4.6h-3.4z" fill="#8a5a32" stroke="#111" stroke-width=".6"/>';
+}
+function CASTLE2D(c, r, perm) {      // Politics: a mighty castle: a tall keep, curtain walls, round towers with tall roofs
+  const top = perm ? -30 : -24;
+  const tower = x => '<rect x="' + (x - 3.2) + '" y="-9" width="6.4" height="18" fill="' + c + '" ' + S2 + ' stroke-width="1.2"/><rect x="' + x + '" y="-9" width="3.2" height="18" fill="rgba(0,0,0,.22)"/>' +
+    '<polygon points="' + (x - 4.2) + ',-9 ' + x + ',-18 ' + (x + 4.2) + ',-9" fill="' + r + '" ' + S2 + ' stroke-width="1.1"/><rect x="' + (x - .8) + '" y="-5" width="1.6" height="3" fill="rgba(0,0,0,.6)"/>' +
+    (perm ? '<path d="M' + x + '-18v-4" stroke="#111" stroke-width=".8"/><path d="M' + x + '-22h3.4l-1 1.3 1 1.3H' + x + 'z" fill="' + c + '" stroke="#111" stroke-width=".5"/>' : '');
+  return '<rect x="-6" y="' + top + '" width="12" height="' + (-top) + '" fill="' + c + '" ' + S2 + ' stroke-width="1.3"/><rect x="0" y="' + top + '" width="6" height="' + (-top) + '" fill="rgba(0,0,0,.2)"/>' +
+    [-6, -2, 2].map(x => '<rect x="' + x + '" y="' + (top - 2.4) + '" width="2.4" height="2.4" fill="' + c + '" ' + S2 + ' stroke-width=".8"/>').join('') +
+    '<rect x="-1.2" y="' + (top + 6) + '" width="2.4" height="3.4" rx="1.2" fill="rgba(0,0,0,.6)"/>' +
+    '<path d="M0 ' + (top - 2.4) + 'v-8" stroke="#111" stroke-width="1.2"/><path d="M0 ' + (top - 10.4) + 'h8l-2.4 3 2.4 3H0z" fill="' + c + '" stroke="#111" stroke-width=".8"/>' +
+    (perm ? '<path d="M-6 ' + (top - 2.4) + 'l1.5-3.4 1.5 2 1.5-3 1.5 3 1.5-3 1.5 3 1.5-2 1.5 3.4z" fill="#e8b84a" stroke="#7a5410" stroke-width=".6" stroke-linejoin="round"/>' : '') +
+    '<polygon points="-12,9 -12,-4 -10,-4 -10,-6 -7.5,-6 -7.5,-4 -4.5,-4 -4.5,-6 -2,-6 -2,-4 2,-4 2,-6 4.5,-6 4.5,-4 7.5,-4 7.5,-6 10,-6 10,-4 12,-4 12,9" fill="' + c + '" ' + S2 + ' stroke-width="1.4"/>' +
+    '<path d="M-3 9v-6a3 3 0 0 1 6 0v6z" fill="rgba(0,0,0,.65)"/><path d="M-2 3.4v5.6M0 2.2v6.8M2 3.4v5.6M-3 5.5h6" stroke="#9aa1ab" stroke-width=".55"/>' +
+    tower(-12) + tower(12);
+}
+const TRACK2D = {sci: LIBRARY2D, trd: MARKET2D, pol: CASTLE2D};
 // a stone wall round a building: the back half is drawn behind it, the front half in front (with battlements)
 const WALL2D = half => {
   const d = half === 'back' ? 'M-19 4A19 11 0 0 1 19 4' : 'M19 4A19 11 0 0 1-19 4';
@@ -259,9 +303,15 @@ function piece(v, b) {
   const town = '<polygon points="-8,8 -8,-2 0,-10 8,-2 8,8" fill="' + c + '"/><polygon points="0,-10 8,-2 8,8 0,8" fill="rgba(0,0,0,.28)"/><polygon points="-8,-2 0,-10 8,-2 6,-2 0,-8 -6,-2" fill="rgba(255,255,255,.35)"/><rect x="-5.5" y="2" width="3.5" height="6" fill="rgba(0,0,0,.55)"/><polygon points="-8,8 -8,-2 0,-10 8,-2 8,8" fill="none" stroke="#111" stroke-width="2" stroke-linejoin="round"/>';
   // a castle (Forts and Knights): the big two-tower fort with roofs in its track's colour
   // (the flat map stays simple, Rick 2026-11-19: chimney smoke and fluttering flags are 3D only)
-  const body = b.l !== 2 ? town : b.c && TRACKS[b.c] ? CITADEL2D(c).replaceAll('#e8b84a', TRACKS[b.c].c) : b.u === 2 ? CITADEL2D(c) : b.u === 1 ? KEEP2D(c) : FORT2D(c);
+  // (2026-11-20: each track's castle has its own look: library, market, castle; TRACK2D)
+  const perm = !!(b.c && G.castle && G.castle[b.c] && G.castle[b.c].perm);
+  let body = b.l !== 2 ? town : b.c && TRACKS[b.c] ? TRACK2D[b.c](c, TRACKS[b.c].c, perm) : b.u === 2 ? CITADEL2D(c) : b.u === 1 ? KEEP2D(c) : FORT2D(c);
+  // a takeover (TAKE): the new building grows up over its plain fort; the old one sinks away over the plain fort left behind
+  const tk = taking() ? TAKE : null, late = tk ? '-' + (Date.now() - tk.t) + 'ms' : '';
+  if (tk && +v === tk.to && b.c) body = '<g class="tkfort" style="animation-delay:' + late + '">' + FORT2D(c) + '</g><g class="tkin" style="animation-delay:' + late + '">' + body + '</g>';
+  const over = tk && +v === tk.from ? '<g class="tkout" style="animation-delay:' + late + '">' + TRACK2D[tk.k](PCOL[tk.fp], TRACKS[tk.k].c, false) + '</g>' : '';
   return '<g class="deco" transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(1.1)"><ellipse cx="3" cy="9" rx="12" ry="4" fill="rgba(0,0,0,.35)"/>' + (b.w ? WALL2D('back') : '') +
-    drop('b' + v, b.p + ':' + b.l + ':' + (b.u || 0) + ':' + (b.c || ''), body) + (b.w ? drop('w' + v, 1, WALL2D('front')) : '') + '</g>';
+    drop('b' + v, b.p + ':' + b.l + ':' + (b.u || 0) + ':' + (b.c || ''), body) + over + (b.w ? drop('w' + v, 1, WALL2D('front')) : '') + '</g>';
 }
 // --- Forts and Guards pictures ---
 // The Sea die's faces (SEAICON by SEAFACE name), a raider ship for the board, and a guard standing on a road.
@@ -279,7 +329,7 @@ function fleetAt(k) { const t = Math.min(1, k / FLEETMAX); return [FLEETFAR[0] +
 const FLEETSHIPS = [[0, 0], [-36, 14], [-14, -30]];      // three ships around the fleet's spot
 // A knight's picture by strength (Rick, 2026-11-19): 1 = on foot; 2 = mounted on a brown horse with a lance and a pennant
 // in the player's colour; 3 = a mighty knight: gold armour on a white horse, with a pulsing golden glow (.radiant).
-const GUARDBODY = (c, s) => s > 1 ? MOUNTED(c, s === 3) : FOOTMAN(c, s);
+const GUARDBODY = (c, s) => s > 1 ? MOUNTED(c, s === 3) : FOOTMAN(c);
 // The mounted knights' lance (Rick, 2026-11-19, like a real one): a tapered grip at the hand, a cone-shaped guard,
 // a long thin shaft and a slim sharp point, along the line from (-3,-3.2) up to the front
 const LANCEU = [16.4 / 18.9, -9.4 / 18.9];      // which way the lance points (from its back end at -3,-3.2)
@@ -314,38 +364,56 @@ function MOUNTED(c, gold) {
       '<path d="M5.6-2.1L8.3.3M6.8-3.8L9.4-1.9" stroke-width="1.5"/></g>' +
       '<g fill="none" stroke="#f5c84a" stroke-linecap="round"><path d="M6.2-1.6Q8.9-.2 7.6 3" stroke-width="1.4"/><path d="M-3.2-1.8Q-6.2-1.6-6.4 1.4" stroke-width="1.4"/>' +
       '<path d="M5.6-2.1L8.3.3M6.8-3.8L9.4-1.9" stroke-width=".9"/></g>' +
-      '<ellipse cx="10.9" cy="-5.1" rx="2.2" ry=".72" transform="rotate(28 10.9 -5.1)" fill="#f5c84a" stroke="#7a5410" stroke-width=".4"/><circle cx="10.6" cy="-5.7" r=".42" fill="#111"/>' : '') +
+      '<ellipse cx="10.9" cy="-5.1" rx="2.2" ry=".72" transform="rotate(28 10.9 -5.1)" fill="#f5c84a" stroke="#7a5410" stroke-width=".4"/><circle cx="10.6" cy="-5.7" r=".42" fill="#111"/>'
+      // (2026-11-20, Rick: more armour) a strength-2 horse: steel chest and face plates, a rump cloth in the player's colour
+      : '<path d="M-3.2-1.8Q-6.2-1.6-6.4 1.4" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round"/><path d="M-3.2-1.8Q-6.2-1.6-6.4 1.4" fill="none" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/>' +
+        '<path d="M6.2-1.6Q8.9-.2 7.6 3" fill="none" stroke="#3a3f47" stroke-width="2.1" stroke-linecap="round"/><path d="M6.2-1.6Q8.9-.2 7.6 3" fill="none" stroke="#c9ced6" stroke-width="1.4" stroke-linecap="round"/>' +
+        '<ellipse cx="10.9" cy="-5.1" rx="2.2" ry=".72" transform="rotate(28 10.9 -5.1)" fill="#c9ced6" stroke="#3a3f47" stroke-width=".4"/><circle cx="10.6" cy="-5.7" r=".42" fill="#111"/>') +
     '<path d="M-3.6-1.9h6.6v4.6q-3.3 1.5-6.6 0z" fill="' + c + '" stroke="#111" stroke-width=".8"/>' +      // saddle cloth in the player's colour
     '<path d="M-2.2-1.6V-8.2Q.3-9.9 2.8-8.2V-1.6Z" fill="' + arm + '" stroke="' + ln + '" stroke-width=".9"/>' +      // body armour
+    '<path d="M-1.2-1.6V-7.7Q.3-8.5 1.8-7.7V-1.6Z" fill="' + c + '" stroke="#111" stroke-width=".45"/><path d="M.3-6.2l.8.8-.8.8-.8-.8z" fill="#e8b84a" stroke="#6a4a0e" stroke-width=".2"/>' +      // surcoat in the player's colour (2026-11-20)
+    '<circle cx="-.9" cy="-8" r="1.3" fill="' + arm + '" stroke="' + ln + '" stroke-width=".5"/>' +      // shoulder plate
     '<path d="M-1.2-8L-1.5-7.4" stroke="' + arm + '" stroke-width="1.6" stroke-linecap="round"/>' +      // left arm (to the shield's hand)
-    '<path d="M1.8-7.4Q3.4-7.6 3.9-6.8" stroke="' + arm + '" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="4" cy="-7" r=".9" fill="#d9a877" stroke="#111" stroke-width=".4"/>' +      // right arm holding the lance
+    '<path d="M1.8-7.4Q3.4-7.6 3.9-6.8" stroke="' + arm + '" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="4" cy="-7" r=".9" fill="' + arm + '" stroke="#111" stroke-width=".4"/>' +      // right arm holding the lance (steel gauntlet)
     '<circle cx=".3" cy="-10.6" r="2.3" fill="#d9a877" stroke="#111" stroke-width=".8"/><path d="M-2.3-11a2.6 2.6 0 0 1 5.2 0Z" fill="' + arm + '" stroke="' + ln + '" stroke-width=".8"/>' +
     '<circle cx="1.5" cy="-10.3" r=".5" fill="#1d1610"/><path d="M.8-11.3l1.4.3" stroke="#1d1610" stroke-width=".45" stroke-linecap="round"/>' +      // eye and brow (looking ahead)
     // the mighty knight's grizzled grey beard and lighter moustache (Rick, 2026-11-19)
     (gold ? '<path d="M-.6-9.8q.4 3.4 3.4 1.4q.7-.7.3-1.6q-1.7.7-3.7.2z" fill="#8f8a84" stroke="#111" stroke-width=".4" stroke-linejoin="round"/><path d="M-.1-8.7l.3.8M.9-8.3l.2.9M1.9-8.7l.3.6" stroke="#c9c4bb" stroke-width=".3"/>' +
       '<path d="M1.5-9.6q.8-.5 1.5.1" stroke="#c9c4bb" stroke-width=".7" fill="none" stroke-linecap="round"/>' : '') +
-    '<path d="M.3-13.4q2.2-2.8 4.4-1.8" stroke="' + (gold ? '#fff6d0' : '#c62828') + '" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +      // plume
+    '<path d="M.3-13.4q2.2-2.8 4.4-1.8" stroke="' + (gold ? '#fff6d0' : c) + '" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +      // plume
     LANCE2D(gold) +      // lance (no pennant since 2026-11-19, Rick's request)
     // shield: smaller and higher (Rick, 2026-11-19), clear of the leg and the saddle cloth
     // (2026-11-19: a proper shield with a rim and a boss, held in the left hand)
     '<path d="M-5.3-9.8h3.8v2.6q0 2.2-1.9 3.2q-1.9-1-1.9-3.2z" fill="' + c + '" stroke="' + (gold ? '#b8860b' : '#9aa1aa') + '" stroke-width=".55"/><path d="M-5.3-9.8h3.8v2.6q0 2.2-1.9 3.2q-1.9-1-1.9-3.2z" fill="none" stroke="' + ln + '" stroke-width=".25"/>' +
     '<circle cx="-3.4" cy="-7.7" r=".6" fill="' + (gold ? '#f5c84a' : '#c9ced6') + '" stroke="#111" stroke-width=".3"/>' +
-    '<circle cx="-1.55" cy="-7.4" r=".7" fill="#d9a877" stroke="#111" stroke-width=".35"/>';      // the hand gripping it
+    '<circle cx="-1.55" cy="-7.4" r=".7" fill="' + arm + '" stroke="#111" stroke-width=".35"/>';      // the gauntlet gripping it
 }
-const FOOTMAN = (c, s) => '<ellipse cx="1.5" cy="7.5" rx="7.5" ry="2.6" fill="rgba(0,0,0,.4)"/>' +
-  (s > 1 ? '<path d="M5.5 8V-12" stroke="#5a3d22" stroke-width="1.4"/><path d="M5.5-15.5l1.7 3.4h-3.4z" fill="#e8edf2" stroke="#111" stroke-width=".6"/>' : '') +
-  '<path d="M-4 7.5V-1Q0-4 4-1V7.5Z" fill="' + c + '" stroke="#111" stroke-width="1.2"/><path d="M1-2.6Q4-1.4 4-1V7.5H1Z" fill="rgba(0,0,0,.25)"/>' +
-  // arms (2026-11-19, Rick: "eyes and arms like the bandit"): sleeves in the player's colour, hands; the right one holds the spear
-  '<path d="M-3.4-.6L-2.8 1.6" stroke="#111" stroke-width="2.9" stroke-linecap="round"/><path d="M-3.4-.6L-2.8 1.6" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round"/>' +
-  '<path d="M3.4-.6L' + (s > 1 ? '5.3 2' : '5.8 3.8') + '" stroke="#111" stroke-width="2.9" stroke-linecap="round"/><path d="M3.4-.6L' + (s > 1 ? '5.3 2' : '5.8 3.8') + '" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round"/>' +
-  '<circle cx="' + (s > 1 ? 5.5 : 6) + '" cy="' + (s > 1 ? 2.4 : 4.3) + '" r="1.2" fill="#d9a877" stroke="#111" stroke-width=".5"/>' +
+// (FOOTMAN is only strength 1 now: stronger knights ride, MOUNTED)
+const FOOTMAN = c => '<ellipse cx="1.5" cy="7.5" rx="7.5" ry="2.6" fill="rgba(0,0,0,.4)"/>' +
+  // armour (Rick, 2026-11-20): a steel body under a surcoat in the player's colour with a gold badge, a belt
+  '<path d="M-4 7.5V-1Q0-4 4-1V7.5Z" fill="#b8bec8" stroke="#111" stroke-width="1.2"/>' +
+  '<path d="M-2.5-2.2Q0-3 2.5-2.2V7.5H-2.5Z" fill="' + c + '" stroke="#111" stroke-width=".6"/><path d="M0-.6l1 1-1 1-1-1z" fill="#e8b84a" stroke="#6a4a0e" stroke-width=".25"/>' +
+  '<path d="M-4 3.2H4" stroke="#3a2a1c" stroke-width="1"/><path d="M1-2.6Q4-1.4 4-1V7.5H1Z" fill="rgba(0,0,0,.22)"/>' +
+  // the sword (Rick, 2026-11-20: a sword instead of the spear), point up, leaning out a little: steel blade with a
+  // groove, gold crossguard, leather grip and gold pommel; the hand (drawn after) covers the grip
+  '<g transform="rotate(14 6 4.3)"><path d="M5.2 2.7V-6.6L6-8.6l.8 2V2.7z" fill="#e8edf2" stroke="#4b525c" stroke-width=".5" stroke-linejoin="round"/>' +
+  '<path d="M6-7V2.2" stroke="#9aa1ab" stroke-width=".35"/><rect x="5.45" y="3.4" width="1.1" height="2.3" fill="#3a2a1c"/>' +
+  '<rect x="3.9" y="2.5" width="4.2" height="1.1" rx=".45" fill="#e8b84a" stroke="#6a4a0e" stroke-width=".4"/><circle cx="6" cy="6.2" r=".75" fill="#e8b84a" stroke="#6a4a0e" stroke-width=".35"/></g>' +
+  // arms (2026-11-19, Rick: "eyes and arms like the bandit"); armoured since 2026-11-20: steel arms and gauntlets,
+  // shoulder plates; the right hand holds the sword
+  '<path d="M-3.4-.6L-2.8 1.6" stroke="#111" stroke-width="2.9" stroke-linecap="round"/><path d="M-3.4-.6L-2.8 1.6" stroke="#c9ced6" stroke-width="1.9" stroke-linecap="round"/>' +
+  '<path d="M3.4-.6L5.8 3.8" stroke="#111" stroke-width="2.9" stroke-linecap="round"/><path d="M3.4-.6L5.8 3.8" stroke="#c9ced6" stroke-width="1.9" stroke-linecap="round"/>' +
+  '<circle cx="6" cy="4.3" r="1.2" fill="#9aa1ab" stroke="#111" stroke-width=".5"/>' +
+  '<path d="M-5.2.2Q-5.2-2.4-2.4-2.2L-2.6.4Z" fill="#c9ced6" stroke="#111" stroke-width=".55"/><path d="M5.2.2Q5.2-2.4 2.4-2.2L2.6.4Z" fill="#a9b0b9" stroke="#111" stroke-width=".55"/>' +
+  '<path d="M-.2-7.9q1.2-5 5.2-4q-2.8.4-3.6 4.1z" fill="' + c + '" stroke="#111" stroke-width=".5"/>' +      // plume in the player's colour
   '<circle cy="-4.5" r="3.2" fill="#d9a877" stroke="#111" stroke-width="1"/><path d="M-3.7-5a3.7 3.7 0 0 1 7.4 0Z" fill="#b8bec8" stroke="#111" stroke-width=".9"/>' +
+  '<path d="M-3.9-5.2H3.9" stroke="#111" stroke-width="1.5" stroke-linecap="round"/><path d="M-3.8-5.2H3.8" stroke="#d4d9e0" stroke-width=".8" stroke-linecap="round"/>' +      // helmet rim
   '<circle cx="-1.2" cy="-3.9" r=".6" fill="#1d1610"/><circle cx="1.2" cy="-3.9" r=".6" fill="#1d1610"/>' +      // eyes
   '<path d="M-2-4.9l1.4.3M2-4.9l-1.4.3" stroke="#1d1610" stroke-width=".55" stroke-linecap="round"/>' +      // brows
-  (s > 1 ? '<path d="M0-8.6q2.5-3.5 5-2.2" stroke="#c62828" stroke-width="1.8" fill="none" stroke-linecap="round"/>' : '') +
+  '<path d="M0-5.2V-2.9" stroke="#111" stroke-width="1.1" stroke-linecap="round"/><path d="M0-5.1V-3" stroke="#c9ced6" stroke-width=".55" stroke-linecap="round"/>' +      // nose guard
   // shield (2026-11-19): flat top, pointed bottom, a steel rim and boss, gripped by the left hand at its edge
   '<path d="M-8.2-1.6h5.6v4.6q0 3.2-2.8 4.5q-2.8-1.3-2.8-4.5z" fill="' + c + '" stroke="#9aa1aa" stroke-width="1"/><path d="M-8.2-1.6h5.6v4.6q0 3.2-2.8 4.5q-2.8-1.3-2.8-4.5z" fill="none" stroke="#111" stroke-width=".45"/>' +
-  '<circle cx="-5.4" cy="2" r="1.1" fill="' + (s > 1 ? '#e8b84a' : '#c9ced6') + '" stroke="#111" stroke-width=".45"/>' +
+  '<circle cx="-5.4" cy="2" r="1.1" fill="#c9ced6" stroke="#111" stroke-width=".45"/>' +
   '<circle cx="-2.6" cy="2.2" r="1.15" fill="#d9a877" stroke="#111" stroke-width=".5"/>';
 function edgeMid(e) { const A = VERT[EDGE[e].a], B = VERT[EDGE[e].b]; return [(A.x + B.x) / 2, (A.y + B.y) / 2]; }
 // on duty: full colour with a gold ring at its feet; resting (inactive): greyed out with a little "z"
@@ -482,12 +550,28 @@ function sea(sand) {
 // --- Harvest effect ---
 // After a roll's dice stop, the lands that paid out glow (HARV, drawn by drawBoard) and one little card per
 // resource flies from each land to whoever got it: your hand, or that player's profile.
-let HARV = null;
+// A track building taken from someone (Rick, 2026-11-20; G.takefx, started by takeFx in flair.js): TAKE = {k, from, fp,
+// to, p, t, id}. Over TAKEMS: the old owner's building shakes (0-12%), sinks into the ground (12-40%) back to a plain
+// fort, its badge flies across (30-65%), and the new owner's grows up out of the ground (62-85%). Both maps.
+let TAKE = null;
+const TAKEMS = 4200;
+const taking = () => !!(TAKE && G && G.id === TAKE.id && Date.now() - TAKE.t < TAKEMS);
+let HARV = null, BLOCK = null;
+const BLOCKMS = 1600;      // how long the red glow and the bandit's hops last
+const blocking = () => !!(BLOCK && G && BLOCK.h === G.storm && Date.now() > BLOCK.t && Date.now() < BLOCK.t + BLOCKMS);
 function harvestFx() {
   const sum = G.dice[0] + G.dice[1];
   if (sum === 7) return;
   const hs = [];
   G.hex.forEach((h, i) => { if (h.n === sum && !scorched(i) && !(G.deck && i === G.storm)) hs.push(i); });
+  // the bandit blocks its land (Rick, 2026-11-20): when its number comes up and a town or fort there misses out, the
+  // land glows red instead of gold, the bandit hops on the spot, and a "Blocked" chip rises (BLOCK; both maps)
+  const sb = G.deck && G.hex[G.storm] && G.hex[G.storm].n === sum && HEX[G.storm].v.some(v => G.b[v]) ? G.storm : -1;
+  if (sb >= 0) {
+    BLOCK = {h: sb, t: Date.now() + DICEMS};
+    setTimeout(() => { if (G) { drawBoard(); blockPop(sb); } }, DICEMS);
+    setTimeout(() => { if (G) drawBoard(); }, DICEMS + BLOCKMS + 50);      // (the flat map's glow and hop end)
+  }
   if (!hs.length) return;
   HARV = {h: hs, t: Date.now() + DICEMS};
   setTimeout(() => {
@@ -829,7 +913,10 @@ function drawBoard() {
   if (G.deck && HEX[G.storm]) {       // the bandit, standing on the land they block
     const h = HEX[G.storm];
     s += '<polygon class="deco" points="' + corners(h, TILE) + '" fill="rgba(12,18,34,.45)"/>';
-    if (!chase2Busy()) s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + (h.y - 4).toFixed(1) + ')">' + drop('storm', G.storm, BANDIT) + '</g>';      // (a Guard's chase draws its own)
+    const bl = blocking(), late = bl ? BLOCK.t - Date.now() : 0;      // (its number came up: red glow and hops, see harvestFx)
+    if (bl) s += '<polygon class="deco bglow" style="animation-delay:' + late + 'ms" points="' + corners(h, TILE) + '"/>';
+    if (!chase2Busy()) s += '<g class="deco" transform="translate(' + h.x.toFixed(1) + ' ' + (h.y - 4).toFixed(1) + ')">' +
+      (bl ? '<g class="bhop" style="animation-delay:' + late + 'ms">' + drop('storm', G.storm, BANDIT) + '</g>' : drop('storm', G.storm, BANDIT)) + '</g>';      // (a Guard's chase draws its own)
   }
   // the longest route (2026-11-19): a plain gold edge under its roads and a thin gold line along them (still: the flat map
   // stays simple; 3D has the glowing strip)
@@ -884,7 +971,7 @@ const AWICON = {
   route: '<svg viewBox="-12 -12 24 24"><title>Longest route: +2 points</title><path d="M-8 7L-3-1L3 3L8-7" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M-8 7L-3-1L3 3L8-7" fill="none" stroke="#ffcf5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-8" cy="7" r="2" fill="#fff"/><circle cx="8" cy="-7" r="2" fill="#fff"/></svg>',
   army: '<svg viewBox="-12 -12 24 24"><title>Most Knights played: +2 points</title><path d="M0-9l8 3v5c0 5-3.5 8-8 10c-4.500-2-8-5-8-10v-5z" fill="#ffcf5a" stroke="#111" stroke-width="1.2"/><path d="M0-9l8 3v5c0 5-3.500 8-8 10z" fill="rgba(0,0,0,.25)"/><path d="M0-5v10M-4-1h8" stroke="#111" stroke-width="2" stroke-linecap="round"/></svg>',
   // a track's castle (Forts and Knights): a little tower in the track's colour, with a padlock once it's permanent
-  castle: (k, perm) => '<svg viewBox="-12 -12 24 24"><title>' + TRACKS[k].n + ' castle: +' + CASTLEPTS + ' points' + (perm ? ' (permanent)' : ' (can be taken at level 5)') + '</title>' +
+  castle: (k, perm) => '<svg viewBox="-12 -12 24 24"><title>' + TRACKBLD[k] + ' (' + TRACKS[k].n + '): +' + CASTLEPTS + ' points' + (perm ? ' (permanent)' : ' (can be taken at level 5)') + '</title>' +
     '<path d="M-7 10V-4h3v-3h3v3h2v-3h3v3h3v14z" fill="' + TRACKS[k].c + '" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/><path d="M-2 10V4a2 2 0 0 1 4 0v6z" fill="rgba(0,0,0,.55)"/><path d="M-1-7v-4l5 1.6-5 1.6" fill="#fff" stroke="#111" stroke-width=".6"/>' +
     (perm ? '<rect x="3.5" y="2" width="6" height="5" rx="1" fill="#ffd95e" stroke="#111" stroke-width=".8"/><path d="M4.8 2v-1.6a1.7 1.7 0 0 1 3.4 0V2" fill="none" stroke="#111" stroke-width=".9"/>' : '') + '</svg>',
   // a track's banner (older saves only): first to level 5 in Science / Trade / Politics

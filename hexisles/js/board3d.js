@@ -11,25 +11,68 @@ const TOP = 9;                        // height of a land tile's top (sea level 
 function want3D() { try { return localStorage.getItem(VIEWKEY) !== '2d'; } catch (e) { return true; } }
 function set3D(on) {
   try { localStorage.setItem(VIEWKEY, on ? '3d' : '2d'); } catch (e) {}
-  if (on && !D3.ready) { if (!D3.failed) load3D(); return; }
+  // (true: the player asked for 3D, so skip the slow-graphics check. 2026-11-20: it also tries again after a failed
+  // start, and says why when it still can't, instead of the button doing nothing.)
+  if (on && !D3.ready) { load3D(true).then(() => { if (!D3.ready) note3D(); }); return; }
   show3D(on);
+}
+// A short message by the map's buttons when the 3D island can't start (2026-11-20, Rick: "the 3d button doesn't work";
+// Chrome had switched WebGL off after its graphics process crashed, so no 3D was possible until it restarted).
+function note3D() {
+  let n = $('note3d');
+  if (!n) { n = document.createElement('div'); n.id = 'note3d'; $('view').appendChild(n); }
+  n.textContent = D3.nogl ? 'Chrome has switched off 3D graphics on this computer (usually after a graphics hiccup). Close Chrome completely and open it again to get the 3D island back.'
+    : D3.lost ? 'The graphics chip reset, so the 3D island stopped. You\'re on the flat map now; press 3D to try again.'
+    : 'The 3D island could not load. It needs an internet connection; try again in a moment.';
+  n.hidden = false;
+  clearTimeout(n.t); n.t = setTimeout(() => { n.hidden = true; }, 7000);
+}
+// Can this browser make a WebGL drawing surface at all? (No when Chrome has switched WebGL off.)
+function haveGL() {
+  try {
+    const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl');
+    if (!gl) return false;
+    const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+    return true;
+  } catch (e) { return false; }
 }
 function show3D(on) {
   D3.on = !!on && !!D3.ready;
   $('view').classList.toggle('is3d', D3.on);
   const b = $('z-3d');
   b.textContent = D3.on ? '2D' : '3D';
-  b.title = D3.failed ? 'The 3D island could not load (it needs internet)' : D3.on ? 'Switch to the flat map' : 'Switch to the 3D island';
+  b.title = D3.nogl ? 'Chrome has switched off 3D graphics. Restart Chrome to get the 3D island back.' :
+    D3.failed ? 'The 3D island could not load (it needs internet)' : D3.on ? 'Switch to the flat map' :
+    D3.slow ? 'This browser is drawing without the graphics chip, so the flat map is used. Press to try the 3D island anyway.' : 'Switch to the 3D island';
   if (D3.on) { D3.resize(); if (G) D3.update(); }
   applyZoom();
 }
-async function load3D() {
-  if (D3.loading) return;
-  D3.loading = true; $('z-3d').textContent = '…';
+// Is the 3D island likely to be painfully slow here? (2026-11-20, all of Rick's Chrome froze on New game.)
+// When Chrome can't use the graphics chip (graphics acceleration off, or a driver Chrome doesn't trust), it draws
+// 3D with the processor instead, many times slower. `failIfMajorPerformanceCaveat` makes the test canvas refuse
+// in that case. Then the flat map is used at start-up; pressing the 3D button (load3D(true)) still loads it.
+function slowGraphics() {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2', {failIfMajorPerformanceCaveat: true}) || c.getContext('webgl', {failIfMajorPerformanceCaveat: true});
+    if (!gl) return true;
+    const e = gl.getExtension('WEBGL_debug_renderer_info'), name = e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : '';
+    const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+    return /swiftshader|llvmpipe|software|basic render/i.test(name);
+  } catch (e) { return false; }
+}
+async function load3D(asked) {
+  if (D3.loading || D3.ready) return;
+  D3.nogl = !haveGL();
+  if (D3.nogl) { D3.failed = true; show3D(false); return; }
+  if (!asked && slowGraphics()) { D3.slow = true; show3D(false); return; }
+  D3.loading = true; D3.failed = false; $('z-3d').textContent = '…';
   try {
     const m = await Promise.all(['three', 'three/addons/objects/Water.js',
       'three/addons/controls/OrbitControls.js', 'three/addons/utils/BufferGeometryUtils.js'].map(u => import(u)));
+    const t0 = performance.now();
     init3D(m[0], m[1].Water, m[2].OrbitControls, m[3]);
+    D3.initMs = Math.round(performance.now() - t0);      // (for testing: how long setting up the 3D island blocked the page)
     D3.ready = true;
   } catch (e) { console.warn('The 3D board could not start:', e); D3.failed = true; }
   D3.loading = false;
@@ -39,12 +82,33 @@ async function load3D() {
 function init3D(T, Water, Orbit, BU) {
   const view = $('view');
   const R = new T.WebGLRenderer({antialias: true});
-  R.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  // (2026-11-20, Rick's laptop froze: sharpness is capped at 1.5x and lowered by frame() if the graphics chip can't keep up)
+  let PR = Math.min(devicePixelRatio || 1, 1.5);
+  // ...and the canvas never draws more than MAXPX pixels (2026-11-20: Rick's big, sharp screen made a ~4 million
+  // pixel canvas, 2.5x the test browser's, and all of Chrome froze on New game). usePR() applies both limits.
+  const MAXPX = 3e6;      // (gentle: Rick's maximised window keeps ~1.45x of its 1.5x; the freeze turned out to be mostly the processor)
+  // Don't stop to read each shader's error report: on Rick's laptop that waited ~0.5 s for the programs to finish
+  // preparing, freezing the page when a game started (2026-11-20). Only useful while writing shaders.
+  R.debug.checkShaderErrors = false;
+  const usePR = () => { const w = view.clientWidth || 1, h = view.clientHeight || 1; R.setPixelRatio(Math.min(PR, Math.sqrt(MAXPX / (w * h)))); };
+  usePR();
   R.outputColorSpace = T.SRGBColorSpace;
   R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = .95;
   R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap;
   R.shadowMap.autoUpdate = false;      // shadows are only redrawn when something moves (see SHADOW)
   const cv = R.domElement; cv.id = 'board3d'; view.insertBefore(cv, $('roll'));
+  // If the graphics chip resets (2026-11-20, Rick's laptop: "D3D11 device was removed", the map went blank), this 3D
+  // island is lost for good. Then: drop it, go back to the flat map and say why; pressing 3D builds a fresh one if
+  // Chrome still allows 3D.
+  let DEAD = false;
+  cv.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    if (DEAD) return;
+    DEAD = true; D3.ready = false; D3.lost = true; HOLD = false;
+    cv.remove();
+    D3.nogl = !haveGL();
+    show3D(false); note3D();
+  });
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(36, 1, 5, 40000);
   const TIME = {value: 0};             // seconds, shared with the swaying-plants shader
   const ANISO = R.capabilities.getMaxAnisotropy();
@@ -82,11 +146,15 @@ function init3D(T, Water, Orbit, BU) {
   // ----- painted textures (no image files: made from smooth random noise) -----
   const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
   function noise(P, seed) {      // smooth noise that wraps round every P cells, so the textures tile without seams
+    // (2026-11-20: each cell's random value is worked out once into a grid, not 4 times per pixel; painting the
+    // textures took 1.2 s on Rick's laptop and froze the page. Same values, same pictures.)
+    const g = new Float64Array(P * P);
+    for (let q = 0; q < P; q++) for (let p = 0; p < P; p++) g[q * P + p] = hash(p + seed, q - seed * 1.7);
     return (x, y) => {
       x *= P; y *= P;
       const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
-      const at = (p, q) => hash(((p % P) + P) % P + seed, ((q % P) + P) % P - seed * 1.7);
-      return at(i, j) * (1 - a) * (1 - b) + at(i + 1, j) * a * (1 - b) + at(i, j + 1) * (1 - a) * b + at(i + 1, j + 1) * a * b;
+      const i0 = ((i % P) + P) % P, i1 = (i0 + 1) % P, j0 = (((j % P) + P) % P) * P, j1 = ((((j + 1) % P) + P) % P) * P;
+      return g[j0 + i0] * (1 - a) * (1 - b) + g[j0 + i1] * a * (1 - b) + g[j1 + i0] * (1 - a) * b + g[j1 + i1] * a * b;
     };
   }
   function fbm(P, seed) { const L = [0, 1, 2, 3].map(k => noise(P << k, seed + k * 17)); return (x, y) => (L[0](x, y) * 8 + L[1](x, y) * 4 + L[2](x, y) * 2 + L[3](x, y)) / 15; }
@@ -393,7 +461,7 @@ function init3D(T, Water, Orbit, BU) {
   function fit(reset) {
     const w = view.clientWidth, h = view.clientHeight;
     if (!w || !h) return;
-    R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
+    usePR(); R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
     const v = T.MathUtils.degToRad(cam.fov / 2), hz = Math.atan(Math.tan(v) * cam.aspect);
     const dist = (ISLE + 40) / Math.sin(Math.min(v * 1.25, hz)) * (cam.aspect < 1.2 ? 1.08 : WIDE.matches ? 1.12 : .95);
     C.minDistance = dist * .28; C.maxDistance = dist * 1.8;
@@ -431,12 +499,13 @@ function init3D(T, Water, Orbit, BU) {
     if (t === 'wood') {                                         // a forest: pines and round leafy trees
       // (Rick's request, 2026-11-19: trees don't poke into each other. Each tree's widest part (pine: bottom tier,
       // leafy: crown) is a circle of radius `w`; a spot is only used if it's clear of every tree already planted.)
+      // (denser, Rick 2026-11-20: up to 34 trees (was 22), a little smaller on average, packed closer, still not touching)
       const trees = [];
-      for (let n = 0; n < 400 && trees.length < 22; n++) {
+      for (let n = 0; n < 1200 && trees.length < 34; n++) {
         const x = (r() - .5) * 84, z = (r() - .5) * 84;
-        if (!inHex(x, z, 38) || Math.hypot(x, z) < 24) continue;
-        const s = .8 + r() * .35, pine = r() < .35, w = (pine ? 5 : 6.3) * s;
-        if (trees.some(q => Math.hypot(q.x - x, q.z - z) < q.w + w + .4)) continue;
+        if (!inHex(x, z, 39) || Math.hypot(x, z) < 23) continue;
+        const s = .7 + r() * .35, pine = r() < .4, w = (pine ? 5 : 6.3) * s;
+        if (trees.some(q => Math.hypot(q.x - x, q.z - z) < q.w + w + .1)) continue;
         trees.push({x, z, w});
         const k = .7 + r() * .45;
         if (pine) {
@@ -450,14 +519,28 @@ function init3D(T, Water, Orbit, BU) {
       }
     }
     if (t === 'stone') {                                        // grey peaks behind the number, boulders in front, a stone mine at one side
+      const rock0 = L.rock.length, crys0 = L.crystal.length, snow0 = L.snow.length;    // (for the number-disc check at the end)
       const m = r() < .5 ? -1 : 1;                              // which front side the mine is on
-      [[0, -27, 1.25], [-24, -14, 1], [24, -14, 1.05], [-28, 12, .7], [28, 12, .75], [-12, 31, .5], [13, 31, .45]].forEach(([x, z, s]) => {
-        if ((z === 12 || z === 31) && Math.sign(x) === m) return;      // (the mine's hill takes this peak's place, and its track needs the front clear)
-        if (z === 12) return;      // (the quarry takes the other side's middle peak's place)
-        x += (r() - .5) * 4; z += (r() - .5) * 4;
-        L.rock.push({x: X(x), y: TOP + 2, z: Z(z), sx: 11 * s, sy: 20 * s, sz: 11 * s, ry: r() * 6, c: '#8f8a84', k: .8 + r() * .3});
-        if (s > .9) L.snow.push({x: X(x), y: TOP + 2 + 17.5 * s, z: Z(z), sx: 4.3 * s, sy: 3.5 * s, ry: r() * 6, c: '#f2f4f8'});
-      });
+      // a mountain range (Rick, 2026-11-20: "more of a continuous mountain range"; were 5 separate peaks): a chain of
+      // overlapping peaks curving round the back of the tile, from the mine's hill on one side to the quarry's on the
+      // other, tallest in the middle and lower towards the ends, with low ridges filling the dips between peaks and a
+      // second, lower row behind. Snow on the tall ones.
+      const RANGE = 11;
+      for (let q = 0; q < RANGE; q++) {
+        // (the ends stop short of the quarry's crane and the mine's shaft, and are narrower)
+        const f = q / (RANGE - 1), a = Math.PI * (1.08 + .84 * f), R = 29 + (r() - .5) * 2.5;
+        const x = Math.cos(a) * R, z = Math.sin(a) * R, hgt = (.55 + .45 * Math.sin(f * Math.PI)) * (q % 2 ? .78 : 1) * (.9 + r() * .2);
+        const w = 6 + 3 * Math.sin(f * Math.PI) + r() * 1.2, sy = 27 * hgt;
+        L.rock.push({x: X(x), y: TOP + 1, z: Z(z), sx: w, sy, sz: w * .9, ry: r() * 6, c: '#8f8a84', k: .78 + r() * .3});
+        if (sy > 19) L.snow.push({x: X(x), y: TOP + 1 + sy * .87, z: Z(z), sx: w * .42, sy: sy * .17, ry: r() * 6, c: '#f2f4f8'});
+        if (q < RANGE - 1) {      // a low ridge in the dip before the next peak
+          const b = a + Math.PI * .84 / (RANGE - 1) / 2;
+          L.rock.push({x: X(Math.cos(b) * 31), y: TOP, z: Z(Math.sin(b) * 31), sx: 6.5, sy: 9 + r() * 4, sz: 6, ry: r() * 6, c: '#86817b', k: .85});
+        }
+        if (q % 2 === 0 && f > .1 && f < .9) {      // the lower row behind, along the back edge
+          L.rock.push({x: X(Math.cos(a) * 37), y: TOP, z: Z(Math.sin(a) * 37), sx: 6, sy: 11 + r() * 4, sz: 5.5, ry: r() * 6, c: '#7f7a74', k: .85});
+        }
+      }
       // (boulders keep clear of the mine)
       // the quarry (2026-11-19, Rick's request), on the other front side from the mine: a hill with stepped ledges cut
       // into it in pale fresh stone, a crystal vein showing on the top ledge, a stack of cut blocks and a wooden crane
@@ -512,6 +595,21 @@ function init3D(T, Water, Orbit, BU) {
       L.rock.push({x: X(hx), y: TOP, z: Z(hz), sx: 3.6, sy: 2.6, ry: 1, c: '#8d9096'}, {x: X(hx - m * 2.4), y: TOP, z: Z(hz + 2.4), sx: 2.2, sy: 1.8, ry: 2, c: '#a2a5ab'});
       L.post.push({x: X(hx - m * 3), y: TOP, z: Z(hz + 1), sx: .5, sy: 7.5, rz: -m * .4, c: '#8a6236'});
       L.blade.push({x: X(hx - m * 3 + m * 7.5 * Math.sin(.4)), y: TOP + 7.5 * Math.cos(.4), z: Z(hz + 1), sx: 4.6, sy: .7, sz: .7, rz: -m * .4, c: '#8d9298'});
+      // Keep clear of the number disc (Rick, 2026-11-20: peaks and crystals poked into it). The disc's radius is 15.2;
+      // nothing may come within DISCCLEAR of the middle. A rock's lumpy shape reaches ~1.3x its size, so rocks too
+      // close are made narrower (same height), and crystal clusters are moved outwards.
+      const DISCCLEAR = 17;
+      L.rock.slice(rock0).forEach(p => {
+        const d = Math.hypot(p.x - h.x, p.z - h.y), w = Math.max(p.sx, p.sz == null ? p.sx : p.sz) * 1.3;
+        if (d - w >= DISCCLEAR) return;
+        const k = Math.max(.3, (d - DISCCLEAR) / w);
+        p.sx *= k; if (p.sz != null) p.sz *= k;
+        L.snow.slice(snow0).forEach(q => { if (q.x === p.x && q.z === p.z) { q.sx *= Math.sqrt(k); q.sz = q.sx; } });      // (its snow cap too)
+      });
+      L.crystal.slice(crys0).forEach(p => {
+        const dx = p.x - h.x, dz = p.z - h.y, d = Math.hypot(dx, dz) || 1, need = DISCCLEAR + 1.5;
+        if (d < need) { p.x = h.x + dx / d * need; p.z = h.y + dz / d * need; }
+      });
     }
     if (t === 'grain') for (let z = -44; z <= 44; z += 2.3) for (let x = -44; x <= 44; x += 2.3) {     // wheat, stalk by stalk
       const a = x + (r() - .5) * 1.6, b = z + (r() - .5) * 1.6;
@@ -627,7 +725,10 @@ function init3D(T, Water, Orbit, BU) {
     L.barrel.push({x: X(-15), y: TOP, z: Z(-7), sx: 2.2, sy: 4.5, c: '#7a5230'}, {x: X(-12.4), y: TOP, z: Z(-4.6), sx: 2, sy: 4, c: '#6b4728'});
   }
   function build() {
-    junk.forEach(o => o.dispose()); junk = []; stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CRATER = null;
+    // (2026-11-20: the last game's materials are thrown away a few seconds later, not now, so the new game's
+    // identical materials reuse the graphics programs already prepared instead of making them again)
+    const old = junk; junk = []; setTimeout(() => old.forEach(o => o.dispose()), 3000);
+    stat.clear(); TILES3 = []; DISCS = []; SMOKE = []; CRATER = null;
     const L = {trunk: [], pine: [], crown: [], rock: [], snow: [], stalk: [], tuft: [], reed: [], post: [], rail: [], fleece: [], sheepd: [], brick: [], puddle: [], plank: [], pile: [],
       kiln: [], mouth: [], hole: [], rim: [], blade: [], cut: [], crystal: [], smoke: [], cave: [], fire: [], tent: [], gold: [], heap: [], coin: [], barrel: [], lamp: [], wheel: []};
     HEX.forEach((h, i) => {      // (everything made for a tile remembers which tile it is, for the intro)
@@ -817,7 +918,9 @@ function init3D(T, Water, Orbit, BU) {
   function introEnd() {
     const I = INTRO; INTRO = null;
     if (!I) return;
-    I.insts.forEach(m => { m.instanceMatrix.array.set(m.userData.base); m.instanceMatrix.needsUpdate = true; delete m.userData.base; });
+    // (computeBoundingSphere: three.js measured each group while it was shrunk to nothing, so zooming in made whole
+    // groups of scenery vanish as "off screen"; Rick saw details disappear, 2026-11-20. Measure again at full size.)
+    I.insts.forEach(m => { m.instanceMatrix.array.set(m.userData.base); m.instanceMatrix.needsUpdate = true; delete m.userData.base; m.computeBoundingSphere(); });
     stat.children.forEach(o => { const u = o.userData; if (u.y0 != null && !o.isInstancedMesh) { o.position.y = u.y0; o.scale.copy(u.s0); o.visible = true; delete u.y0; } });
     SMOKE.forEach(p => { p.visible = true; });
     dyn.visible = true; SHADOW = true;
@@ -832,11 +935,103 @@ function init3D(T, Water, Orbit, BU) {
   const WINMAT = std({color: 0x2a2219, roughness: .4, emissive: 0xffb44a, emissiveIntensity: 0});
   const WINGEO = box(1.7, 1.7, .35), SLIT = box(1.2, 2.6, .35);
   let NIGHTGLOW = null;
+  // ----- the track buildings (Rick, 2026-11-20): a castle claimed at level 4 is no longer a two-tower fort but a building of
+  // its own: Science → a grand library, Trade → a busy market, Politics → a mighty castle. Walls in the player's colour,
+  // roofs in the track's colour; once it's permanent (its owner at level 5) it grows grander and gets gold trim. -----
+  const TB = (() => {
+    const tri = (w, h, d) => new T.ExtrudeGeometry(new T.Shape([new T.Vector2(-w / 2, 0), new T.Vector2(w / 2, 0), new T.Vector2(0, h)]), {depth: d, bevelEnabled: false}).translate(0, 0, -d / 2);
+    return {
+      podium: box(20, 1.6, 16), steps: box(12, .8, 2.2), hall: box(15, 9, 8.5), col: cyl(.72, .82, 8.4, 12), colCap: box(2, .5, 2),
+      beam: box(18, 1.3, 4.2), pedi: tri(18, 3.6, 3.6), hallRoof: tri(16.5, 3.2, 9), drum: cyl(4.4, 4.4, 2.2, 20), dome: new T.SphereGeometry(4.6, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      finial: new T.ConeGeometry(.55, 2.6, 8), orb: new T.SphereGeometry(.7, 12, 8), wing: box(5, 6, 6), wingDome: new T.SphereGeometry(2.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      scope: cyl(.45, .7, 5, 10, 0), door: box(2.6, 4.6, .4), win: box(1.4, 3, .35),
+      plaza: cyl(11.6, 12.2, .7, 6), market: box(10, 6, 7), mRoof: tri(11.6, 4.2, 8.2), counter: box(4.4, 1.7, 1.9), post: cyl(.18, .18, 4.4, 6, 0), awning: box(5.2, .25, 3.2),
+      good: new T.SphereGeometry(.55, 8, 6), sack: new T.SphereGeometry(.9, 10, 8), cratel: box(1.6, 1.6, 1.6),
+      body: cyl(.55, .75, 2.2, 8, 0), head: new T.SphereGeometry(.55, 10, 8), belfry: box(3.4, 13, 3.4), belfryRoof: new T.ConeGeometry(3, 4, 4).rotateY(Math.PI / 4), bell: cyl(.5, 1.1, 1.4, 12, 0),
+      curtain: box(15, 6.5, 1.8), ctower: cyl(2.5, 2.8, 12, 14), cone: new T.ConeGeometry(3.2, 5.5, 14), keep: box(8, 18, 8), kcren: box(1.8, 1.8, 1.8), wmer: box(1.5, 1.3, 1.9),
+      gate: box(3.6, 5.2, .5), portc: box(3, 4.4, .2), crown: new T.ConeGeometry(.6, 2.2, 6), ring: new T.TorusGeometry(2.6, .45, 8, 24).rotateX(Math.PI / 2), banner: box(2.6, 4.2, .2)
+    };
+  })();
+  const MARBLE = std({color: 0xf2ede2, roughness: .55}), WOOD = std({color: 0x8a5a32, roughness: .85}), PAVE = std({color: 0xcfc4ad, roughness: .95}), SACK = std({color: 0xcdb48a, roughness: 1});
+  const GOODMAT = ['#c0392b', '#f39c12', '#7fb03a', '#8e5bc8', '#e8d36a'].map(c => std({color: c, roughness: .6}));
+  const FOLKMAT = ['#c0392b', '#2e86c1', '#27ae60', '#8e44ad', '#d68910', '#566573'].map(c => std({color: c, roughness: .8}));
+  const FOLK = [];      // market shoppers, rebuilt in dynamic(), walked about in frame()
+  function trackBuilding(g, b, k, v) {
+    const y0 = TOP + 1, wall = pm3(b.p, 'wall'), roof = TRACKMAT[k] = TRACKMAT[k] || std({color: TRACKS[k].c, roughness: .45, metalness: .2});
+    const perm = b.perm != null ? b.perm : !!(G.castle && G.castle[k] && G.castle[k].perm), trim = perm ? M3.gold : MARBLE;
+    const add = (geo, mat, x, y, z, ry) => { const m = part(g, geo, mat, x, y, z); if (ry) m.rotation.y = ry; return m; };
+    if (k === 'sci') {      // a grand library: a marble podium, a hall with a columned porch, a pediment and a dome
+      add(TB.podium, MARBLE, 0, y0 + .8, 0); add(TB.steps, MARBLE, 0, y0 + .4, 8.6);
+      add(TB.hall, wall, 0, y0 + 6.1, -2.6);
+      for (let i = 0; i < 6; i++) { const x = -7.2 + i * 2.88; add(TB.col, MARBLE, x, y0 + 1.6, 5.6); add(TB.colCap, trim, x, y0 + 10.2, 5.6); }
+      add(TB.beam, trim, 0, y0 + 11, 4.6);
+      add(TB.pedi, roof, 0, y0 + 11.6, 4.8); add(TB.hallRoof, roof, 0, y0 + 10.6, -2.6);
+      add(TB.door, M3.door, 0, y0 + 3.9, 1.7);
+      [-1, 1].forEach(s => { add(TB.win, WINMAT, s * 4.5, y0 + 5.8, 1.68); add(TB.win, WINMAT, s * 7.55, y0 + 5.8, -2.6, Math.PI / 2); });
+      const dy = y0 + 13.4, big = perm ? 1.22 : 1;
+      add(TB.drum, wall, 0, dy, -2.6).scale.set(big, 1, big);
+      add(TB.dome, perm ? M3.gold : roof, 0, dy + 2.2, -2.6).scale.setScalar(big);
+      add(TB.finial, M3.gold, 0, dy + 2.2 + 4.6 * big + 1.2, -2.6); add(TB.orb, M3.gold, 0, dy + 2.2 + 4.6 * big + 2.6, -2.6);
+      if (perm) {      // level 5: two domed reading wings and a brass telescope on the roof
+        [-1, 1].forEach(s => { add(TB.wing, wall, s * 9.6, y0 + 4.6, -3); add(TB.wingDome, roof, s * 9.6, y0 + 7.6, -3); add(TB.win, WINMAT, s * 9.6, y0 + 4.8, .05); });
+        const sc = add(TB.scope, M3.gold, 5.2, y0 + 12.2, -5.5); sc.rotation.z = -.7; sc.rotation.x = -.3;
+      }
+    } else if (k === 'trd') {      // a busy market: a paved square, a market hall, stalls with striped awnings, goods, barrels, shoppers
+      add(TB.plaza, PAVE, 0, y0, 0);
+      add(TB.market, wall, 0, y0 + 4.9, -4).scale.y = 1.4; add(TB.mRoof, roof, 0, y0 + 9.1, -4).scale.y = 1.25;
+      add(TB.door, M3.door, 0, y0 + 3, -.45); [-1, 1].forEach(s => add(TB.win, WINMAT, s * 3.2, y0 + 5.4, -.45));
+      const stalls = perm ? [[-7.2, 3.2, .5], [0, 6.6, 0], [7.2, 3.2, -.5], [-8.6, -4.6, 1.4], [8.6, -4.6, -1.4]] : [[-6.6, 3.6, .45], [0, 6.8, 0], [6.6, 3.6, -.45]];
+      stalls.forEach(([x, z, ry], i) => {
+        const s = new T.Group(); s.position.set(x, y0 + .7, z); s.rotation.y = ry; g.add(s);
+        part(s, TB.counter, WOOD, 0, .85, 0);
+        [-2, 2].forEach(px => part(s, TB.post, WOOD, px, 2.2, -.8));
+        const aw = part(s, TB.awning, i % 2 ? pm3(b.p, 'flag') : roof, 0, 4.5, -.1); aw.rotation.x = .28;
+        for (let q = 0; q < 4; q++) part(s, TB.good, GOODMAT[(i + q) % GOODMAT.length], -1.5 + q, 1.95, .1);
+      });
+      [[-4.2, -8.6], [4.6, -8.4], [-9.6, 0]].forEach(([x, z], i) => { const c = add(i === 2 ? TB.cratel : G3.barrel, WOOD, x, y0 + .7 + (i === 2 ? .8 : 0), z); if (i < 2) c.scale.set(1.2, 2, 1.2); });
+      add(TB.sack, SACK, 9.4, y0 + 1, .6).scale.set(1, 1.2, 1); add(TB.sack, SACK, 10, y0 + .9, 2.2);
+      if (perm) {      // level 5: a bell tower with a gold bell and a flag
+        add(TB.belfry, wall, -6.2, y0 + 6.5, -7.2); add(TB.belfryRoof, roof, -6.2, y0 + 15, -7.2); add(TB.bell, M3.gold, -6.2, y0 + 10.2, -5.45);
+        add(G3.mast, M3.pole, -6.2, y0 + 19.5, -7.2); add(G3.flag, pm3(b.p, 'flag'), -3.2, y0 + 22.4, -7.2);      // (the mast is centred on its y)
+      }
+      // shoppers wander between the stalls (walked about in frame(), FOLK)
+      const n = perm ? 6 : 4;
+      for (let i = 0; i < n; i++) {
+        const f = new T.Group(); f.scale.setScalar(1.7); g.add(f);
+        part(f, TB.body, FOLKMAT[(i + (+v || 0)) % FOLKMAT.length], 0, 1.1, 0); part(f, TB.head, M3.skin, 0, 2.75, 0);
+        f.userData = {a: i / n * Math.PI * 2, r: 2.6 + (i % 2) * 1.6, sp: (i % 2 ? .35 : -.28), y: y0 + .7, ph: i * 1.7};
+        FOLK.push(f);
+      }
+    } else {      // a mighty castle: curtain walls with battlements, four round towers with tall roofs, a great keep and a gate
+      const h = perm ? 24 : 18;
+      [[0, 7.6, 0], [0, -7.6, 0], [7.6, 0, Math.PI / 2], [-7.6, 0, Math.PI / 2]].forEach(([x, z, ry]) => {
+        add(TB.curtain, wall, x, y0 + 3.25, z, ry);
+        for (let q = -3; q <= 3; q++) { const m = add(TB.wmer, pm3(b.p, 'roof'), x + (ry ? 0 : q * 2.1), y0 + 7.1, z + (ry ? q * 2.1 : 0)); if (ry) m.rotation.y = ry; }
+      });
+      [[-7.6, -7.6], [7.6, -7.6], [-7.6, 7.6], [7.6, 7.6]].forEach(([x, z]) => {
+        add(TB.ctower, wall, x, y0, z); add(TB.cone, roof, x, y0 + 14.7, z);      // (cyl() pieces stand on their y)
+        add(TB.win, WINMAT, x + (x > 0 ? .9 : -.9), y0 + 8, z + 2.5).scale.set(.6, .8, 1);
+        if (perm) { add(G3.mast, M3.pole, x, y0 + 17, z).scale.y = .6; add(TB.banner, pm3(b.p, 'flag'), x + 1.4, y0 + 18.2, z); }
+      });
+      add(TB.keep, wall, 0, y0 + h / 2, -1).scale.y = h / 18;
+      [-3, 0, 3].forEach(x => [-3, 0, 3].forEach(z => { if (x || z) add(TB.kcren, pm3(b.p, 'roof'), x, y0 + h + .9, z - 1); }));
+      [-1, 1].forEach(s => { add(TB.win, WINMAT, s * 2, y0 + h * .62, 3.05); add(TB.win, WINMAT, s * 4.05, y0 + h * .62, -1, Math.PI / 2); });
+      add(TB.gate, M3.door, 0, y0 + 2.6, 8.55); add(TB.portc, M3.steel, 0, y0 + 2.9, 8.85);
+      add(G3.mast, M3.pole, 0, y0 + h + 1.8, -1).scale.y = 1.3;
+      add(G3.flag, pm3(b.p, 'flag'), 3, y0 + h + 6, -1);
+      if (perm) {      // level 5: a gold crown round the top of the keep
+        add(TB.ring, M3.gold, 0, y0 + h + 2.2, -1).scale.set(1.5, 1, 1.5);
+        for (let q = 0; q < 8; q++) { const a = q / 8 * Math.PI * 2; add(TB.crown, M3.gold, Math.cos(a) * 3.9, y0 + h + 3.6, -1 + Math.sin(a) * 3.9); }
+      }
+    }
+    const l = new T.Sprite(NIGHTGLOW); l.position.set(0, y0 + 4, 11); l.scale.set(18, 18, 1); g.add(noRef(l));
+  }
   function building(v, b) {
     const g = new T.Group(), fort = b.l === 2, P = g.userData.parts = {cren: []};
     NIGHTGLOW = NIGHTGLOW || new T.SpriteMaterial({map: glowTex, transparent: true, opacity: 0, depthWrite: false});
     P.found = part(g, fort ? G3.found2 : G3.found, M3.stone, 0, 0, 0);
-    if (!fort) {           // a house with a pitched roof, a door and a chimney
+    if (fort && b.c && TRACKS[b.c]) trackBuilding(g, b, b.c, v);      // a track building (library, market, castle)
+    else if (!fort) {           // a house with a pitched roof, a door and a chimney
       part(g, G3.house, pm3(b.p, 'wall'), 0, TOP + 4.5, 0);
       part(g, G3.roof, pm3(b.p, 'roof'), 0, TOP + 8, 0);
       part(g, G3.door, M3.door, -1.6, TOP + 3, 4.55);
@@ -1231,8 +1426,27 @@ function init3D(T, Water, Orbit, BU) {
     obj.userData.y0 = obj.position.y;
     if (Date.now() - (FELL[key] || 0) < DROPMS) DROPS.push({obj, key});
   }
+  // A track building taken from someone (Rick, 2026-11-20; TAKE in draw2d.js): the old one shakes, then sinks into the
+  // ground (squashing down) back to a plain fort; the new owner's plain fort is swapped for the new building growing up.
+  let TK = {};
+  function takeStep(now) {
+    if (!taking()) { if (TK.gNew) { TK.gNew.scale.set(1, 1, 1); TK.gNew.visible = true; } if (TK.gOld) TK.gOld.visible = false; if (TK.gFort) TK.gFort.visible = false; TK = {}; return; }
+    const k = (now - TAKE.t) / TAKEMS;
+    SHADOW = true;
+    if (TK.gOld) {
+      const o = TK.gOld;
+      if (k < .12) { o.rotation.z = Math.sin(k * 260) * .05; o.position.y = 0; o.scale.set(1, 1, 1); o.visible = true; }
+      else { const s = Math.min(1, (k - .12) / .28), e = s * s; o.rotation.z = 0; o.position.y = -e * 14; o.scale.set(1 + e * .1, Math.max(.02, 1 - e), 1 + e * .1); o.visible = s < 1; }
+    }
+    if (TK.gNew) {
+      const s = (k - .62) / .23;
+      TK.gNew.visible = s > 0;
+      TK.gNew.scale.set(1, s <= 0 ? .001 : s >= 1 ? 1 : Math.max(.001, backOut(s)), 1);
+      if (TK.gFort) TK.gFort.visible = k < .66;
+    }
+  }
   function dynamic() {
-    dynJunk.forEach(o => o.dispose()); dynJunk = []; DROPS = [];
+    dynJunk.forEach(o => o.dispose()); dynJunk = []; DROPS = []; TK = {};
     dyn.clear(); hits.clear();
     TILES3.forEach((o, i) => o.top.color.setScalar(scorched(i) ? .35 : G.deck && i === G.storm ? .5 : 1));
     for (const e in G.r) {
@@ -1249,7 +1463,7 @@ function init3D(T, Water, Orbit, BU) {
       dyn.add(m); dropIn('r' + e, m);
     });
     ghostOff();      // (the board changed: the preview is rebuilt on the next pointer move)
-    DSMOKE.length = 0; DFLAGS.length = 0; UPGS.length = 0;
+    DSMOKE.length = 0; DFLAGS.length = 0; UPGS.length = 0; FOLK.length = 0;
     if (PREVID !== G.id) { PREVID = G.id; PREVL = {}; for (const k in UPG) delete UPG[k]; }
     const now = Date.now(), held = raidHeld();
     if (RAID) { RAID.forts = {}; RAID.kn = {}; }
@@ -1269,6 +1483,14 @@ function init3D(T, Water, Orbit, BU) {
         for (let k = 0; k < 7; k++) { const s = part(g, G3.cube, M3.stone, 0, 0, 0); s.scale.setScalar(2.4); stones.push(s); }
         UPGS.push({g, old, stones, t0: UPG[v]});
         upgPose(UPGS[UPGS.length - 1], now);
+      } else if (taking() && (+v === TAKE.to || +v === TAKE.from)) {      // a track building changing hands (takeStep)
+        if (+v === TAKE.to) {
+          TK.gNew = g;
+          TK.gFort = building(v, {p: b.p, l: 2}); TK.gFort.rotation.y = g.rotation.y; dyn.add(TK.gFort);      // its plain fort, until the new building rises
+        } else {
+          TK.gOld = building(v, {p: TAKE.fp, l: 2, c: TAKE.k, perm: false}); dyn.add(TK.gOld);      // the old owner's building, over the fort left behind
+        }
+        takeStep(now);
       } else { delete UPG[v]; dropIn('b' + v, g); }
       if (b.l === 1) {      // a town's chimney smokes: 3 puffs taking turns (the chimney sits at 2.6, -2 in the turned house)
         const r = g.rotation.y, cx = VERT[v].x + 2.6 * Math.cos(r) - 2 * Math.sin(r), cz = VERT[v].y - 2.6 * Math.sin(r) - 2 * Math.cos(r);
@@ -1443,8 +1665,20 @@ function init3D(T, Water, Orbit, BU) {
   }
   // a guard on a road: stone base, body in the player's colour, helmet and shield; a trained one also has a spear and a red plume
   const GG = {base: cyl(3.6, 3.9, 1.2, 12), body: cyl(2.2, 2.9, 6.5, 10), head: sph(0, 0, 0, 1.9), helm: new T.SphereGeometry(2.15, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-    shield: box(3.8, 4.8, .9), spear: cyl(.28, .28, 16, 6), tip: new T.ConeGeometry(.7, 2.4, 6).translate(0, 1.2, 0), plume: box(.7, 1.8, 3.2),
-    duty: new T.TorusGeometry(4.3, .45, 6, 28).rotateX(Math.PI / 2)};
+    shield: box(3.8, 4.8, .9), plume: box(.7, 1.8, 3.2), duty: new T.TorusGeometry(4.3, .45, 6, 28).rotateX(Math.PI / 2),
+    // armour (Rick, 2026-11-20: "a more armored look, while still maintaining player colors"): steel body, shoulder
+    // plates, gauntlets and a helmet with a nose guard and rim; the surcoat (front and back), plume and shield carry the colour
+    tabard: box(3.1, 5.4, .3), pauldron: new T.SphereGeometry(1.35, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), nasal: box(.38, 1.5, .32),
+    rim: new T.TorusGeometry(2.15, .2, 6, 24).rotateX(Math.PI / 2), crest: new T.ConeGeometry(.75, 3, 8).rotateX(-.5), emblem: box(.85, .85, .22).rotateZ(Math.PI / 4),
+    belt: new T.TorusGeometry(2.72, .26, 6, 24).rotateX(Math.PI / 2)};
+  // A foot knight's sword (Rick, 2026-11-20: a sword instead of the spear), along +y with 0 = the middle of the grip:
+  // a gold pommel, a leather grip, a gold crossguard and a steel blade narrowing to a point
+  const SWORD = (() => {
+    const s = new T.Shape(); s.moveTo(-.48, 0); s.lineTo(.48, 0); s.lineTo(.4, 6.4); s.lineTo(0, 7.6); s.lineTo(-.4, 6.4); s.closePath();
+    return {pommel: new T.SphereGeometry(.42, 10, 8).translate(0, -1.35, 0), grip: cyl(.24, .28, 2.2, 8, 0), guard: box(2.6, .38, .55).translate(0, 1.2, 0),
+      blade: new T.ExtrudeGeometry(s, {depth: .16, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 1}).translate(0, 1.35, -.08),
+      fuller: box(.14, 5.6, .3).translate(0, 4.4, 0)};      // (the groove down the middle of the blade)
+  })();
   const RESTING = std({color: 0x7d7a74, roughness: .9});      // a resting guard's grey body
   // Mounted knights (Rick, 2026-11-19): strength 2 rides a brown horse with a lance; strength 3 (mighty) wears gold armour on a
   // white horse and glows (a soft golden halo sprite, pulsing in frame()). The horse faces along +x; guard3D turns it along the road.
@@ -1547,15 +1781,23 @@ function init3D(T, Water, Orbit, BU) {
     if (gold) {      // the mighty knight's horse wears gold armour (Rick, 2026-11-19)
       part(H, HB.bard.peytral, GOLDARM, 0, 0, 0); part(H, HB.bard.crupper, GOLDARM, 0, 0, 0);
       part(NK, HB.bard.rings, GOLDARM, 0, 0, 0); part(NK, HB.bard.chanfron, GOLDARM, 0, 0, 0);
+    } else {      // (2026-11-20, Rick: more armour) a steel chest plate and face plate, and a rump cloth in the player's colour
+      part(H, HB.bard.peytral, M3.steel, 0, 0, 0); part(H, HB.bard.crupper, cloth, 0, 0, 0); part(NK, HB.bard.chanfron, M3.steel, 0, 0, 0);
     }
     // the rider
     part(grp, HG.cloth, cloth, -.2, 11.6, 0).scale.set(1.2, 1, 1.25);              // saddle cloth in the player's colour
     [-1, 1].forEach(s => part(grp, HG.legR, arm, .4, 10.8, s * 2.7));               // legs either side of the horse
-    part(grp, HG.torso, gold || g.a ? arm : RESTING, -.2, 11.8, 0);                 // body armour
+    part(grp, HG.torso, arm, -.2, 11.8, 0);                                          // body armour
+    // (2026-11-20) a surcoat in the player's colour over it, front and back (grey while resting), shoulder plates
+    [1, -1].forEach(s => { const t = part(grp, GG.tabard, cloth, -.2 + s * 1.5, 13.5, 0); t.rotation.set(-s * .1, Math.PI / 2, 0, 'YXZ'); t.scale.set(.7, .62, 1); });
+    part(grp, GG.emblem, M3.gold, 1.5, 14.3, 0).rotation.y = Math.PI / 2;
+    [-1, 1].forEach(s => { const p = part(grp, GG.pauldron, arm, -.2, 15.2, s * 1.65); p.scale.setScalar(.72); p.rotation.x = s * .35; });
     const hx = rest ? .9 : -.2, hy = rest ? 16.4 : 17.2;                             // (a dozing rider's head droops forward)
     part(grp, GG.head, M3.skin, hx, hy, 0).scale.setScalar(.8);
     const hm = part(grp, GG.helm, arm, hx, hy + .3, 0); hm.scale.setScalar(.8); hm.rotation.z = rest ? -.5 : 0;
-    part(grp, GG.plume, gold ? M3.feather : M3.red, hx + (rest ? .7 : 0), hy + 2.3, 0).rotation.z = rest ? -.5 : 0;
+    const rm = part(grp, GG.rim, arm, hx, hy + .3, 0); rm.scale.setScalar(.8); rm.rotation.z = rest ? -.5 : 0;
+    part(grp, GG.nasal, arm, hx + 1.6, hy + .15, 0).scale.setScalar(.8);      // nose guard (the rider faces +x)
+    part(grp, GG.plume, gold ? M3.feather : cloth, hx + (rest ? .7 : 0), hy + 2.3, 0).rotation.z = rest ? -.5 : 0;      // plume in the player's colour
     if (rest) snooze(grp, 2, 20.5, 0);
     face3(grp, hx + 1.3, hy + .1, 0, .8, rest, 'x');
     if (gold) {      // the mighty knight's grizzled beard (Rick, 2026-11-19): a scruffy grey beard, lighter whiskers and moustache
@@ -1572,9 +1814,10 @@ function init3D(T, Water, Orbit, BU) {
     part(LG, LANCE.guard, gold ? GOLDARM : M3.steel, 0, 0, 0); part(LG, LANCE.shaft, M3.steel, 0, 0, 0);      // (all metal, Rick 2026-11-19)
     part(LG, LANCE.point, gold ? GOLDARM : M3.shine, 0, 0, 0);
     // arms (Rick, 2026-11-19): the right hand holds the lance's grip, the left holds the shield
-    const sleeve = gold || g.a ? arm : RESTING, grip = LG.position;
-    limb3(grp, [-.2, 14.8, -1.7], [grip.x, grip.y, grip.z], .55, sleeve); part(grp, G3.ball, M3.skin, grip.x, grip.y, grip.z).scale.setScalar(.6);
-    limb3(grp, [-.2, 14.8, 1.7], [.3, 14.2, 2.1], .55, sleeve); part(grp, G3.ball, M3.skin, .3, 14.2, 2.1).scale.setScalar(.6);
+    // (2026-11-20: armoured arms and gauntlets on every knight)
+    const grip = LG.position;
+    limb3(grp, [-.2, 14.8, -1.7], [grip.x, grip.y, grip.z], .55, arm); part(grp, G3.ball, arm, grip.x, grip.y, grip.z).scale.setScalar(.65);
+    limb3(grp, [-.2, 14.8, 1.7], [.3, 14.2, 2.1], .55, arm); part(grp, G3.ball, arm, .3, 14.2, 2.1).scale.setScalar(.65);
     // (no pennant on the lance since 2026-11-19, Rick's request)
     if (gold && g.a) { const h = new T.Sprite(HALO); h.position.set(0, 11, 0); h.scale.set(40, 40, 1); grp.add(h); grp.add(new T.Mesh(BEAM, BEAMMAT)); }      // the golden glow
   }
@@ -1622,18 +1865,34 @@ function init3D(T, Water, Orbit, BU) {
     }
     part(grp, GG.base, M3.stone, 0, 0, 0);
     if (g.a) part(grp, GG.duty, M3.gold, 0, 1.3, 0);      // on duty: a gold ring round its feet
-    part(grp, GG.body, g.a ? pm3(g.p, 'flag') : RESTING, 0, 1.2, 0);
+    // armour (Rick, 2026-11-20): a steel body under a surcoat in the player's colour (grey while resting), a belt with a
+    // gold buckle, steel shoulder plates
+    const cloth = g.a ? pm3(g.p, 'flag') : RESTING;
+    part(grp, GG.body, M3.steel, 0, 1.2, 0);
+    part(grp, GG.tabard, cloth, 0, 4.3, 2.55).rotation.x = -.09; part(grp, GG.tabard, cloth, 0, 4.3, -2.55).rotation.x = .09;
+    part(grp, GG.emblem, M3.gold, 0, 5.6, 2.62);
+    part(grp, GG.belt, M3.hat, 0, 3.5, 0).scale.set(1, 1, 1.04);
+    [-1, 1].forEach(s => { const p = part(grp, GG.pauldron, M3.steel, s * 2.35, 6.9, 0); p.rotation.z = -s * .35; });
     // (resting: head nodding forward, towards the camera, and Z's floating up)
-    part(grp, GG.head, M3.skin, 0, g.a ? 9.6 : 9.1, g.a ? 0 : .8);
-    part(grp, GG.helm, M3.steel, 0, g.a ? 10 : 9.5, g.a ? 0 : .8).rotation.x = g.a ? 0 : .45;
+    const hz = g.a ? 0 : .8, hy = g.a ? 9.6 : 9.1;
+    part(grp, GG.head, M3.skin, 0, hy, hz);
+    part(grp, GG.helm, M3.steel, 0, hy + .4, hz).rotation.x = g.a ? 0 : .45;
+    part(grp, GG.rim, M3.steel, 0, hy + .4, hz).rotation.x = g.a ? 0 : .45;      // the helmet's rim
+    part(grp, GG.nasal, M3.steel, 0, hy + .25, hz + 1.95).rotation.x = g.a ? -.15 : .3;      // nose guard
+    part(grp, GG.crest, cloth, 0, hy + 3, hz - .5).rotation.x = g.a ? -.5 : .1;      // plume in the player's colour
     if (!g.a) snooze(grp, 1.2, 13, 0);
-    // eyes and arms (Rick, 2026-11-19: "like the bandit"): sleeves in the player's colour; the right hand holds the spear
-    face3(grp, 0, g.a ? 9.8 : 9.2, (g.a ? 0 : .8) + 1.75, 1, !g.a, 'z');
-    const sleeve = g.a ? pm3(g.p, 'flag') : RESTING, hand = g.s > 1 ? [3.2, 4.6, .6] : [3.3, 3.4, 1];
-    limb3(grp, [2.3, 7.2, 0], hand, .7, sleeve); part(grp, G3.ball, M3.skin, ...hand).scale.setScalar(.75);
-    limb3(grp, [-2.3, 7.2, 0], [-2.6, 4.5, 1.7], .7, sleeve); part(grp, G3.ball, M3.skin, -2.6, 4.5, 1.7).scale.setScalar(.75);
+    // eyes and arms (Rick, 2026-11-19: "like the bandit"); armoured arms and steel gauntlets since 2026-11-20; the right hand holds the sword
+    face3(grp, 0, hy + .2, hz + 1.75, 1, !g.a, 'z');
+    const hand = [3.3, 3.4, 1];
+    limb3(grp, [2.3, 7.2, 0], hand, .7, M3.steel); part(grp, G3.ball, M3.steel, ...hand).scale.setScalar(.8);
+    limb3(grp, [-2.3, 7.2, 0], [-2.6, 4.5, 1.7], .7, M3.steel); part(grp, G3.ball, M3.steel, -2.6, 4.5, 1.7).scale.setScalar(.8);
     shield3(grp, [-2.75, 4.6, 2.35], 1, .45, g.p, false);      // held in the left hand (Rick, 2026-11-19)
-    if (g.s > 1) { part(grp, GG.spear, M3.pole, 3.2, 1.2, .6); part(grp, GG.tip, M3.shine, 3.2, 17.2, .6); part(grp, GG.plume, M3.red, 0, 12.6, 0); }
+    // the sword (Rick, 2026-11-20): on duty it's held up, point to the sky, leaning out a little; a resting knight
+    // leans it back against its shoulder
+    const sw = new T.Group(); sw.position.set(...hand); grp.add(sw);
+    if (g.a) sw.rotation.set(.18, 0, -.22); else sw.rotation.set(-.6, 0, .12);
+    part(sw, SWORD.pommel, M3.gold, 0, 0, 0); part(sw, SWORD.grip, M3.hat, 0, 0, 0); part(sw, SWORD.guard, M3.gold, 0, 0, 0);
+    part(sw, SWORD.blade, M3.shine, 0, 0, 0); part(sw, SWORD.fuller, M3.steel, 0, 0, 0);
     grp.scale.setScalar(1.75);
     grp.position.set(x, TOP + 2.4, z);
     return grp;
@@ -1815,12 +2074,138 @@ function init3D(T, Water, Orbit, BU) {
     });
     SHADOW = true;      // (their shadows move over the land)
   }
+  // ----- the winner's celebration (Rick, 2026-11-20): fireworks over the island while the camera circles it -----
+  // flair.js winFx() starts it when a game is won (never on load). Rockets rise from round the island, each bursting
+  // into a ball of sparks that drift out, slow down, droop and fade; colours: the winner's, gold and white, mixed.
+  // Each burst is one Points cloud (cheap). No new lights: adding a light makes every material recompile, which
+  // froze Rick's laptop. The camera turns slowly round the island until the player grabs it.
+  const PARTYMS = 9500, SPARKN = 120, SPARKLIFE = 1900;
+  const dotTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.4, 'rgba(255,255,255,.95)'); gr.addColorStop(.7, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return tex(c, true, false); })();
+  let PARTY = null;
+  function partyStart(p) {
+    partyEnd();
+    const g = new T.Group(), win = new T.Color(PCOL[p] || '#ffd95e'), cols = [win, new T.Color('#ffd23f'), win, new T.Color('#ffffff'), win, new T.Color('#ff9f43')];
+    const list = [];
+    for (let k = 0, t = 300; t < PARTYMS - 2400; k++) {      // a burst every ~0.4 s, sometimes two close together
+      const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 120, from = [Math.cos(a) * (d + 50), Math.sin(a) * (d + 50)];
+      list.push({t, from, at: [Math.cos(a) * d * .8, 110 + Math.random() * 70, Math.sin(a) * d * .8], col: cols[k % cols.length], big: .8 + Math.random() * .5});
+      t += Math.random() < .25 ? 120 : 300 + Math.random() * 320;
+    }
+    scene.add(g);
+    PARTY = {t0: Date.now(), g, list, cam: true};
+  }
+  function partyEnd() {
+    if (!PARTY) return;
+    scene.remove(PARTY.g);
+    PARTY.list.forEach(b => { if (b.pts) { b.pts.geometry.dispose(); b.pts.material.dispose(); } if (b.rk) b.rk.material.dispose(); });
+    PARTY = null;
+  }
+  function partyStep(now, dt) {
+    const P = PARTY, t = now - P.t0;
+    if (t > PARTYMS || !G || G.phase !== 'over') { partyEnd(); return; }
+    if (P.cam) {      // the camera circles the island, slowly
+      const off = cam.position.clone().sub(C.target).applyAxisAngle(new T.Vector3(0, 1, 0), dt * .28);
+      cam.position.copy(C.target).add(off);
+    }
+    P.list.forEach(b => {
+      const k = t - b.t;
+      if (k < 0) return;
+      const RISE = 650;
+      if (k < RISE) {      // the rocket climbs, a bright dot with a little wobble
+        if (!b.rk) { b.rk = new T.Sprite(new T.SpriteMaterial({map: dotTex, color: 0xfff1c4, transparent: true, depthWrite: false, blending: T.AdditiveBlending})); b.rk.scale.setScalar(9); P.g.add(b.rk); }
+        const e = 1 - Math.pow(1 - k / RISE, 2);
+        b.rk.position.set(b.from[0] + (b.at[0] - b.from[0]) * e + Math.sin(k * .03) * .8, TOP + (b.at[1] - TOP) * e, b.from[1] + (b.at[2] - b.from[1]) * e);
+        return;
+      }
+      if (b.rk) { P.g.remove(b.rk); b.rk.material.dispose(); b.rk = null; }
+      const age = k - RISE;
+      if (age > SPARKLIFE) { if (b.pts) { P.g.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); b.pts = null; b.done = true; } return; }
+      if (b.done) return;
+      if (!b.pts) {      // burst: sparks fly out in every direction
+        const pos = new Float32Array(SPARKN * 3), dir = [];
+        for (let q = 0; q < SPARKN; q++) {
+          const u = Math.random() * 2 - 1, w = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = (150 + Math.random() * 30) * b.big;
+          dir.push([r * Math.cos(w) * sp, u * sp, r * Math.sin(w) * sp]);
+        }
+        const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+        // (normal blending: added-up light vanishes against the bright daytime sea)
+        b.pts = new T.Points(geo, new T.PointsMaterial({map: dotTex, color: b.col.clone().lerp(new T.Color(1, 1, 1), .25), size: 30, transparent: true, depthWrite: false}));
+        b.pts.frustumCulled = false; b.dir = dir; P.g.add(b.pts);
+      }
+      const s = age / 1000, spread = (1 - Math.exp(-2.6 * s)) / 2.6, fall = 22 * s * s, arr = b.pts.geometry.attributes.position.array;
+      b.dir.forEach((v, q) => { arr[q * 3] = b.at[0] + v[0] * spread; arr[q * 3 + 1] = b.at[1] + v[1] * spread - fall; arr[q * 3 + 2] = b.at[2] + v[2] * spread; });
+      b.pts.geometry.attributes.position.needsUpdate = true;
+      const f = age / SPARKLIFE;
+      b.pts.material.opacity = Math.min(1, (1 - f) * 2.5) * (.8 + .2 * Math.sin(age * .05 + b.t));      // bright, then fades out, twinkling
+      b.pts.material.size = 30 * (1 - f * .45) * (age < 120 ? 1.6 - age / 200 : 1);      // a bright flash at the start
+    });
+  }
+  cv.addEventListener('pointerdown', () => { if (PARTY) PARTY.cam = false; });      // (the player grabbed the camera)
   // ----- every frame -----
+  // Frame limit (2026-11-20, Rick's laptop froze in Chrome): drawing as fast as the screen allows kept a laptop's
+  // built-in graphics chip at full load. Now: 30 frames a second while nothing big moves, up to 60 during
+  // animations (dice, drops, the intro, raids...), 12 while the new-game window covers the island.
+  // If drawn frames keep arriving much later than planned, the chip is struggling: lower the sharpness (PR) a step
+  // (down to .75) and stay at 30 a second.
   const clock = new T.Clock();
-  function frame() {
+  let LASTF = 0, LATE = 0, SEEN = 0, LOWQ = false, SHF = 0, RMS = 0;
+  // Shader warm-up (2026-11-20): the first time each kind of material is drawn, the graphics chip has to prepare a
+  // program for it, which froze the page for ~0.4 s when the first game started (and again as the intro revealed
+  // hidden scenery). warm() asks for all of them at once, including hidden things, with compileAsync (Chrome
+  // prepares them in the background), and frame() waits (HOLD) until they're ready. Once per page.
+  // (2026-11-20, Rick: all of Chrome still froze just opening the page.) Every visit now opens on the New game window
+  // with the island drawing behind it, so the sea, sky and island programs were prepared one by one in the first
+  // frames, the page waiting up to ~0.25 s for each (and Chrome's shared graphics process stuck behind them). So
+  // warm(true) also runs once at start-up, before the first frame; the game's own warm() still follows its first build.
+  // (2026-11-20, later: Rick's graphics chip reset — "D3D11 device was removed" — while a game's ~45 programs were
+  // being prepared all at once.) Now they're prepared WARMN at a time, with a short pause between batches, so the chip
+  // never gets one big pile of work. One object per kind of material is enough (compile() also covers hidden things
+  // and uses the whole scene's lights). frame() still waits (HOLD), at most WARMMAX ms; anything left after that is
+  // prepared as it's first drawn, like before. A newer warm() takes over from one still running.
+  let HOLD = false, WARMED = false, WARMRUN = 0;
+  const WARMN = 3, WARMMAX = 10000;
+  function warm(startup) {
+    if (!startup) WARMED = true;
+    if (!R.compileAsync) return;
+    const seen = new Set(), list = [];
+    scene.traverse(o => {
+      [].concat(o.material || []).forEach(m => {
+        const k = m.id + '|' + !!o.isInstancedMesh + '|' + !!o.isPoints + '|' + !!o.isSprite + '|' + !!o.isLine;
+        if (!seen.has(k)) { seen.add(k); list.push(o); }
+      });
+    });
+    const run = ++WARMRUN, end = performance.now() + WARMMAX;
+    HOLD = true;
+    (async () => {
+      for (let i = 0; i < list.length && run === WARMRUN && !DEAD && performance.now() < end; i += WARMN) {
+        try {
+          await Promise.race([Promise.all(list.slice(i, i + WARMN).map(o => R.compileAsync(o, cam, scene))),
+            new Promise(r => setTimeout(r, 3000))]);      // (never stuck on one batch)
+        } catch (e) {}
+        await new Promise(r => setTimeout(r, 25));      // (a breather for the graphics chip)
+      }
+      if (run === WARMRUN) HOLD = false;
+    })();
+  }
+  function frame(ts) {
+    if (DEAD) return;      // (this 3D island was lost to a graphics reset: stop drawing it)
     requestAnimationFrame(frame);
+    if (!D3.on || HOLD) { clock.getDelta(); return; }
+    // (60 a second only if a frame costs the processor little: on Rick's laptop each took ~20-25 ms, so 60 a
+    // second during the intro left no time for anything else and Chrome froze; RMS = average cost, measured below)
+    const busy = !LOWQ && RMS < 9 && (INTRO || DROPS.length || DICE3 || CHASE || RAID || SAIL || PARTY || TK.gNew || UPGS.length);
+    const gap = 1000 / (!$('m-setup').hidden ? 12 : busy ? 60 : 30);
+    if (ts - LASTF < gap - 4) return;
+    if (LASTF && document.visibilityState === 'visible') {      // is the chip keeping up?
+      if (ts - LASTF > Math.max(gap * 1.8, 50)) LATE++;
+      if (++SEEN >= 60) {
+        if (LATE > 30 && PR > .75) { PR = Math.max(.75, PR - .25); usePR(); LOWQ = true; SHADOW = true; }
+        SEEN = LATE = 0;
+      }
+    }
+    LASTF = ts;
     const dt = Math.min(clock.getDelta(), .1);
-    if (!D3.on) return;
     const now = Date.now(), t = TIME.value += dt;
     water.material.uniforms.time.value += dt * .55;
     foam.material.opacity = .55 + .3 * Math.sin(t * 1.3);
@@ -1831,6 +2216,16 @@ function init3D(T, Water, Orbit, BU) {
     const az = C.getAzimuthalAngle();
     DISCS.forEach(d => { d.rotation.y = az; });
     BANDIT3.rotation.y = az;
+    // the bandit blocks its land (Rick, 2026-11-20): two angry hops on the spot, squashing as it lands (BLOCK, draw2d.js)
+    if (!CHASE && BANDIT3.parent && G && HEX[G.storm]) {
+      const k = BLOCK && BLOCK.h === G.storm ? (now - BLOCK.t) / BLOCKMS : -1;
+      if (k > 0 && k < .6) {
+        const q = (k / .3) % 1, up = Math.sin(q * Math.PI) * (k < .3 ? 13 : 9), squash = q < .15 || q > .85 ? .15 : 0;
+        BANDIT3.position.y = TOP + up; BANDIT3.scale.set(1 + squash * .6, 1 - squash, 1 + squash * .6);
+        BANDIT3.rotation.z = Math.sin(q * Math.PI) * (k < .3 ? -.12 : .12);
+        BLOCK.hop = true;
+      } else if (BLOCK && BLOCK.hop) { BANDIT3.position.y = TOP; BANDIT3.scale.set(1, 1, 1); BANDIT3.rotation.z = 0; BLOCK.hop = false; }
+    }
     if (FLEET.parent) FLEET.children.forEach(b => { const k = b.userData.k; b.position.y = Math.sin(t * 2 + k * 2) * .6; b.rotation.x = Math.sin(t * 1.6 + k) * .05; });      // the raiders rock on the waves
     M3.spot.opacity = .55 + .35 * Math.sin(t * 4.5);
     M3.lava.emissiveIntensity = 1.7 + .5 * Math.sin(t * 2.3);
@@ -1847,6 +2242,11 @@ function init3D(T, Water, Orbit, BU) {
     BLAZE.emissiveIntensity = M3.fire.emissiveIntensity * 1.1;
     RF++;
     DFLAGS.forEach(f => { f.rotation.y = Math.sin(t * 3.1 + f.userData.ph) * .32; });      // forts' flags flutter
+    FOLK.forEach(f => {      // market shoppers stroll round the stalls, bobbing as they walk, stopping now and then
+      const u = f.userData, go = Math.max(0, Math.sin(t * .5 + u.ph)), a = u.a + (t * u.sp + Math.sin(t * .5 + u.ph) * .8 * Math.sign(u.sp));
+      f.position.set(Math.cos(a) * u.r, u.y + Math.abs(Math.sin(t * 7 + u.ph)) * .35 * go, Math.sin(a) * u.r * .7 + 2.8);      // (in front of the hall)
+      f.rotation.y = -a + (u.sp > 0 ? Math.PI : 0);
+    });
     SMOKE.concat(DSMOKE).forEach(p => {      // puffs of smoke drift up from the crater, the kilns' and the towns' chimneys, and fade
       const u = p.userData, s = u.s, k = (t * (.09 + (1 - s) * .08) + u.k) % 1;
       p.position.set(u.x + (k * 26 + Math.sin(k * 9 + u.k * 20) * 3) * s, u.y + k * 55 * s, u.z - k * 12 * s);
@@ -1854,7 +2254,9 @@ function init3D(T, Water, Orbit, BU) {
     });
     TILES3.forEach((o, i) => {      // lands that just paid out glow
       const on = HARV && HARV.h.includes(i) && now > HARV.t && now < HARV.t + 1600;
-      o.top.emissiveIntensity = on ? .75 * Math.sin(Math.PI * (now - HARV.t) / 1600) : 0;
+      const bl = BLOCK && BLOCK.h === i && now > BLOCK.t && now < BLOCK.t + BLOCKMS;      // (the bandit's land: red, Rick 2026-11-20)
+      o.top.emissive.setHex(bl ? 0xff2a18 : 0xffe08a);
+      o.top.emissiveIntensity = bl ? .9 * Math.sin(Math.PI * (now - BLOCK.t) / BLOCKMS) : on ? .75 * Math.sin(Math.PI * (now - HARV.t) / 1600) : 0;
     });
     if (DROPS.length) {
       SHADOW = true;
@@ -1888,18 +2290,27 @@ function init3D(T, Water, Orbit, BU) {
     if (CLOUDS) cloudsStep(now);
     if (SAIL) sailStep(now);
     if (CHASE) chaseStep(now, az);
-    if (SHADOW) { R.shadowMap.needsUpdate = true; SHADOW = false; }
+    if (PARTY) partyStep(now, dt);
+    if (TK.gNew || TK.gOld) takeStep(now);
+    if (SHADOW && ++SHF % 2) { R.shadowMap.needsUpdate = true; SHADOW = false; }      // (shadows: at most every other frame; they cost the most)
+    const r0 = performance.now();
     R.render(scene, cam);
+    RMS = RMS * .9 + (performance.now() - r0) * .1;      // (how long a frame costs the processor, averaged)
+    D3.drawn = true;      // (the first frame is on screen: main.js can lift the loading screen)
     if (DICE3) diceStep(now);
     if (DICE3) { R.autoClear = false; R.clearDepth(); R.render(DSCENE, cam); R.autoClear = true; }      // the thrown dice, always on top
   }
+  warm(true);      // (prepare the start-up scene's programs in the background; see warm())
   requestAnimationFrame(frame);
+
+  D3.perf =() => ({PR, LOWQ, SEEN, LATE, RMS: Math.round(RMS * 10) / 10});      // for testing the frame limit
 
   // ----- what the rest of the game uses -----
   D3.update = () => {
     const key = G.id + '|' + G.hex.map(h => h.t + h.n).join() + '|' + JSON.stringify(G.ports || []) + '|' + !!G.fire;
     if (key !== SKEY) { SKEY = key; build(); }
     dynamic();
+    if (!WARMED) warm();
   };
   D3.resize = () => fit(false);
   D3.reset = () => fit(true);
@@ -1916,6 +2327,10 @@ function init3D(T, Water, Orbit, BU) {
   D3.dice = d => throwDice3(d);
   D3.raid = fx => raidStart(fx);
   D3.knight = (v, g) => guard3D(v, g);
+  D3.building = (v, b) => building(v, b);
+  // players' colours changed (a new game with picked colours): make their materials again (pm3, the previews)
+  D3.recolor = () => { for (const k in PM) { PM[k].dispose(); delete PM[k]; } for (const k in GHOSTM) { GHOSTM[k].dispose(); delete GHOSTM[k]; } };      // (for testing and pictures: a building model, not added to the board)
+  D3.party = p => partyStart(p);      // the winner's fireworks and the camera circling (flair.js winFx)
   D3.clouds = ms => cloudsStart(ms);      // (weather: real clouds drifting over the island, see flair.js)      // (for testing and pictures: a knight model, not added to the board)
   D3.introLeft = () => INTRO ? Math.max(0, INTRO.end - (Date.now() - INTRO.t0)) : 0;      // (computer players wait for the island)
   D3.day = d => { DAY.test = d; DAY.cur = null; };      // (null: back to normal)      // for testing: jump to a time of day (0 morning, .25 noon, .5 sunset, .75 night)

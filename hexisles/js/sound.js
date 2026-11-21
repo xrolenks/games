@@ -47,7 +47,7 @@ const SFXLINES = [
   // the volcano (rumble, eruption) is silent for now: Rick's choice, 2026-11-18
   [/raiders sail closer/, 'horn'], [/raiders landed/, 'warhorn'], [/drove them off/, 'award'], [/sacked a fort/, 'sack'], [/treasure washed ashore! (?!Nobody)/, 'coins'],
   [/ hired a knight/, 'guard'], [/ trained a knight/, 'train'], [/ to a Keep| raised a Citadel| founded a fort/, 'fort'],
-  [/ banner: | castle: | the .* castle from |castle is now permanent/, 'award'], [/ to level \d/, 'sparkle'], [/ draws? a progress card/, 'card'],
+  [/ banner: | castle: | the .* castle from |castle is now permanent| (built|took) the (Grand Library|Grand Market|Mighty Castle)| is now permanent/, 'award'], [/ to level \d/, 'sparkle'], [/ draws? a progress card/, 'card'],
   [/ sent the bandit /, 'stomp'], [/ robbed /, 'swipe'], [/ handed .* a card\.| discarded /, 'card'],
   [/ bought a progress card/, 'card'], [/ played /, 'play'], [/ found 1 /, 'sparkle'],
   [/ offers /, 'pop'], [/ accepted the trade/, 'yes'], [/ said no to | turned down |Nobody wanted| took the offer back/, 'no'],

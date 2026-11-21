@@ -41,11 +41,22 @@ function lobbyNames() {
   NET.bots = Math.max(0, Math.min(NET.bots, maxBots()));
   return [NET.name].concat(NET.conns.map(c => c.name), DEFNAMES.slice(1, 1 + NET.bots));
 }
+// Colours in the lobby (Rick, 2026-11-20): each person picks their own (the host keeps NET.color, each guest's
+// connection c.color, sent by {t:'color', c}); a colour someone else has can't be picked; computer players get free ones.
+function lobbyColors(n) {
+  const cols = fixColors([NET.color].concat(NET.conns.map(c => c.color)), n);
+  NET.color = cols[0]; NET.conns.forEach((c, i) => { if (cols[i + 1]) c.color = cols[i + 1]; });
+  return cols;
+}
+const humanColors = not => [NET.color].concat(NET.conns.filter(c => c !== not).map(c => c.color)).filter(Boolean);      // colours the people (not computers) already have
 function fillLobby() {
-  const host = NET.role === 'host', names = NET.names || [];
+  const host = NET.role === 'host', names = NET.names || [], cols = NET.cols || [];
   $('l-codebox').hidden = !host; $('l-code').textContent = NET.ready ? NET.code : '…';
   $('l-msg').textContent = NET.msg || '';
-  $('l-names').innerHTML = names.map((n, i) => '<div class="row"><i style="background:' + PCOL[i] + '"></i><span>' + esc(n) + '</span></div>').join('');
+  // my row (only there can I pick); colours taken = the other people's (a computer player's colour is free: it moves)
+  const me = host ? 0 : names.indexOf(NET.name), humans = host ? 1 + NET.conns.length : NET.hu || names.length;
+  $('l-names').innerHTML = names.map((n, i) => { const c = cols[i] || DEFCOL[i] || '#888', mine = i === me;
+    return '<div class="row">' + cdot(i, c, mine) + '<span>' + esc(n) + (mine ? ' (you)' : '') + '</span></div>' + (mine && CPICK === i ? cpal(i, c, cols.filter((u, k) => k !== i && k < humans)) : ''); }).join('');
   $('l-bots').hidden = !host;
   if (host) $('l-bots').innerHTML = '<span style="flex:1">Computer players</span>' + [0, 1, 2, 3].map(n => '<button data-n="' + n + '"' + (n === NET.bots ? ' class="on"' : '') + (n > maxBots() ? ' disabled' : '') + '>' + n + '</button>').join('');
   fillMode('l-mode', host);
@@ -54,8 +65,8 @@ function fillLobby() {
   $('l-cancel').hidden = !(G && NET.inGame && !NET.lost);
 }
 function sendLobby() {
-  NET.names = lobbyNames();
-  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, fire: FIRE, lvl: LEVEL, tm: TIMER}); });
+  NET.names = lobbyNames(); NET.cols = lobbyColors(NET.names.length);
+  NET.conns.forEach(c => { if (c.open) c.send({t: 'lobby', names: NET.names, cols: NET.cols, hu: 1 + NET.conns.length, fire: FIRE, lvl: LEVEL, tm: TIMER}); });
   fillLobby();
 }
 
@@ -63,7 +74,7 @@ function sendLobby() {
 function hostStart() {
   const name = myName();
   closeNet();
-  NET = {role: 'host', seat: 0, name, conns: [], bots: 0, code: '', ready: false, inGame: false, msg: 'Opening a room…'};
+  NET = {role: 'host', seat: 0, name, color: SCFG[0].c, conns: [], bots: 0, code: '', ready: false, inGame: false, msg: 'Opening a room…'};
   $('m-net').hidden = true; $('m-setup').hidden = true; $('m-lobby').hidden = false; sendLobby();
   loadPeer(hostOpen);
 }
@@ -113,9 +124,11 @@ function hostData(c, d) {
     const taken = lobbyNames(); let k = 2; const base = name;
     while (taken.includes(name)) name = base.slice(0, 10) + ' ' + k++;
     c.name = name; c.seat = -1; NET.conns.push(c);
+    if (COLORS.some(q => q[1] === d.c) && !humanColors(c).includes(d.c)) c.color = d.c;      // their favourite colour, if no other person has it
     c.send({t: 'you', name}); sendLobby();
     if (NET.inGame) c.send({t: 'state', g: G, seat: -1});       // game already running: they watch until the next one
   }
+  if (d.t === 'color' && NET.conns.includes(c) && COLORS.some(q => q[1] === d.c) && !humanColors(c).includes(d.c)) { c.color = d.c; sendLobby(); }      // a guest picks a colour in the lobby
   if (d.t === 'act' && NET.inGame && c.seat >= 0 && d.a) {
     try { if (act(d.a, c.seat)) { save(); render(); } } catch (e) {}
   }
@@ -185,7 +198,8 @@ function hostBegin() {
   const names = lobbyNames(), humans = 1 + NET.conns.length;
   if (!NET.ready || names.length < 2) return;
   NET.conns.forEach((c, i) => { c.seat = i + 1; });
-  newGame(names.map((n, i) => ({name: n, bot: i >= humans})), FIRE, LEVEL, TIMER);
+  const cols = lobbyColors(names.length);
+  newGame(names.map((n, i) => ({name: n, bot: i >= humans, c: cols[i]})), FIRE, LEVEL, TIMER);
   NET.inGame = true; $('m-lobby').hidden = true; save(); render();
 }
 function broadcast() {
@@ -215,7 +229,7 @@ function joinStart(name, code, retry, tries) {
     const peer = NET.peer = new Peer();
     peer.on('open', () => {
       const c = NET.conn = peer.connect(ROOM + code, {reliable: true});
-      c.on('open', () => { clearTimeout(me.wait); NET.msg = 'Connected. Waiting for the host to start…'; c.send({t: 'hello', name}); fillLobby(); });
+      c.on('open', () => { clearTimeout(me.wait); NET.msg = 'Connected. Waiting for the host to start…'; c.send({t: 'hello', name, c: SCFG[0].c}); fillLobby(); });
       c.on('data', d => { if (NET === me) guestData(d); });      // events from an old connection are ignored
       c.on('close', () => { if (NET === me) guestLost(); });
     });
@@ -230,7 +244,7 @@ function guestData(d) {
   if (NET.role !== 'guest' || !d) return;
   if (d.t === 'you') NET.name = d.name;
   if (d.t === 'full') netFail('That game is full.');
-  if (d.t === 'lobby') { NET.names = d.names; FIRE = !!d.fire; if ([0, 1, 2].includes(d.lvl)) LEVEL = d.lvl; if (TIMES.includes(d.tm)) TIMER = d.tm; fillLobby(); }
+  if (d.t === 'lobby') { NET.names = d.names; NET.cols = Array.isArray(d.cols) ? d.cols : []; NET.hu = d.hu; FIRE = !!d.fire; if ([0, 1, 2].includes(d.lvl)) LEVEL = d.lvl; if (TIMES.includes(d.tm)) TIMER = d.tm; fillLobby(); }
   if (d.t === 'state') {
     const fresh = !NET.inGame || (G && G.phase === 'over' && d.g.phase !== 'over');
     G = d.g; NET.seat = d.seat; NET.inGame = true; NET.lost = false;
@@ -260,6 +274,15 @@ $('n-join').onclick = () => joinStart(myName(), $('n-code').value.trim().toUpper
 $('n-code').onkeydown = e => { if (e.key === 'Enter') $('n-join').click(); };
 $('l-bots').onclick = e => { const b = e.target.closest('button'); if (b && NET.role === 'host') { NET.bots = +b.dataset.n; sendLobby(); } };
 $('l-start').onclick = hostBegin;
+$('l-names').onclick = e => {      // the colour picker in the lobby (only on your own row)
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.cp != null) { CPICK = CPICK === +b.dataset.cp ? -1 : +b.dataset.cp; fillLobby(); return; }
+  if (!b.dataset.pc) return;
+  CPICK = -1; SCFG[0].c = b.dataset.pc;      // (remembered as your colour for next time)
+  try { localStorage.setItem(COLKEY, JSON.stringify(SCFG.map(c => c.c))); } catch (x) {}
+  if (NET.role === 'host') { NET.color = b.dataset.pc; sendLobby(); }
+  else if (NET.conn && NET.conn.open) { NET.conn.send({t: 'color', c: b.dataset.pc}); fillLobby(); }
+};
 $('l-leave').onclick = leaveNet;
 $('l-cancel').onclick = () => { $('m-lobby').hidden = true; };
 $('l-rejoin').onclick = () => joinStart(NET.name, NET.code, true);

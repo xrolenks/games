@@ -88,6 +88,51 @@ function harvestPop(hs) {
   });
 }
 
+// --- the bandit blocks a land (Rick, 2026-11-20): a red "Blocked" chip rises over it (both maps; see harvestFx) ---
+function blockPop(i) {
+  const P = boardPt(HEX[i].x, HEX[i].y, TOP + 30);
+  if (!inView(P)) return;
+  const d = fxEl('hpop blk', ico(G.hex[i].t) + '<b>Blocked</b>');
+  d.style.cssText = 'left:' + P[0] + 'px;top:' + P[1] + 'px;--a:#ff5a4a';
+  d.animate([{transform: 'translate(-50%,-20%) scale(.4)', opacity: 0}, {transform: 'translate(-50%,-110%) scale(1.15)', opacity: 1, offset: .15},
+    {transform: 'translate(-50%,-140%) scale(1)', opacity: 1, offset: .75}, {transform: 'translate(-50%,-180%) scale(.9)', opacity: 0}],
+    {duration: 1800, easing: 'ease-out', fill: 'both'}).onfinish = () => d.remove();
+  setTimeout(() => d.remove(), 2100);
+}
+
+// --- a track building taken from someone (Rick, 2026-11-20): G.takefx from placeCastle (rules.js) ---
+// Every screen plays it when its counter changes (never on load): a banner at the top, the building at the old fort
+// sinks away (draw2d.js piece / board3d.js takeStep, timed by TAKE), its badge flies over to the new owner's fort, and
+// the new one grows up there.
+let SEENTAKE = null;
+function takeFx() {
+  const f = G.takefx, now = {id: G.id, n: f ? f.n : 0}, was = SEENTAKE;
+  SEENTAKE = now;
+  if (!was || was.id !== now.id || now.n === was.n || !f || !G.pl[f.p] || !G.pl[f.fp] || !VERT[f.from] || !VERT[f.to]) return;
+  TAKE = {k: f.k, from: f.from, fp: f.fp, to: f.to, p: f.p, t: Date.now(), id: G.id};
+  delete FELL['b' + f.from]; delete FELL['b' + f.to];      // (no ordinary drop: the takeover shows the change)
+  drawBoard();
+  const d = fxEl('awardpop', '<div class="aic">' + AWICON.castle(f.k, false) + '</div><div><b>' + TRACKBLD[f.k] + ' taken!</b><small>' + esc(G.pl[f.p].name) + ' took it from ' + esc(G.pl[f.fp].name) + ' (' + TRACKS[f.k].n + ' level ' + TRACKMAX + ')</small></div>');
+  d.style.setProperty('--c', PCOL[f.p]); d.style.top = '16%';
+  d.animate([{opacity: 0, transform: 'translate(-50%,-50%) scale(.5)'}, {opacity: 1, transform: 'translate(-50%,-50%) scale(1.06)', offset: .06},
+    {opacity: 1, transform: 'translate(-50%,-50%) scale(1)', offset: .1}, {opacity: 1, transform: 'translate(-50%,-50%) scale(1)', offset: .85},
+    {opacity: 0, transform: 'translate(-50%,-50%) scale(.96)'}], {duration: TAKEMS, easing: 'ease-out', fill: 'both'}).onfinish = () => d.remove();
+  setTimeout(() => d.remove(), TAKEMS + 300);
+  if (D3.on) { setTimeout(() => { if (G) dustAt(VERT[f.from].x, VERT[f.from].y, true); }, TAKEMS * .2); setTimeout(() => { if (G) dustAt(VERT[f.to].x, VERT[f.to].y, true); }, TAKEMS * .66); }
+  // the badge flies from the old fort to the new one in an arc
+  setTimeout(() => {
+    const A = boardPt(VERT[f.from].x, VERT[f.from].y, TOP + 20), B = boardPt(VERT[f.to].x, VERT[f.to].y, TOP + 20);
+    if (!A || !B) return;
+    const b = fxEl('awfly', AWICON.castle(f.k, false)), up = Math.min(A[1], B[1]) - 110;
+    b.style.setProperty('--accent', TRACKS[f.k].c);
+    b.animate([{transform: 'translate(' + A[0] + 'px,' + A[1] + 'px) translate(-50%,-50%) scale(.5)', opacity: 0}, {transform: 'translate(' + A[0] + 'px,' + (A[1] - 30) + 'px) translate(-50%,-50%) scale(1)', opacity: 1, offset: .15},
+      {transform: 'translate(' + (A[0] + B[0]) / 2 + 'px,' + up + 'px) translate(-50%,-50%) scale(1.15) rotate(12deg)', offset: .55},
+      {transform: 'translate(' + B[0] + 'px,' + B[1] + 'px) translate(-50%,-50%) scale(.6)', opacity: .9}], {duration: TAKEMS * .35, easing: 'ease-in-out', fill: 'both'}).onfinish = () => b.remove();
+    setTimeout(() => b.remove(), TAKEMS * .4);
+  }, TAKEMS * .3);
+  setTimeout(() => { if (G) render(); }, TAKEMS + 60);      // (afterwards: the board as it is now)
+}
+
 // --- award banner ---
 let SEENAW = null, AWBUSY = 0;
 function awardFx() {
@@ -126,6 +171,32 @@ function awardPop(p, ic, name, from) {
   setTimeout(() => d.remove(), 2500);
 }
 
+// --- the winner's celebration (Rick, 2026-11-20) ---
+// When a game is won (never on load): a big "<name> won!" banner with a trophy in the winner's colour, and on the 3D
+// island fireworks while the camera circles it (D3.party). The win window waits until it's over (WINUNTIL, dice.js).
+let SEENWIN = null, WINUNTIL = 0;
+const WINMS = 7000, WINMS2D = 3200;      // (the flat map stays simple: just the banner)
+function winFx() {
+  const now = {id: G.id, over: G.phase === 'over'};
+  const was = SEENWIN; SEENWIN = now;
+  if (!was || was.id !== now.id || was.over || !now.over || !G.pl[G.win]) return;
+  const p = G.win, P = G.pl[p], ms = D3.on ? WINMS : WINMS2D;
+  WINUNTIL = Date.now() + ms;
+  if (D3.on && D3.party) D3.party(p);
+  const old = $('winpop'); if (old) old.remove();
+  const d = fxEl('', '<svg viewBox="' + CARDART.p.vb + '">' + CARDART.p.svg(PCOL[p]) + '</svg><div>' + esc(P.name) + ' won!</div><small>' + score(p) + ' points</small>');
+  d.id = 'winpop'; d.style.setProperty('--c', PCOL[p]);
+  d.animate([
+    {opacity: 0, transform: 'translate(-50%,-50%) scale(.4)'},
+    {opacity: 1, transform: 'translate(-50%,-50%) scale(1.12)', offset: .07},
+    {opacity: 1, transform: 'translate(-50%,-50%) scale(1)', offset: .12},
+    {opacity: 1, transform: 'translate(-50%,-50%) scale(1.03)', offset: .5},
+    {opacity: 1, transform: 'translate(-50%,-50%) scale(1)', offset: .88},
+    {opacity: 0, transform: 'translate(-50%,-70%) scale(.95)'}
+  ], {duration: ms, easing: 'ease-in-out', fill: 'both'}).onfinish = () => d.remove();
+  setTimeout(() => d.remove(), ms + 300);      // (in case the finish event never comes: hidden tab)
+}
+
 // --- weather, every few turns ---
 const hash01 = s => { let h = 2166136261; for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; };
 let SEENWX = null, WXEND = 0;
@@ -134,7 +205,7 @@ function weatherFx() {
   const was = SEENWX; SEENWX = now;
   if (!was || was.id !== now.id || now.tn === was.tn || G.phase === 'over' || G.tut || !D3.on) return;      // (3D only)
   if (Date.now() < WXEND || hash01(G.id + ':' + now.tn) > .32) return;      // about 1 turn in 3
-  if (hash01(now.tn + ':' + G.id) < .55) rain(); else clouds();
+  clouds();      // (rain and the rainbow are off for now, Rick 2026-11-20; was: 55% rain(), else clouds())
 }
 function wxLayer() {
   let L = $('wx');
